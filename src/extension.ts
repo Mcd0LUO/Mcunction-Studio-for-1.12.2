@@ -37,6 +37,13 @@ export function activate(context: vscode.ExtensionContext) {
 	registerHoverProvider(context);
 	// 注册文档管理
 	const docManager = DynamicDocManager.getInstance();
+	// 注册编辑器命令
+	context.subscriptions.push(
+		vscode.commands.registerCommand('mcf-studio.reloadWorkspace', async () => {
+			await dataloader.loadData();
+		}),
+		vscode.commands.registerCommand('mcf-studio.createFunctionFile', MinecraftUtils.createNewFunctionFile),
+	);
 
 
 

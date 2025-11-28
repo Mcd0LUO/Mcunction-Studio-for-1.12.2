@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { rootDir } from '../extension';
+import { DataLoader } from '../core/DataLoader';
 
 /**
  * Minecraft相关工具类（性能优化版）
@@ -13,6 +14,7 @@ import { rootDir } from '../extension';
  * 4. 提前拦截无效参数，减少无效资源操作耗时
  */
 export class MinecraftUtils {
+
     /**
      * 路径解析缓存：存储parseResourcePath方法的结果，避免重复解析相同资源路径
      * 数据结构：Map<资源名称字符串, 解析结果>
@@ -188,6 +190,10 @@ export class MinecraftUtils {
         const callPath = releivePath.split('/').slice(1).join('/').replace("/",":").slice(0,-11);
         return this.parseResourcePath(callPath);
 
+
+    }
+    public static getFunctionResName(uri: vscode.Uri) : string | undefined {
+        return this.parseFunctionUri(uri)?.join(':');
     }
 
     /**
@@ -372,5 +378,54 @@ export class MinecraftUtils {
     // 7. 所有校验通过 → 返回 Uri
     console.log(`成功提取并验证有效 data 目录：${dataDirFullPath}`);
     return vscode.Uri.file(dataDirFullPath);
-}
+    }
+
+    public static async createNewFunctionFile(uri: vscode.Uri) {
+        // 检查是否打开了工作区
+        if (!vscode.workspace.workspaceFolders) {
+            vscode.window.showErrorMessage('请先打开一个工作区文件夹');
+            return;
+        }
+
+        const targetDir: string = uri.fsPath;
+
+        // 显示输入框，获取用户输入的文件名
+        const fileName: string | undefined = await vscode.window.showInputBox({
+            placeHolder: '输入文件名（不需要后缀）',
+            prompt: '创建新的MCFunction文件',
+            validateInput: (value: string): string | null => {
+                if (!value) {
+                    return '文件名不能为空';
+                }
+                if (/[<>:"/\\|?*]/.test(value)) {
+                    return '文件名包含无效字符';
+                }
+                if (fs.existsSync(path.join(targetDir, `${value}.mcfunction`))) {
+                    return '文件已存在';
+                }
+                return null;
+            }
+        });
+
+        if (!fileName) {
+            return;
+        }
+
+        // 创建文件
+        const filePath: string = path.join(targetDir, `${fileName}.mcfunction`);
+        const fileUri: vscode.Uri = vscode.Uri.file(filePath);
+        // 添加到函数池子
+        DataLoader.getInstance().addFunction(fileUri);
+
+        try {
+            // 写入空文件并打开
+            await vscode.workspace.fs.writeFile(fileUri, new Uint8Array());
+            const document: vscode.TextDocument = await vscode.workspace.openTextDocument(fileUri);
+            await vscode.window.showTextDocument(document);
+        }
+        catch (error) {
+            vscode.window.showErrorMessage(`创建文件失败：${error}`);
+        }
+    }
+
 }

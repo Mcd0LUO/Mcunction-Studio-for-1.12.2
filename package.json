@@ -43,7 +43,25 @@
         "title": "刷新函数|计分板|进度|标签池",
         "category": "Mcfunction Studio"
       }
-    ]
+    ],
+    "keybindings": [
+      {
+        "command": "mcf-studio.reloadWorkspace",
+        "key": "ctrl+r",
+        "mac": "cmd+r",
+        "when": "editorTextFocus && editorLangId == mcfunction"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "mcf-studio.createFunctionFile",
+          "label": "新建mcfunction文件",
+          "group": "z_McfunctionStudio",
+          "when": "explorerResourceIsFolder || filesExplorerFocus"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

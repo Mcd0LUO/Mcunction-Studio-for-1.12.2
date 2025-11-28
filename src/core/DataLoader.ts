@@ -42,6 +42,13 @@ export class DataLoader {
     }
     // 加载数据
     public async loadData(): Promise<any> {
+        this.scoreboardsData.clear();
+        this.functionResNames = [];
+        this.advancementResNames = [];
+        this.tagsData.clear();
+        this.functionData.clear();
+        this.fakePlayerData.clear();
+        this.teamsData.clear();
         // 并行执行
         const promise1 = this.loadFunctionData();
         const promise2 = this.loadAdvancementData();
@@ -115,6 +122,12 @@ export class DataLoader {
             teamData.def = [uri, lineNumber];
         }
         this.teamsData.set(teamName, {def: [uri, lineNumber]});
+    }
+    public addFunction(uri: vscode.Uri): void  {
+        const resName = MinecraftUtils.getFunctionResName(uri);
+        if (resName) {
+            this.functionResNames.push(resName);
+        }
     }
 
 
