@@ -14,7 +14,7 @@ export class GiveCompletionProvider extends BaseCompletionProvider {
             return this.provideSelectorCompletions(commands[1]);
         }
         if (commands.length === 3) {
-            return this.createItemCompletion();
+            return this.provideItemCompletions();
         }
         if (commands.length === 4) {
             return [this.createCompletionItem("<数量>", "count" , "1", true, vscode.CompletionItemKind.Value)];

@@ -21,6 +21,7 @@ const TYPE_OPTIONS = [
 ];
 
 export class StatsCompletionProvider extends BaseCompletionProvider {
+    protected commandKeyword: string = "stats";
     public provideCommandCompletions(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext, commands: string[]): vscode.CompletionItem[] {
         switch (commands.length) {
             case 2:
@@ -35,10 +36,10 @@ export class StatsCompletionProvider extends BaseCompletionProvider {
                 });
             case 3:
                 if (commands[1] === "entity") {
-                    return this.provideSelectorCompletions(commands[2],true);
+                    return this.provideSelectorCompletions(commands[2]);
                 }
                 if (commands[1] === "block") {
-                    return this.provideCoordinateCompletions(true);
+                    return this.provideCoordinateCompletions();
                 }
                 return [];
             case 4:

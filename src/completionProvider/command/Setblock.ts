@@ -34,11 +34,11 @@ export class SetblockCompletionProvider extends BaseCompletionProvider {
             case 3:
             case 4:
                 // 处理坐标参数的自动补全
-                return this.provideCoordinateCompletions(true);
+                return this.provideCoordinateCompletions();
                 
             case 5:
                 // 处理方块ID参数的自动补全
-                return this.createBlockCompletion();
+                return this.provideBlockCompletions();
                 
             case 6:
                 // 处理方块数据值参数的自动补全

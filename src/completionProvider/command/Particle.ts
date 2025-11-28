@@ -16,7 +16,7 @@ export class ParticleCompletionProvider extends BaseCompletionProvider {
             case 3:
             case 4:
             case 5:
-                return this.provideCoordinateCompletions(true);
+                return this.provideCoordinateCompletions();
             case 6:
             case 7:
             case 8:

@@ -1,5 +1,4 @@
 import { TextDocument, Position, CancellationToken, CompletionContext, CompletionItem } from "vscode";
-import { TextDocument, Position, CancellationToken, CompletionContext, CompletionItem } from "vscode";
 import * as vscode from "vscode";
 import { BaseCompletionProvider } from '../Base';
 
@@ -13,7 +12,7 @@ export class FillCompletionProvider extends BaseCompletionProvider {
             return this.provideCoordinateCompletions();
         }
         if (commands.length === 8) {
-            return this.createItemCompletion();
+            return this.provideItemCompletions();
         }
         if (commands.length === 9) {
             return [this.createCompletionItem(

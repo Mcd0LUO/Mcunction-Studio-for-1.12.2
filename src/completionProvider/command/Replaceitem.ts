@@ -60,7 +60,7 @@ export class ReplaceitemCompletionProvider extends BaseCompletionProvider {
                 // 根据操作类型提供不同的补全
                 if (commands[1] === 'entity') {
                     // 第三个参数是目标实体（玩家或实体选择器）
-                    return this.provideSelectorCompletions(commands[2], true);
+                    return this.provideSelectorCompletions(commands[2]);
                 } else if (commands[1] === 'block') {
                     // 第三个参数是方块的x坐标
                     return this.provideCoordinateCompletions();
@@ -82,7 +82,7 @@ export class ReplaceitemCompletionProvider extends BaseCompletionProvider {
                 // 根据操作类型提供不同的补全
                 if (commands[1] === 'entity') {
                     // 第五个参数是物品ID
-                    return this.createItemCompletion();
+                    return this.provideItemCompletions();
                 } else if (commands[1] === 'block') {
                     // 第五个参数是方块的z坐标
                     return this.provideCoordinateCompletions();
@@ -123,7 +123,7 @@ export class ReplaceitemCompletionProvider extends BaseCompletionProvider {
                     ];
                 } else if (commands[1] === 'block') {
                     // 第七个参数是物品ID
-                    return this.createItemCompletion();
+                    return this.provideItemCompletions();
                 }
                 break;
                 

@@ -1,5 +1,3 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
 class Parent {
     privateField = "private";
     protectedField = "protected";
@@ -16,6 +14,7 @@ class Child extends Parent {
     }
 }
 const obj = new Parent();
+export {};
 // obj.privateField;   // 错误！无法从类外部访问 private 成员
 // obj.protectedField; // 错误！无法从类外部访问 protected 成员
 //# sourceMappingURL=example.js.map
