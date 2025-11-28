@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { MinecraftUtils } from '../utils/MinecraftUtils';
 import { DataLoader } from './DataLoader';
+import { CommandUtils } from '../utils/CommandUtils';
 
 /**
  * 命令类型枚举（用于区分不同跳转目标）
@@ -110,52 +111,11 @@ export class McFunctionDefinitionProvider implements vscode.DefinitionProvider {
      * 匹配选择器内的predicate（仅处理选择器范围内的tag/score/team）
      */
     private matchSelectorPredicate(lineText: string, position: vscode.Position): CommandInfo | null {
-        let selectorStartIdx = lineText.indexOf('@');
-        while (selectorStartIdx !== -1 && selectorStartIdx < position.character) {
-            // 检查选择器类型（a/s/p/e/r）
-            const selectorType = lineText.charAt(selectorStartIdx + 1);
-            if (!['a', 's', 'p', 'e', 'r'].includes(selectorType)) {
-                selectorStartIdx = lineText.indexOf('@', selectorStartIdx + 1);
-                continue;
-            }
+        const params = CommandUtils.getCursorPredicate(lineText, position.character);
+        if (!params) {return null;}
 
-            // 找到选择器的[]范围
-            const bracketStartIdx = lineText.indexOf('[', selectorStartIdx);
-            if (bracketStartIdx === -1 || bracketStartIdx > position.character) {
-                selectorStartIdx = lineText.indexOf('@', selectorStartIdx + 1);
-                continue;
-            }
-            const bracketEndIdx = lineText.indexOf(']', bracketStartIdx);
-            if (bracketEndIdx === -1 || bracketEndIdx < position.character) {
-                selectorStartIdx = lineText.indexOf('@', selectorStartIdx + 1);
-                continue;
-            }
 
-            // 光标在选择器的[]范围内，解析内部predicate
-            const predicatesStr = lineText.substring(bracketStartIdx + 1, bracketEndIdx).trim();
-            if (!predicatesStr) {
-                selectorStartIdx = lineText.indexOf('@', selectorStartIdx + 1);
-                continue;
-            }
-            const predicates = predicatesStr.split(',').map(p => p.trim()).filter(p => p);
-
-            let currentPredicateStart = bracketStartIdx + 1;
-            for (const predicate of predicates) {
-                const actualPredicateStart = lineText.indexOf(predicate, currentPredicateStart);
-                if (actualPredicateStart === -1) {break;}
-
-                const actualPredicateEnd = actualPredicateStart + predicate.length;
-                if (position.character >= actualPredicateStart && position.character <= actualPredicateEnd) {
-                    return this.parsePredicateType(predicate, actualPredicateStart, actualPredicateEnd, position.line);
-                }
-
-                currentPredicateStart = actualPredicateEnd + 1;
-            }
-
-            selectorStartIdx = lineText.indexOf('@', selectorStartIdx + 1);
-        }
-
-        return null;
+        return this.parsePredicateType(...params, position.line);
     }
 
     /**
@@ -292,16 +252,6 @@ export class McFunctionDefinitionProvider implements vscode.DefinitionProvider {
                 return advUri ? { uri: advUri, range: new vscode.Range(0, 0, 0, 0) } : null;
             case CommandType.Scoreboard:
                 return DataLoader.getInstance().getScoreboardDef(resourcePath);
-            // case CommandType.ScoreboardFakePlayer:
-            //     const fakePlayerData = DataLoader.getInstance().getFakePlayerData().get(resourcePath);
-            //     if (fakePlayerData) {
-                    // const [uri, lineNumber] = fakePlayerData; // 取第一个定义位置
-                    // return { uri, range: new vscode.Range(lineNumber, 0, lineNumber, 0) };
-                // }
-                // return null;
-            // case CommandType.Tag:
-            //     const tagUri = null;
-            //     return tagUri ? { uri: tagUri, range: new vscode.Range(0, 0, 0, 0) } : null;
             case CommandType.Team:
                 const teamUri = DataLoader.getInstance().getTeamDef(resourcePath);
                 return teamUri;

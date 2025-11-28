@@ -1,3 +1,4 @@
+import * as vscode from 'vscode';
 
 interface CommandsInfo {
     isExecute: boolean;       // 是否为 execute 命令
@@ -198,7 +199,7 @@ export class CommandUtils {
             return null;
         }
         startIdx += 1;
-        if (!["s","p","e","r"].includes(command[startIdx])) {
+        if (!["s", "p", "e", "r"].includes(command[startIdx])) {
             return null;
         }
         startIdx += 1;
@@ -208,6 +209,84 @@ export class CommandUtils {
         const params = selector.split(',');
         return new Map();
 
+    }
+
+    public static isInSelector(lineText: string, currentIdx: number): boolean {
+        let startIdx = lineText.indexOf('@');
+
+        return (startIdx !== -1 && startIdx < currentIdx);
+    }
+
+    /**
+     * 获取当前光标处选择器的信息
+     * @param lineText 当前行文本
+     * @param cursorIdx 光标索引
+     * @returns 选择器信息（选择器文本，选择器起始索引）
+     */
+    public static getCursorSelector(lineText: string, cursorIdx: number): [string, number] | null {
+        let selectorStartIdx = lineText.indexOf('@');
+        while (selectorStartIdx !== -1 && selectorStartIdx < cursorIdx) {
+            // 检查选择器类型（a/s/p/e/r）
+            const selectorType = lineText.charAt(selectorStartIdx + 1);
+            if (!['a', 's', 'p', 'e', 'r'].includes(selectorType)) {
+                selectorStartIdx = lineText.indexOf('@', selectorStartIdx + 1);
+                continue;
+            }
+
+            // 找到选择器的[]范围
+            const bracketStartIdx = lineText.indexOf('[', selectorStartIdx);
+            if (bracketStartIdx === -1 || bracketStartIdx > cursorIdx) {
+                selectorStartIdx = lineText.indexOf('@', selectorStartIdx + 1);
+                continue;
+            }
+            const bracketEndIdx = lineText.indexOf(']', bracketStartIdx);
+            if (bracketEndIdx === -1 || bracketEndIdx < cursorIdx) {
+                selectorStartIdx = lineText.indexOf('@', selectorStartIdx + 1);
+                continue;
+            }
+
+            // 光标在选择器的[]范围内，解析内部predicate
+            const predicatesStr = lineText.substring(bracketStartIdx + 1, bracketEndIdx).trim();
+            if (!predicatesStr) {
+                selectorStartIdx = lineText.indexOf('@', selectorStartIdx + 1);
+                continue;
+            }
+            return [predicatesStr, bracketStartIdx];
+
+        }
+        return null;
+    }
+
+    /**
+     * 获取当前光标处predicate的信息
+     * @param lineText 当前行文本
+     * @param cursorIdx 光标索引
+     * @returns predicate信息（predicate文本，predicate起始索引，predicate结束索引）
+     */
+    public static getCursorPredicate(lineText: string, cursorIdx: number): [string, number, number] | null {
+        let selectorStartIdx = lineText.indexOf('@');
+        const selectorInfo = this.getCursorSelector(lineText, cursorIdx);
+        if (!selectorInfo) { return null; }
+        const [predicatesStr, bracketStartIdx] = selectorInfo;
+        if (!predicatesStr) { return null; }
+        const predicates = predicatesStr.split(',').map(p => p.trim()).filter(p => p);
+
+        let currentPredicateStart = bracketStartIdx + 1;
+        for (const predicate of predicates) {
+            const actualPredicateStart = lineText.indexOf(predicate, currentPredicateStart);
+            if (actualPredicateStart === -1) { break; }
+
+            const actualPredicateEnd = actualPredicateStart + predicate.length;
+            if (cursorIdx >= actualPredicateStart && cursorIdx <= actualPredicateEnd) {
+                return [predicate, actualPredicateStart, actualPredicateEnd];
+            }
+
+            currentPredicateStart = actualPredicateEnd + 1;
+        }
+
+        selectorStartIdx = lineText.indexOf('@', selectorStartIdx + 1);
+
+        return null; 
     }
 
 }

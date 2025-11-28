@@ -6,6 +6,7 @@ import { MinecraftUtils } from './utils/MinecraftUtils';
 import { McFunctionSignatureHelpProvider, registerSignatureHelp } from './core/Signature';
 import { registerCodeLens } from './core/CodeLens';
 import { registerFunctionDefinitionProvider } from './core/McFunctionDefinitionProvider';
+import { registerHoverProvider } from './core/HoverProvider';
 
 export let rootDir: vscode.Uri;
 
@@ -31,7 +32,8 @@ export function activate(context: vscode.ExtensionContext) {
 	registerCodeLens();
 	// 注册定义跳转
 	registerFunctionDefinitionProvider(context);
-
+	// 注册Hover
+	registerHoverProvider(context);
 
 
 

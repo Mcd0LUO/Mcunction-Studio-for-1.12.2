@@ -108,24 +108,30 @@ export class McFunctionSignatureHelpProvider implements vscode.SignatureHelpProv
     }
 
     private provideScoreboardSignatureHelp(commands: string[]): vscode.SignatureHelp {
-    const signatureHelp = new vscode.SignatureHelp();
-    const signature = new vscode.SignatureInformation(
-        '<目标> <记分板> <数值>',
-        '>设置实体的记分板数值'
-    );
-    // 参数说明
-    signature.parameters = [
-        new vscode.ParameterInformation('<目标>', '实体选择器（如@a/@p/@e）'),
-        new vscode.ParameterInformation('<记分板>', '已定义的记分板名称'),
-        new vscode.ParameterInformation('<数值>', 'int（如100、-5）')
-    ];
-    signatureHelp.signatures = [signature];
-    signatureHelp.activeSignature = 0;
+        const signatureHelp = new vscode.SignatureHelp();
+        if (commands[1] === 'players') {
+            const signature = new vscode.SignatureInformation(
+                '<目标> <记分板> <数值>',
+                '>设置实体的记分板数值'
+            );
+            // 参数说明
+            signature.parameters = [
+                new vscode.ParameterInformation('<目标>', '选择器'),
+                new vscode.ParameterInformation('<记分板>', '已定义的记分板名称'),
+                new vscode.ParameterInformation('<数值>', 'int（如100、-5）')
+            ];
+            signatureHelp.signatures = [signature];
+            signatureHelp.activeSignature = 0;
 
-    // 计算当前输入到第几个参数
-    const paramIndex = commands.length - 4;
-    signatureHelp.activeParameter = paramIndex;
-    return signatureHelp;
+            // 计算当前输入到第几个参数
+            const paramIndex = commands.length - 4;
+            signatureHelp.activeParameter = paramIndex;
+        }
+        else if (commands[1] === 'teams') {
+            
+        }
+
+        return signatureHelp;
 }
 
 
