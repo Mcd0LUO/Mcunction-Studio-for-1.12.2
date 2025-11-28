@@ -10,6 +10,10 @@ interface CommandsInfo {
 export class CommandUtils {
     // execute默认参数长度
     private static EXECUTE_PARAM_COUNT = 4;
+
+
+
+
     public static extraceActiveCommand(command: string): string[] {
         return this.findActiveCommand(this.extractCommand(command)).currentCommands;
     }
@@ -186,6 +190,24 @@ export class CommandUtils {
 
     public static isFakePlayerSelector(selector: string): boolean {
         return !selector.startsWith('@');
+    }
+
+    public static extractSelector(command: string): Map<string, string> | null {
+        let startIdx = command.indexOf('@');
+        if (startIdx === -1) {
+            return null;
+        }
+        startIdx += 1;
+        if (!["s","p","e","r"].includes(command[startIdx])) {
+            return null;
+        }
+        startIdx += 1;
+        const selector_unsafe = command.slice(startIdx);
+        const endIdx = selector_unsafe.indexOf(']');
+        const selector = selector_unsafe.slice(0, endIdx);
+        const params = selector.split(',');
+        return new Map();
+
     }
 
 }

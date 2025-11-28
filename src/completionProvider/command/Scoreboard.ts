@@ -75,6 +75,9 @@ export class ScoreboardCompletionProvider extends BaseCompletionProvider {
                 
             ];
         }
+        if (commands.length === 4) {
+            return this.provideTeamCompletions();
+        }
         return [];
     }
 

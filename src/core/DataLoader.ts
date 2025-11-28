@@ -13,6 +13,11 @@ interface ScoreboardData {
 interface functionData {
     ref: Map<vscode.Uri, number[]>;  // 被哪些函数引用  uri:行索引
 }
+interface TeamData {
+    color?: string;
+    rule?: string;
+    def: [vscode.Uri, number];  // 函数定义位置 uri:行索引
+}
 
 
 export class DataLoader {
@@ -23,7 +28,7 @@ export class DataLoader {
     private functionData: Map<string, functionData> = new Map();  // 函数数据
     private fakePlayerData: Map<string, Map<vscode.Uri, number[]>> = new Map();  // 假玩家数据
     private tagsData: Map<string, number> = new Map(); // 标签数据   标签:个数
-    private teamsData: Map<string, number> = new Map();
+    private teamsData: Map<string, TeamData> = new Map();
 
     private constructor() {
         this.loadData();
@@ -60,23 +65,57 @@ export class DataLoader {
     public getTagsData(): Map<string, number> {
         return this.tagsData;
     }
-    public getTeamsData(): Map<string, number> {
+    public getTeamsData(): Map<string, TeamData> {
         return this.teamsData;
+    }
+    public getScoreboardDef(scoreboardName: string): { uri: vscode.Uri, range: vscode.Range } | null {
+        const scoreboardData = DataLoader.getInstance().getScoreboardsData().get(scoreboardName);
+        if (scoreboardData) {
+            const [uri, lineNumber] = scoreboardData.def;
+            return { uri, range: new vscode.Range(lineNumber, 0, lineNumber, 0) };
+        }
+        return null;
+    }
+
+    public getTeamDef(teamName: string): { uri: vscode.Uri, range: vscode.Range } | null {
+        const teamData = DataLoader.getInstance().getTeamsData().get(teamName);
+        if (teamData) {
+            const [uri, lineNumber] = teamData.def;
+            return { uri, range: new vscode.Range(lineNumber, 0, lineNumber, 0) };
+        }
+        return null;
     }
 
     private addTag(tagName: string): void {
         const value = this.tagsData.get(tagName);
-        if(value) {
+        if (value) {
             this.tagsData.set(tagName, value + 1);
         }
-            this.tagsData.set(tagName, 1);
+        this.tagsData.set(tagName, 1);
     }
-    private addTeam(teamName: string): void {
-        const value = this.teamsData.get(teamName);
-        if (value) {
-            this.teamsData.set(teamName, value + 1);
+    private addTeam(teamName: string, uri: vscode.Uri, lineNumber: number): void {
+        const teamData = this.teamsData.get(teamName);
+        if (teamData) {
+            teamData.def = [uri, lineNumber];
         }
-        this.teamsData.set(teamName, 1);
+        this.teamsData.set(teamName, {def: [uri, lineNumber]});
+    }
+
+    private addScoreboard(scoreboardName: string,type: string, lineNumber: number, uri: vscode.Uri, desc: string = ''): void {
+        // 先尝试获取这个记分板
+        const scoreboard = this.scoreboardsData.get(scoreboardName);
+        if (!scoreboard) {
+            const def: [vscode.Uri, number] = [uri, lineNumber];
+            const data: ScoreboardData = { type: type, desc: desc, def: def };
+            this.scoreboardsData.set(scoreboardName, data);
+        }
+        // 已有则警告
+        else {
+            const def = scoreboard.def;
+            if (def) {
+                vscode.window.showWarningMessage(`重复定义记分板目标：${scoreboardName} 在 ${uri.path}:${lineNumber}`);
+            }
+        }
     }
 
     /**
@@ -224,20 +263,8 @@ export class DataLoader {
         if (commands.length <= 3) { return; }
         // scoreboard objectives add xxx dummy desc 
         if (commands[1] === 'objectives' && commands[2] === 'add' && commands.length > 4) {
-            // 先尝试获取这个记分板
-            const scoreboard = this.scoreboardsData.get(commands[3]);
-            if (!scoreboard) {
-                const def: [vscode.Uri, number] = [uri, lineNumber];
-                const data: ScoreboardData = { type: commands[4], desc: commands.length > 5 ? commands[5] : '', def: def };
-                this.scoreboardsData.set(commands[3], data);
-            }
-            // 已有则警告
-            else {
-                const def = scoreboard.def;
-                if (def) {
-                    vscode.window.showWarningMessage(`重复定义记分板目标：${commands[3]} 在 ${uri.path}:${lineNumber}`);
-                }
-            }
+            this.addScoreboard(commands[3], commands[4],lineNumber, uri , commands[5]);
+
         }
         // scoreboard players add|set|operation|remove xxx yyy zzz
         else if (commands[1] === 'players' && ["add", "remove", "set", "operation"].includes(commands[2])) {
@@ -264,9 +291,9 @@ export class DataLoader {
             // scoreboard players tag @s add|remove xxx
             this.addTag(commands[5]);
         }
-        else if (commands[1] === 'teams' && commands[2] === 'add' ) {
+        else if (commands[1] === 'teams' && commands[2] === 'add') {
             // scoreboard teams add xxx
-            this.addTeam(commands[3]);
+            this.addTeam(commands[3],uri,lineNumber);
 
         }
 
@@ -298,8 +325,8 @@ export class DataLoader {
 
     }
 
-    private extractSummonData(uri: vscode.Uri, lineNumber: number, commands: string[]): void { 
-        if (commands.length < 5) {return;}
+    private extractSummonData(uri: vscode.Uri, lineNumber: number, commands: string[]): void {
+        if (commands.length < 5) { return; }
         // summon xxx x y z {}
         const nbt = commands[5];
         const start_index = nbt.indexOf("Tags:[");
@@ -307,10 +334,10 @@ export class DataLoader {
             const tags = nbt.slice(start_index + 6);
             const end_index = tags.indexOf('"]');
             if (end_index >= 0) {
-                const tag_list = tags.slice(0, end_index).split(",").map(tag => tag.replaceAll('"',''));
+                const tag_list = tags.slice(0, end_index).split(",").map(tag => tag.replaceAll('"', ''));
                 tag_list.forEach(tag => this.addTag(tag));
             }
-};
+        };
     }
 
 

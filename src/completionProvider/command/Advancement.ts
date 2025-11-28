@@ -51,11 +51,9 @@ export class AdvancementCompletionProvider extends BaseCompletionProvider {
         let pos = position.with(position.line, position.character - word.length);
         //获取进度路径的范围
         const wordRange = document.getWordRangeAtPosition(pos);
-        let displayPath;
         // console.log(this.functionPaths);
         return DataLoader.getInstance().getAdvancementResNames().map(path => {
-            displayPath = path.replace("/",":").slice(0, -5);
-            const item = this.createCompletionItem(displayPath, '进度路径', displayPath , false, vscode.CompletionItemKind.File);
+            const item = this.createCompletionItem(path, '进度路径', path , false, vscode.CompletionItemKind.Function);
             //修改覆盖
             if (wordRange) {
             item.range = wordRange;

@@ -159,7 +159,7 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
             "",
             team,
             false,
-            vscode.CompletionItemKind.Constant
+            vscode.CompletionItemKind.Field
         ));
     }
 
@@ -169,7 +169,7 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
             "",
             tag,
             false,
-            vscode.CompletionItemKind.Property
+            vscode.CompletionItemKind.Constant
         ));
         add.length > 0 ? arr.push(this.createCompletionItem(add, '', add)) : arr;
         return arr;
