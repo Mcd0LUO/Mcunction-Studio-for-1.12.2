@@ -1,0 +1,141 @@
+import * as vscode from 'vscode';
+import { CommandUtils } from '../utils/CommandUtils';
+
+/**
+ * 命令签名帮助提供器（示例：scoreboard/function命令参数提示）
+ */
+export class McFunctionSignatureHelpProvider implements vscode.SignatureHelpProvider {
+
+    
+    provideSignatureHelp(
+        document: vscode.TextDocument,
+        position: vscode.Position,
+        token: vscode.CancellationToken
+    ): vscode.ProviderResult<vscode.SignatureHelp> {
+        const lineText = document.lineAt(position.line).text;
+        const commands = CommandUtils.extraceActiveCommand(lineText);
+        // 匹配 scoreboard players set 命令
+        switch (commands[0]) {
+            case 'scoreboard':
+                return this.provideScoreboardSignatureHelp(commands);
+            case 'function':
+                return this.provideFunctionSignatureHelp(commands);
+            case 'execute':
+                return this.provideExecuteSignatureHelp(commands);
+            case 'summon':
+                return this.provideSummonSignatureHelp(commands);
+            case 'stats':
+                return this.provideStatsSignatureHelp(commands);
+            default:
+                return null;
+        }
+
+    }
+    provideStatsSignatureHelp(commands: string[]): vscode.ProviderResult<vscode.SignatureHelp> {
+        if (commands.length >= 8) {return null;} 
+        const signatureHelp = new vscode.SignatureHelp();
+        // 匹配 stats 命令
+        const signature = new vscode.SignatureInformation(
+            '<源> <绑定对象> <操作> <事件> <赋值对象> <记分项>',
+        );
+        signature.parameters = [
+            new vscode.ParameterInformation('<源>'),
+            new vscode.ParameterInformation('<绑定对象>', '目标选择器'),
+            new vscode.ParameterInformation('<操作>'),
+            new vscode.ParameterInformation('<事件>', '如minecraft:used/minecraft:used_on_block'),
+            new vscode.ParameterInformation('<赋值对象>', '目标选择器'),
+            new vscode.ParameterInformation('<记分项>')
+        ];
+        signatureHelp.signatures = [signature];
+        signatureHelp.activeSignature = 0;
+        signatureHelp.activeParameter = commands.length - 2;
+        return signatureHelp;
+    }
+    provideSummonSignatureHelp(commands: string[]): vscode.ProviderResult<vscode.SignatureHelp> {
+        if (commands.length >= 7) {return null;}
+        const signatureHelp = new vscode.SignatureHelp();
+        // 匹配 summon 命令
+        const signature = new vscode.SignatureInformation(
+            '[<实体ID> <x> <y> <z> <NBT>]',
+        );
+        signature.parameters = [
+            new vscode.ParameterInformation('<实体ID>', '如minecraft:pig'),
+            new vscode.ParameterInformation('<x>', 'x坐标'),
+            new vscode.ParameterInformation('<y>', 'y坐标'),
+            new vscode.ParameterInformation('<z>', 'z坐标'),
+            new vscode.ParameterInformation('<NBT>', 'compound{}')
+        ];
+        signatureHelp.signatures = [signature];
+        signatureHelp.activeSignature = 0;
+        signatureHelp.activeParameter = commands.length - 2;
+
+        return signatureHelp;
+    }
+    provideExecuteSignatureHelp(commands: string[]): vscode.ProviderResult<vscode.SignatureHelp> {
+        if (commands.length <= 2 || commands.length > 5) {return null;}
+        const signatureHelp = new vscode.SignatureHelp();
+        const signature = new vscode.SignatureInformation(
+            'vec3[<x> <y> <z>]',
+        );
+        signature.parameters = [
+            new vscode.ParameterInformation('<x>', 'x坐标'),
+            new vscode.ParameterInformation('<y>', 'y坐标'),
+            new vscode.ParameterInformation('<z>', 'z坐标')
+        ];
+        signatureHelp.signatures = [signature];
+        signatureHelp.activeSignature = 0;
+        signatureHelp.activeParameter = commands.length -3;
+        return signatureHelp;
+    }
+    provideFunctionSignatureHelp(commands: string[]): vscode.SignatureHelp | null {
+        if (commands.length >= 3) {return null;}
+        const signatureHelp = new vscode.SignatureHelp();
+        // 匹配 function 命令
+        const signature = new vscode.SignatureInformation(
+            '<命名空间:路径>',
+        );
+        signature.parameters = [
+            new vscode.ParameterInformation('命名空间', '如minecraft、my_mod'),
+            new vscode.ParameterInformation('路径', '如tick、tools/build')
+        ];
+        signatureHelp.signatures = [signature];
+        signatureHelp.activeSignature = 0;
+        signatureHelp.activeParameter = commands[1].split(':').length -1;
+        
+        
+
+        return signatureHelp;
+    }
+
+    private provideScoreboardSignatureHelp(commands: string[]): vscode.SignatureHelp {
+    const signatureHelp = new vscode.SignatureHelp();
+    const signature = new vscode.SignatureInformation(
+        '<目标> <记分板> <数值>',
+        '>设置实体的记分板数值'
+    );
+    // 参数说明
+    signature.parameters = [
+        new vscode.ParameterInformation('<目标>', '实体选择器（如@a/@p/@e）'),
+        new vscode.ParameterInformation('<记分板>', '已定义的记分板名称'),
+        new vscode.ParameterInformation('<数值>', 'int（如100、-5）')
+    ];
+    signatureHelp.signatures = [signature];
+    signatureHelp.activeSignature = 0;
+
+    // 计算当前输入到第几个参数
+    const paramIndex = commands.length - 4;
+    signatureHelp.activeParameter = paramIndex;
+    return signatureHelp;
+}
+
+
+}
+
+// 注册Signature Help
+export function registerSignatureHelp() {
+    return vscode.languages.registerSignatureHelpProvider(
+        { language: 'mcfunction', scheme: 'file' },
+        new McFunctionSignatureHelpProvider(),
+        ...[' ']
+    );
+}
