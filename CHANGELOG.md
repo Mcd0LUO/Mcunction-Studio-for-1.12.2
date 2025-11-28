@@ -2,8 +2,7 @@
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
 
-Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
-## [Unreleased]
-
-- Initial release
+## [1.0.0]
+- 完成基本命令补全 #除json文本组件补全
+- 完成定义跳转 (ctrl + 点击)

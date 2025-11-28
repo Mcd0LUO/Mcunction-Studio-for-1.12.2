@@ -34,8 +34,14 @@
     ],
     "commands": [
       {
-        "command": "mcfunction-studio.helloWorld",
-        "title": "Hello World"
+        "command": "mcf-studio.createFunctionFile",
+        "title": "新建mcfunction文件",
+        "category": "Mcfunction Studio"
+      },
+      {
+        "command": "mcf-studio.reloadWorkspace",
+        "title": "刷新函数|计分板|进度|标签池",
+        "category": "Mcfunction Studio"
       }
     ]
   },
