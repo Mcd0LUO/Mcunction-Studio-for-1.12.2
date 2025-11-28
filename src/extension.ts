@@ -7,6 +7,7 @@ import { McFunctionSignatureHelpProvider, registerSignatureHelp } from './core/S
 import { registerCodeLens } from './core/CodeLens';
 import { registerFunctionDefinitionProvider } from './core/McFunctionDefinitionProvider';
 import { registerHoverProvider } from './core/HoverProvider';
+import { DynamicDocManager } from './core/DynamicDocManager';
 
 export let rootDir: vscode.Uri;
 
@@ -34,6 +35,8 @@ export function activate(context: vscode.ExtensionContext) {
 	registerFunctionDefinitionProvider(context);
 	// 注册Hover
 	registerHoverProvider(context);
+	// 注册文档管理
+	const docManager = DynamicDocManager.getInstance();
 
 
 

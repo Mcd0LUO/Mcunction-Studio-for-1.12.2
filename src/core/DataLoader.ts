@@ -42,8 +42,24 @@ export class DataLoader {
     }
     // 加载数据
     public async loadData(): Promise<any> {
-        this.loadFunctionData();
-        this.loadAdvancementData();
+        // 并行执行
+        const promise1 = this.loadFunctionData();
+        const promise2 = this.loadAdvancementData();
+
+        try {
+            // 并行等待解析
+            const [result1, result2] = await Promise.all([promise1, promise2]);
+
+            if (result1 && result2) {
+                vscode.window.showInformationMessage(
+                    `加载 ${this.functionResNames.length} 个函数，提取到 ${this.scoreboardsData.size} 个记分板, ${this.tagsData.size} 个标签, ${this.advancementResNames} 个进度, ${this.fakePlayerData.size} 个假玩家`
+                );
+            }
+        } catch (error) {
+            // 处理任一函数执行失败的情况
+            vscode.window.showErrorMessage(`加载数据失败: ${error}`);
+        }
+
         return 0;
     }
 
@@ -86,20 +102,21 @@ export class DataLoader {
         return null;
     }
 
-    private addTag(tagName: string): void {
+    public addTag(tagName: string): void {
         const value = this.tagsData.get(tagName);
         if (value) {
             this.tagsData.set(tagName, value + 1);
         }
         this.tagsData.set(tagName, 1);
     }
-    private addTeam(teamName: string, uri: vscode.Uri, lineNumber: number): void {
+    public addTeam(teamName: string, uri: vscode.Uri, lineNumber: number): void {
         const teamData = this.teamsData.get(teamName);
         if (teamData) {
             teamData.def = [uri, lineNumber];
         }
         this.teamsData.set(teamName, {def: [uri, lineNumber]});
     }
+
 
     private addScoreboard(scoreboardName: string,type: string, lineNumber: number, uri: vscode.Uri, desc: string = ''): void {
         // 先尝试获取这个记分板
@@ -178,7 +195,7 @@ export class DataLoader {
      * 1. 提取所有函数的标准名称（resName）
      * 2. 并发解析所有函数文件，提取记分板和标签
      */
-    public async loadFunctionData(): Promise<null> {
+    public async loadFunctionData(): Promise<boolean | null> {
         try {
             const functionsUri = vscode.Uri.joinPath(rootDir, 'functions');
             const functionPaths = await DataLoader.getAllFunctionsPaths(functionsUri);
@@ -202,24 +219,21 @@ export class DataLoader {
             );
 
 
-            vscode.window.showInformationMessage(
-                `成功加载 ${this.functionResNames.length} 个函数，提取到 ${this.scoreboardsData.size} 个记分板, 检测到 ${this.fakePlayerData.size} 个假玩家`
-            );
-
-            return null;
+            return true;
         } catch (error) {
             vscode.window.showErrorMessage(`加载函数数据失败：${(error as Error).message}`);
             return null;
         }
     }
 
-    public async loadAdvancementData(): Promise<undefined> {
+    public async loadAdvancementData(): Promise<boolean | null> {
         const advancementPaths = await DataLoader.getAllAdvancementsPaths(vscode.Uri.joinPath(rootDir, 'advancements'));
         for (const path of advancementPaths) {
             const resName = MinecraftUtils.buildAdvancementCallByUri(path);
             if (!resName) continue;
             this.advancementResNames.push(resName);
         }
+        return true;
 
     }
 
@@ -291,10 +305,14 @@ export class DataLoader {
             // scoreboard players tag @s add|remove xxx
             this.addTag(commands[5]);
         }
-        else if (commands[1] === 'teams' && commands[2] === 'add') {
+        else if (commands[1] === 'teams') {
             // scoreboard teams add xxx
-            this.addTeam(commands[3],uri,lineNumber);
-
+            if (commands[2] === 'add') {
+                this.addTeam(commands[3],uri,lineNumber);
+            }
+            else if (commands[2] === 'opetion') {
+                
+            }
         }
 
     }

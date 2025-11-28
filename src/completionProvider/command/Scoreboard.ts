@@ -37,9 +37,9 @@ export class ScoreboardCompletionProvider extends BaseCompletionProvider {
             return this.handleTeams(document, position, token, context, commands);
         }
         return [];
-    } 
+    }
     handleTeams(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext, commands: string[]): CompletionItem[] | Promise<CompletionItem[]> {
-        
+
         if (commands.length === 3) {
             return [
                 this.createCompletionItem(
@@ -72,11 +72,206 @@ export class ScoreboardCompletionProvider extends BaseCompletionProvider {
                     '设置队伍选项',
                     'option'
                 )
-                
+
             ];
         }
         if (commands.length === 4) {
             return this.provideTeamCompletions();
+        }
+        if (commands.length === 5 && commands[2] === "option") {
+            return [
+                this.createCompletionItem(
+                    'color',
+                    '设置队伍颜色',
+                    'color'
+                ),
+                this.createCompletionItem(
+                    'friendlyFire',
+                    '设置队伍友火',
+                    'friendlyFire'
+                ),
+                this.createCompletionItem(
+                    'nametagVisibility',
+                    '设置队伍名称可见性',
+                    'nametagVisibility'
+                ),
+                this.createCompletionItem(
+                    'deathMessageVisibility',
+                    '设置队伍死亡信息可见性',
+                    'deathMessageVisibility'
+                ),
+                this.createCompletionItem(
+                    'collisionRule',
+                    '设置队伍碰撞规则',
+                    'collisionRule'
+                ),
+                this.createCompletionItem(
+                    'seeFriendlyInvisibles',
+                    '设置队伍是否可见',
+                    'seeFriendlyInvisibles'
+                )
+
+            ];
+        }
+        if (commands.length === 6) {
+            if (commands[4] === "collisionRule") {
+                return [
+                    this.createCompletionItem(
+                        'never',
+                        '从不碰撞',
+                        'never'
+                    ),
+                    this.createCompletionItem(
+                        'pushOtherTeams',
+                        '碰撞其它队伍',
+                        'pushOtherTeams'
+                    ),
+                    this.createCompletionItem(
+                        'pushOwnTeam',
+                        '碰撞自身队伍',
+                        'pushOwnTeam'
+                    ),
+                    this.createCompletionItem(
+                        'always',
+                        '总是碰撞',
+                        'always'
+                    )
+                ];
+            }
+            if (commands[4] === "nametagVisibility" || commands[4] === "deathMessageVisibility") {
+                return [
+                    this.createCompletionItem(
+                        'always',
+                        '总是可见',
+                        'always'
+                    ),
+                    this.createCompletionItem(
+                        'never',
+                        '从不可见',
+                        'never'
+                    ),
+                    this.createCompletionItem(
+                        'hideForOtherTeams',
+                        '隐藏其它队伍',
+                        'hideForOtherTeams'
+                    ),
+                    this.createCompletionItem(
+                        'hideForOwnTeam',
+                        '隐藏自身队伍',
+                        'hideForOwnTeam'
+                    )
+                ];
+            }
+            if (commands[4] === "friendlyFire" || commands[4] === "seeFriendlyInvisibles") {
+                return [
+                    this.createCompletionItem(
+                        'true',
+                        '允许友火',
+                        'true'
+                    ),
+                    this.createCompletionItem(
+                        'false',
+                        '禁止友火',
+                        'false'
+                    )
+                ];
+            }
+            if (commands[4] === 'color') {
+                return [
+                    this.createCompletionItem(
+                        'aqua',
+                        '青色',
+                        'aqua'
+                    ),
+                    this.createCompletionItem(
+                        'black',
+                        '黑色',
+                        'black'
+                    ),
+                    this.createCompletionItem(
+                        'blue',
+                        '蓝色',
+                        'blue'
+                    ),
+                    this.createCompletionItem(
+                        'dark_aqua',
+                        '暗青色',
+                        'darkAqua'
+                    ),
+                    this.createCompletionItem(
+                        'dark_blue',
+                        '暗蓝色',
+                        'darkBlue'
+                    ),
+                    this.createCompletionItem(
+                        'dark_gray',
+                        '暗灰色',
+                        'darkGray'
+                    ),
+                    this.createCompletionItem(
+                        'dark_green',
+                        '暗绿色',
+                        'darkGreen'
+                    ),
+                    this.createCompletionItem(
+                        'dark_purple',
+                        '暗紫色',
+                        'darkPurple'
+                    ),
+                    this.createCompletionItem(
+                        'dark_red',
+                        '暗红色',
+                        'darkRed'
+                    ),
+                    this.createCompletionItem(
+                        'gold',
+                        '金色',
+                        'gold'
+                    ),
+                    this.createCompletionItem(
+                        'gray',
+                        '灰色',
+                        'gray'
+                    ),
+                    this.createCompletionItem(
+                        'green',
+                        '绿色',
+                        'green'
+                    ),
+                    this.createCompletionItem(
+                        'light_purple',
+                        '浅紫色',
+                        'lightPurple'
+                    ),
+                    this.createCompletionItem(
+                        'red',
+                        '红色',
+                        'red'
+                    ),
+                    this.createCompletionItem(
+                        'white',
+                        '白色',
+                        'white'
+                    ),
+                    this.createCompletionItem(
+                        'yellow',
+                        '黄色',
+                        'yellow'
+                    ),
+                    this.createCompletionItem(
+                        'reset',
+                        '重置颜色',
+                        'reset'
+                    )
+
+
+
+                ];
+
+            }
+                    
+                
+            
         }
         return [];
     }
@@ -106,7 +301,7 @@ export class ScoreboardCompletionProvider extends BaseCompletionProvider {
                 ),
             ];
         }
-        else if (commands.length ===4 ) {
+        else if (commands.length === 4) {
             if (commands[2] === "remove") {
                 return this.provideScoreboardCompletions();
             }
@@ -166,7 +361,7 @@ export class ScoreboardCompletionProvider extends BaseCompletionProvider {
                             );
                         });
                     }
-                    
+
                     else if (commands[4].startsWith("stat.useItem.minecraft.")) {
                         return this.provideBlockCompletions();
                     }
@@ -212,7 +407,7 @@ export class ScoreboardCompletionProvider extends BaseCompletionProvider {
     }
 
     private handlePlayers(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext, commands: string[]): CompletionItem[] {
-        if (commands.length === 3) { 
+        if (commands.length === 3) {
             return [
                 this.createCompletionItem(
                     'add',
@@ -257,10 +452,10 @@ export class ScoreboardCompletionProvider extends BaseCompletionProvider {
                 ),
             ];
         }
-        if (commands.length === 4 && ["add","remove","reset","operation","set","tag"].includes(commands[2])) {
+        if (commands.length === 4 && ["add", "remove", "reset", "operation", "set", "tag"].includes(commands[2])) {
             return this.provideSelectorCompletions(commands[3]);
         }
-        if (commands.length === 5 && ["add","remove","reset","operation","set"].includes(commands[2])) {
+        if (commands.length === 5 && ["add", "remove", "reset", "operation", "set"].includes(commands[2])) {
             return this.provideScoreboardCompletions();
         }
         // scoreboard players tag @s add xxx
@@ -354,12 +549,12 @@ export class ScoreboardCompletionProvider extends BaseCompletionProvider {
             if (commands.length === 8) {
                 return this.provideScoreboardCompletions();
             }
-        } 
-
-
-        
-        
-        
-        return [];
         }
+
+
+
+
+
+        return [];
     }
+}

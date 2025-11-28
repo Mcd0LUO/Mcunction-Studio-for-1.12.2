@@ -213,17 +213,71 @@ export class CommandUtils {
 
     public static isInSelector(lineText: string, currentIdx: number): boolean {
         let startIdx = lineText.indexOf('@');
+        let endIdx = lineText.indexOf(']',startIdx);
 
-        return (startIdx !== -1 && startIdx < currentIdx);
+        return (startIdx !== -1 && startIdx <= currentIdx && endIdx >= currentIdx);
+    }
+
+    public static isSimpleSelector(selector: string): boolean {
+        return ['@a', '@s', '@p', '@e', '@r'].includes(selector);
     }
 
     /**
-     * 获取当前光标处选择器的信息
+     * 获取当前光标处选择器的文本（支持含/不含[]的选择器）
+     * @param lineText 当前行文本
+     * @param cursorIdx 光标索引
+     * @returns 选择器文本
+     */
+    public static getCursorFullSelector(lineText: string, cursorIdx: number): string | null {
+        let selectorStartIdx = lineText.indexOf('@');
+
+        while (selectorStartIdx !== -1 && selectorStartIdx < cursorIdx + 1) {
+            // 检查选择器类型（a/s/p/e/r）
+            const selectorType = lineText.charAt(selectorStartIdx + 1);
+            if (!['a', 's', 'p', 'e', 'r'].includes(selectorType)) {
+                selectorStartIdx = lineText.indexOf('@', selectorStartIdx + 1);
+                continue;
+            }
+
+            // ===== 处理无[]的情况 =====
+            // 确定选择器的结束位置：
+            // 1. 若有[，则到[之前结束（无[]时）或到]结束（有[]时）；
+            // 2. 若无[，则到行尾/空格/下一个非字母数字符号结束
+            let selectorEndIdx: number;
+            const bracketStartIdx = lineText.indexOf('[', selectorStartIdx);
+
+            if (bracketStartIdx === -1) {
+                // 无[]：选择器结束于下一个非字母数字字符/行尾
+                selectorEndIdx = selectorStartIdx + 2; // 初始为@+类型（如@a）
+                // 向后延伸，直到遇到非字母数字或行尾
+                while (selectorEndIdx < lineText.length && /[a-zA-Z0-9_]/.test(lineText.charAt(selectorEndIdx))) {
+                    selectorEndIdx++;
+                }
+            } else {
+                // 有[：先找]的位置
+                const bracketEndIdx = lineText.indexOf(']', bracketStartIdx);
+                selectorEndIdx = bracketEndIdx === -1 ? bracketStartIdx : bracketEndIdx + 1;
+            }
+
+            // 判断光标是否在选择器范围内（@开始到选择器结束之间）
+            if (selectorStartIdx <= cursorIdx && cursorIdx <= selectorEndIdx) {
+                const selectorStr = lineText.substring(selectorStartIdx, selectorEndIdx).trim();
+                return selectorStr;
+            }
+
+            // 光标不在当前选择器范围，找下一个@
+            selectorStartIdx = lineText.indexOf('@', selectorStartIdx + 1);
+        }
+        return null;
+    }
+
+    /**
+     * 获取当前光标处选择器的条件
      * @param lineText 当前行文本
      * @param cursorIdx 光标索引
      * @returns 选择器信息（选择器文本，选择器起始索引）
      */
-    public static getCursorSelector(lineText: string, cursorIdx: number): [string, number] | null {
+    public static getCursorSelectorArgs(lineText: string, cursorIdx: number): [string, number] | null {
         let selectorStartIdx = lineText.indexOf('@');
         while (selectorStartIdx !== -1 && selectorStartIdx < cursorIdx) {
             // 检查选择器类型（a/s/p/e/r）
@@ -258,14 +312,14 @@ export class CommandUtils {
     }
 
     /**
-     * 获取当前光标处predicate的信息
+     * 获取当前光标处selector predicate的信息
      * @param lineText 当前行文本
      * @param cursorIdx 光标索引
      * @returns predicate信息（predicate文本，predicate起始索引，predicate结束索引）
      */
     public static getCursorPredicate(lineText: string, cursorIdx: number): [string, number, number] | null {
         let selectorStartIdx = lineText.indexOf('@');
-        const selectorInfo = this.getCursorSelector(lineText, cursorIdx);
+        const selectorInfo = this.getCursorSelectorArgs(lineText, cursorIdx);
         if (!selectorInfo) { return null; }
         const [predicatesStr, bracketStartIdx] = selectorInfo;
         if (!predicatesStr) { return null; }
@@ -287,6 +341,14 @@ export class CommandUtils {
         selectorStartIdx = lineText.indexOf('@', selectorStartIdx + 1);
 
         return null; 
+    }
+
+    public static getSelectorMap(selector: string): Map<string, any> | null {
+        const args = selector.split(',');
+        return new Map(args.map(arg => {
+            const [key, value] = arg.split('=');
+            return [key, value];
+        }));
     }
 
 }
