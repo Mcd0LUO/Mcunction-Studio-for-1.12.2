@@ -250,7 +250,13 @@ export class DataLoader {
 
     }
 
-    public async loadSingleFunctionData(path: vscode.Uri): Promise<null> {
+    /*
+    * 加载单个函数数据
+    * @param path 函数文件路径
+    * @param startLine 起始行数（默认从0行开始）
+    * @param mode 模式：0-新加载模式 1-刷新，模式
+    */
+    public async loadSingleFunctionData(path: vscode.Uri, startLine: number = 0, mode: number = 0): Promise<null> {
         try {
             // 1. 读取文件内容（VS Code 原生 API，兼容跨平台/远程工作区）
             const fileContent = await vscode.workspace.fs.readFile(path);
@@ -263,6 +269,9 @@ export class DataLoader {
             // 3. 提取数据（正则适配 1.12.2 命令格式）
             lines.forEach((line, index) => {
                 // 解析为命令数组
+                if (index < startLine) {
+                    return;
+                }
                 const trimLine = line.trim();
                 if (!trimLine || trimLine.startsWith('#')) {
                     return;
@@ -270,12 +279,12 @@ export class DataLoader {
                 const commands = CommandUtils.extraceActiveCommand(trimLine);
                 switch (commands[0]) {
                     case 'scoreboard':
-                        this.extractScoreboardData(path, index, commands);
+                        this.extractScoreboardData(path, index, commands, mode);
                         break;
                     case 'function':
-                        this.extractFunctionData(path, index, commands);
+                        this.extractFunctionData(path, index, commands, mode);
                     case "summon":
-                        this.extractSummonData(path, index, commands);
+                        this.extractSummonData(path, index, commands, mode);
 
                 }
             });
@@ -286,7 +295,7 @@ export class DataLoader {
         }
     }
 
-    private extractScoreboardData(uri: vscode.Uri, lineNumber: number, commands: string[]): void {
+    private extractScoreboardData(uri: vscode.Uri, lineNumber: number, commands: string[], mode: number): void {
         if (commands.length <= 3) { return; }
         // scoreboard objectives add xxx dummy desc 
         if (commands[1] === 'objectives' && commands[2] === 'add' && commands.length > 4) {
@@ -331,24 +340,24 @@ export class DataLoader {
     }
 
 
-    async extractFunctionData(path: vscode.Uri, lineNumber: number, commands: string[]) {
+    async extractFunctionData(uri: vscode.Uri, lineNumber: number, commands: string[], mode: number) {
         // 验证函数存在
 
         const funcData = this.functionData.get(commands[1]);
         // 检查该函数的data是否已经初始化
         if (funcData) {
-            if (funcData.ref && funcData.ref.get(path)) {
-                funcData.ref.get(path)?.push(lineNumber);
+            if (funcData.ref && funcData.ref.get(uri)) {
+                funcData.ref.get(uri)?.push(lineNumber);
             }
             else {
                 const funcData: functionData = { ref: new Map<vscode.Uri, number[]>() };
-                funcData.ref.set(path, [lineNumber]);
+                funcData.ref.set(uri, [lineNumber]);
                 this.functionData.set(commands[1], funcData);
             }
         }
         else {
             const data = new Map<vscode.Uri, number[]>();
-            data.set(path, [lineNumber]);
+            data.set(uri, [lineNumber]);
             this.functionData.set(commands[1], { ref: data });
         }
 
@@ -356,7 +365,7 @@ export class DataLoader {
 
     }
 
-    private extractSummonData(uri: vscode.Uri, lineNumber: number, commands: string[]): void {
+    private extractSummonData(uri: vscode.Uri, lineNumber: number, commands: string[], mode: number): void {
         if (commands.length < 5) { return; }
         // summon xxx x y z {}
         const nbt = commands[5];

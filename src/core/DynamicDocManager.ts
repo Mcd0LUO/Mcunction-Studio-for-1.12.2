@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { DataLoader } from './DataLoader';
 
 
 
@@ -37,14 +38,8 @@ export class DynamicDocManager {
 
     private handleSingleChange(change: vscode.TextDocumentContentChangeEvent, document: vscode.TextDocument): void {
         const startLine = change.range.start.line;
-        const endLine = change.range.end.line;
-        for (let i = startLine; i <= endLine; i++) {
-            const line = document.lineAt(i);
-            // 获取当前行内容
-            const lineText = line.text;
-            console.log(lineText);
-        }
-
+        DataLoader.getInstance().loadSingleFunctionData(document.uri, startLine);
+    
     }
 
 }

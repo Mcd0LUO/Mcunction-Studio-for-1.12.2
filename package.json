@@ -2,10 +2,11 @@
   "name": "mcfunction-studio",
   "displayName": "Mcfunction Studio for 1.12",
   "description": "A simple mcfunction dev specialized helper for 1.12.2",
-  "version": "1.0.0",
+  "version": "1.0.1",
+  "publisher": "Mcd0-LUO",
   "author": {
     "email": "1473522801@qq.com",
-    "name": "Mcd0-LUO",
+    "name": "Mcd0_LUO",
     "url": "https://github.com/Mcd0LUO/Mcunction-Studio-for-1.12.2"
   },
   "icon": "icons/main_icon.png",
