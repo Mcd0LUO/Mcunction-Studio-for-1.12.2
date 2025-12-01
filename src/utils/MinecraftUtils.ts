@@ -411,7 +411,7 @@ export class MinecraftUtils {
         const filePath: string = path.join(targetDir, `${fileName}.mcfunction`);
         const fileUri: vscode.Uri = vscode.Uri.file(filePath);
         // 添加到函数池子
-        DataLoader.getInstance().addFunction(fileUri);
+        DataLoader.getInstance().addFunctionRes(fileUri);
 
         try {
             // 写入空文件并打开

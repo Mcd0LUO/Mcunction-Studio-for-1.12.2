@@ -8,6 +8,7 @@ import { registerCodeLens } from './core/CodeLens';
 import { registerFunctionDefinitionProvider } from './core/McFunctionDefinitionProvider';
 import { registerHoverProvider } from './core/HoverProvider';
 import { DynamicDocManager } from './core/DynamicDocManager';
+import { LinePreviewManager } from './core/LinePreviewManager';
 
 export let rootDir: vscode.Uri;
 
@@ -44,6 +45,8 @@ export function activate(context: vscode.ExtensionContext) {
 		}),
 		vscode.commands.registerCommand('mcf-studio.createFunctionFile', MinecraftUtils.createNewFunctionFile),
 	);
+	// 注册json预览
+	const linePre = new LinePreviewManager(); 
 	// 注册辅助命令
 	vscode.commands.registerCommand('mcf-studio.checkDocCache', () => {
 		const docCache = dataloader.getDocCache().get(MinecraftUtils.buildFunctionCall(vscode.workspace.textDocuments[0].uri)??'');

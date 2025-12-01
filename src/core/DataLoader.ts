@@ -25,6 +25,20 @@ enum DataType {
     Team = 3,
     FakePlayer = 4
 }
+interface ConfigData {
+    IgnorePattern: {
+        function: string[];
+        advancement: string[];
+    },
+    Signature: boolean,
+    JsonPreview: {
+        LinePreview: boolean,
+        HoverPreview:boolean
+    },
+    SelecterDiagnostics: boolean,
+    CommandSchemaCheck: boolean
+
+}
 
 
 export class DataLoader {
@@ -35,7 +49,20 @@ export class DataLoader {
     private functionData: Map<string, functionData> = new Map();  // 函数数据
     private fakePlayerData: Map<string, number> = new Map();  // 假玩家数据
     private tagsData: Map<string, number> = new Map(); // 标签数据   标签:个数
-    private teamsData: Map<string, TeamData> = new Map();
+    private teamsData: Map<string, TeamData> = new Map(); // 队伍数据
+    private configData: ConfigData = {
+        IgnorePattern: {
+            function: [],
+            advancement: []
+        },
+        JsonPreview: {
+            LinePreview: true,
+            HoverPreview: true
+        },
+        Signature: true,
+        SelecterDiagnostics: true,
+        CommandSchemaCheck: true
+    }; // 配置数据
 
     private docCache: Map<string, Map<number, { type: DataType, value: string }[]>> = new Map(); // uri -> 行号: { 类型 , 值 }
 
@@ -77,6 +104,10 @@ export class DataLoader {
         }
 
         return 0;
+    }
+    public getConfig(): ConfigData {
+        return this.configData;
+
     }
 
     public getFunctionResNames(): string[] {
@@ -143,12 +174,11 @@ export class DataLoader {
         linemeta.push({ type: DataType.Team, value: teamName });
         cache?.set(lineNumber, linemeta);
     }
-    public addFunction(uri: vscode.Uri): void  {
+    public addFunctionRes(uri: vscode.Uri): void  {
         const resName = MinecraftUtils.buildFunctionCall(uri);
         if (resName) {
             this.functionResNames.push(resName);
         }
-        const cache = this.docCache.get(resName ?? '');
     }
     public addFakePlayer(playerName: string, uri: vscode.Uri, lineNumber: number): void { 
         const fakeData = this.fakePlayerData.get(playerName)?? 0;

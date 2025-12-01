@@ -2,6 +2,10 @@
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
 
+## [1.1.0]
+### 更新
+- 动态加载新创建的scoreboard|tag|data|team  [之前仅在打开工作区时加载一次]
+
 ## [1.0.1] 更新测试
 - 更换icon
 
