@@ -108,7 +108,7 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
         if (insertText instanceof vscode.SnippetString) {
             item.insertText = insertText;
         } else {
-            item.insertText = new vscode.SnippetString(insertText);
+            item.insertText = new vscode.SnippetString(insertText + this.global_sufiix);
         }
 
         // 自动触发下一级补全（提升用户体验，无需手动按 Ctrl+Space）
@@ -136,7 +136,7 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
             .map(command => this.createCompletionItem(
                 command,
                 "",
-                `${command}${this.global_sufiix}`,
+                command,
                 true // 自动触发下一级补全
             ));
     }
@@ -147,7 +147,7 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
         return DataLoader.getInstance().getFunctionResNames().map(resName => this.createCompletionItem(
             resName,
             "",
-            `${resName}${this.global_sufiix}`,
+            resName,
             true,
             vscode.CompletionItemKind.Function
         ));
@@ -171,7 +171,6 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
             false,
             vscode.CompletionItemKind.Constant
         ));
-        add.length > 0 ? arr.push(this.createCompletionItem(add, '', add)) : arr;
         return arr;
     }
     protected provideItemNbtCompletions(): vscode.CompletionItem[] {

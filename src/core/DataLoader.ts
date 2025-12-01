@@ -18,6 +18,13 @@ interface TeamData {
     rule?: string;
     def: [vscode.Uri, number];  // 函数定义位置 uri:行索引
 }
+enum DataType {
+    Scoreboard = 0,
+    Function = 1,
+    Tag = 2,
+    Team = 3,
+    FakePlayer = 4
+}
 
 
 export class DataLoader {
@@ -26,9 +33,11 @@ export class DataLoader {
     private advancementResNames: string[] = []; // 进度文件资源列表
     private scoreboardsData: Map<string, ScoreboardData> = new Map(); // 记分板数据 
     private functionData: Map<string, functionData> = new Map();  // 函数数据
-    private fakePlayerData: Map<string, Map<vscode.Uri, number[]>> = new Map();  // 假玩家数据
+    private fakePlayerData: Map<string, number> = new Map();  // 假玩家数据
     private tagsData: Map<string, number> = new Map(); // 标签数据   标签:个数
     private teamsData: Map<string, TeamData> = new Map();
+
+    private docCache: Map<string, Map<number, { type: DataType, value: string }[]>> = new Map(); // uri -> 行号: { 类型 , 值 }
 
     private constructor() {
         this.loadData();
@@ -59,7 +68,7 @@ export class DataLoader {
 
             if (result1 && result2) {
                 vscode.window.showInformationMessage(
-                    `加载 ${this.functionResNames.length} 个函数，提取到 ${this.scoreboardsData.size} 个记分板, ${this.tagsData.size} 个标签, ${this.advancementResNames} 个进度, ${this.fakePlayerData.size} 个假玩家`
+                    `加载 ${this.functionResNames.length} 个函数，提取到 ${this.scoreboardsData.size} 个记分板, ${this.tagsData.size} 个标签, ${this.advancementResNames.length} 个进度, ${this.fakePlayerData.size} 个假玩家`
                 );
             }
         } catch (error) {
@@ -82,7 +91,7 @@ export class DataLoader {
     public getFunctionData(): Map<string, functionData> {
         return this.functionData;
     }
-    public getFakePlayerData(): Map<string, Map<vscode.Uri, number[]>> {
+    public getFakePlayerData(): Map<string, number> {
         return this.fakePlayerData;
     }
     public getTagsData(): Map<string, number> {
@@ -91,8 +100,11 @@ export class DataLoader {
     public getTeamsData(): Map<string, TeamData> {
         return this.teamsData;
     }
+    public getDocCache(): Map<string, Map<number, { type: DataType, value: string }[]>> {
+        return this.docCache;
+    }
     public getScoreboardDef(scoreboardName: string): { uri: vscode.Uri, range: vscode.Range } | null {
-        const scoreboardData = DataLoader.getInstance().getScoreboardsData().get(scoreboardName);
+        const scoreboardData = this.scoreboardsData.get(scoreboardName);
         if (scoreboardData) {
             const [uri, lineNumber] = scoreboardData.def;
             return { uri, range: new vscode.Range(lineNumber, 0, lineNumber, 0) };
@@ -109,12 +121,16 @@ export class DataLoader {
         return null;
     }
 
-    public addTag(tagName: string): void {
+    public addTag(tagName: string, uri: vscode.Uri, lineNumber: number): void {
         const value = this.tagsData.get(tagName);
         if (value) {
             this.tagsData.set(tagName, value + 1);
         }
         this.tagsData.set(tagName, 1);
+        const cache = this.docCache.get(MinecraftUtils.buildFunctionCall(uri) ?? '');
+        const linemeta: { type: DataType, value: string }[] = cache?.get(lineNumber) ?? [];
+        linemeta.push({ type: DataType.Tag, value: tagName });
+        cache?.set(lineNumber, linemeta);
     }
     public addTeam(teamName: string, uri: vscode.Uri, lineNumber: number): void {
         const teamData = this.teamsData.get(teamName);
@@ -122,31 +138,89 @@ export class DataLoader {
             teamData.def = [uri, lineNumber];
         }
         this.teamsData.set(teamName, {def: [uri, lineNumber]});
+        const cache = this.docCache.get(MinecraftUtils.buildFunctionCall(uri) ?? '');
+        const linemeta: { type: DataType, value: string }[] = cache?.get(lineNumber) ?? [];
+        linemeta.push({ type: DataType.Team, value: teamName });
+        cache?.set(lineNumber, linemeta);
     }
     public addFunction(uri: vscode.Uri): void  {
-        const resName = MinecraftUtils.getFunctionResName(uri);
+        const resName = MinecraftUtils.buildFunctionCall(uri);
         if (resName) {
             this.functionResNames.push(resName);
         }
+        const cache = this.docCache.get(resName ?? '');
+    }
+    public addFakePlayer(playerName: string, uri: vscode.Uri, lineNumber: number): void { 
+        const fakeData = this.fakePlayerData.get(playerName)?? 0;
+        this.fakePlayerData.set(playerName, fakeData + 1);
+        // cache
+        const cache = this.docCache.get(MinecraftUtils.buildFunctionCall(uri) ?? '');
+        const linemeta: { type: DataType, value: string }[] = cache?.get(lineNumber) ?? [];
+        linemeta.push({ type: DataType.FakePlayer, value: playerName });
+        cache?.set(lineNumber, linemeta);
+
     }
 
-
-    private addScoreboard(scoreboardName: string,type: string, lineNumber: number, uri: vscode.Uri, desc: string = ''): void {
+    private addScoreboard(scoreboardName: string, type: string, lineNumber: number, uri: vscode.Uri, desc: string = ''): void {
         // 先尝试获取这个记分板
         const scoreboard = this.scoreboardsData.get(scoreboardName);
         if (!scoreboard) {
             const def: [vscode.Uri, number] = [uri, lineNumber];
             const data: ScoreboardData = { type: type, desc: desc, def: def };
+            // 存入
             this.scoreboardsData.set(scoreboardName, data);
+            const cache = this.docCache.get(MinecraftUtils.buildFunctionCall(uri) ?? '');
+            const linemeta: { type: DataType, value: string }[] = cache?.get(lineNumber) ?? [];
+            linemeta.push({ type: DataType.Scoreboard, value: scoreboardName });
+            cache?.set(lineNumber, linemeta);
+
         }
         // 已有则警告
         else {
             const def = scoreboard.def;
             if (def) {
-                vscode.window.showWarningMessage(`重复定义记分板目标：${scoreboardName} 在 ${uri.path}:${lineNumber}`);
+                vscode.window.showWarningMessage(`重复定义记分板目标：${scoreboardName} 在 ${MinecraftUtils.buildFunctionCall(uri)} : ${lineNumber}`);
             }
         }
+
     }
+
+    public clearCache(doc: vscode.TextDocument, startLine: number = 0, endLine: number = -1) {
+        if (endLine === -1) {
+            endLine = doc.lineCount - 1;
+        }
+        // 文档缓存
+        const resName = MinecraftUtils.buildFunctionCall(doc.uri) ?? '';
+        const docCacheEntry = this.docCache.get(resName);
+        if (!docCacheEntry) {console.log('no cache'); return;};
+        // 遍历行缓存
+        for (let i = startLine; i <= endLine; i++) {
+            const lineCache = docCacheEntry.get(i);
+            lineCache?.forEach(meta => {
+                if (meta.type === DataType.Scoreboard) {
+                    // 删除缓存
+                    this.scoreboardsData.delete(meta.value);
+                }
+                else if (meta.type === DataType.Team) {
+                    // 删除缓存
+                    this.teamsData.delete(meta.value);
+                }
+                else if (meta.type === DataType.Tag) {
+                    // 删除缓存
+                    let count = this.tagsData.get(meta.value);
+                    count && count > 1 ? this.tagsData.set(meta.value, count - 1) : this.tagsData.delete(meta.value);
+                }
+                else if (meta.type === DataType.FakePlayer) {
+                    // 删除缓存
+                    const count = this.fakePlayerData.get(meta.value);
+                    count && count > 1 ? this.fakePlayerData.set(meta.value, count - 1) : this.fakePlayerData.delete(meta.value);
+                }
+            });
+            docCacheEntry.delete(i);
+        }
+    }
+
+
 
     /**
     * 获取所有函数文件路径
@@ -212,7 +286,7 @@ export class DataLoader {
         try {
             const functionsUri = vscode.Uri.joinPath(rootDir, 'functions');
             const functionPaths = await DataLoader.getAllFunctionsPaths(functionsUri);
-
+            // vscode.workspace.textDocuments
             if (functionPaths.length === 0) {
                 vscode.window.showInformationMessage('未找到任何 .mcfunction 函数文件');
                 return null;
@@ -220,15 +294,20 @@ export class DataLoader {
 
             // 第一步：提取所有函数的标准名称（resName）
             this.functionResNames = functionPaths
-                .map(path => MinecraftUtils.buildFunctionCallByUri(path))
+                .map(path => MinecraftUtils.buildFunctionCall(path))
                 .filter((resName): resName is string => !!resName); // 过滤无效名称
 
             // 第二步：并发解析所有函数文件（I/O 操作并发执行，比串行更快）
             await Promise.all(
-                functionPaths.map(path => this.loadSingleFunctionData(path).catch(err => {
+                functionPaths.map(path => {
+                    const resName = MinecraftUtils.buildFunctionCall(path);
+                    if (!resName) return;
+                    this.docCache.set(resName, new Map());
+                    this.loadSingleFileByUri(path).catch(err => {
                     // 单个文件解析失败不中断整体流程
                     vscode.window.showWarningMessage(`解析函数文件失败：${path.path}，原因：${err.message}`);
-                }))
+                });
+            })
             );
 
 
@@ -242,7 +321,7 @@ export class DataLoader {
     public async loadAdvancementData(): Promise<boolean | null> {
         const advancementPaths = await DataLoader.getAllAdvancementsPaths(vscode.Uri.joinPath(rootDir, 'advancements'));
         for (const path of advancementPaths) {
-            const resName = MinecraftUtils.buildAdvancementCallByUri(path);
+            const resName = MinecraftUtils.buildAdvancementCall(path);
             if (!resName) continue;
             this.advancementResNames.push(resName);
         }
@@ -250,52 +329,72 @@ export class DataLoader {
 
     }
 
-    /*
+    /**
     * 加载单个函数数据
     * @param path 函数文件路径
     * @param startLine 起始行数（默认从0行开始）
     * @param mode 模式：0-新加载模式 1-刷新，模式
     */
-    public async loadSingleFunctionData(path: vscode.Uri, startLine: number = 0, mode: number = 0): Promise<null> {
-        try {
-            // 1. 读取文件内容（VS Code 原生 API，兼容跨平台/远程工作区）
-            const fileContent = await vscode.workspace.fs.readFile(path);
-            // 解码为字符串（支持 UTF-8 编码，兼容中文注释）
-            const content = new TextDecoder('utf-8').decode(fileContent);
+    public async loadSingleFileByUri(path: vscode.Uri, startLine: number = 0, endLine: number = -1): Promise<null> {
+        // 1. 读取文件内容（VS Code 原生 API，兼容跨平台/远程工作区）
 
-            // 2. 按行解析（避免跨行长命令误匹配）
-            const lines = content.split(/\r?\n|\r/);
+        const fileContent = await vscode.workspace.fs.readFile(path);
+        // 解码为字符串（支持 UTF-8 编码，兼容中文注释）
+        const content = new TextDecoder('utf-8').decode(fileContent);
 
-            // 3. 提取数据（正则适配 1.12.2 命令格式）
-            lines.forEach((line, index) => {
-                // 解析为命令数组
-                if (index < startLine) {
-                    return;
-                }
-                const trimLine = line.trim();
-                if (!trimLine || trimLine.startsWith('#')) {
-                    return;
-                }
-                const commands = CommandUtils.extraceActiveCommand(trimLine);
-                switch (commands[0]) {
-                    case 'scoreboard':
-                        this.extractScoreboardData(path, index, commands, mode);
-                        break;
-                    case 'function':
-                        this.extractFunctionData(path, index, commands, mode);
-                    case "summon":
-                        this.extractSummonData(path, index, commands, mode);
+        // 2. 按行解析（避免跨行长命令误匹配）
+        const lines = content.split(/\r?\n|\r/);
+        for (let i = startLine; i < lines.length; i++) {
+            this.handleSingleLine(path, lines[i], i);
+        }
 
-                }
-            });
+        return null;
 
-            return null;
-        } catch (error) {
-            throw new Error((error as Error).message);
+        
+    }
+    /**
+    * 加载单个函数数据
+    * @param path 函数文件路径
+    * @param startLine 起始行数（默认从0行开始）
+    * @param mode 模式：0-新加载模式 1-刷新，模式
+    */
+    public async loadSingleFileByDoc(doc: vscode.TextDocument, startLine: number = 0, endLine: number = -1): Promise<null> {
+        // 1. 读取文件内容（VS Code 原生 API，兼容跨平台/远程工作区）
+
+        // 2. 按行解析（避免跨行长命令误匹配）
+        const lines = doc.getText().split(/\r?\n|\r/);
+        for (let i = startLine; i < lines.length; i++) {
+            this.handleSingleLine(doc.uri, lines[i], i);
+        }
+
+        return null;
+
+    }
+
+    
+
+
+    public handleSingleLine(uri: vscode.Uri, line: string, index: number): void {
+        {
+            const trimLine = line.trim();
+            if (!trimLine || trimLine.startsWith('#')) {
+                return;
+            }
+            const commands = CommandUtils.extraceActiveCommand(trimLine);
+            switch (commands[0]) {
+                case 'scoreboard':
+                    this.extractScoreboardData(uri, index, commands);
+                    break;
+                case 'function':
+                    this.extractFunctionData(uri, index, commands);
+                case "summon":
+                    this.extractSummonData(uri, index, commands);
+
+            }
         }
     }
 
-    private extractScoreboardData(uri: vscode.Uri, lineNumber: number, commands: string[], mode: number): void {
+    private extractScoreboardData(uri: vscode.Uri, lineNumber: number, commands: string[]): void {
         if (commands.length <= 3) { return; }
         // scoreboard objectives add xxx dummy desc 
         if (commands[1] === 'objectives' && commands[2] === 'add' && commands.length > 4) {
@@ -306,26 +405,11 @@ export class DataLoader {
         else if (commands[1] === 'players' && ["add", "remove", "set", "operation"].includes(commands[2])) {
             // 如果有假玩家名，则添加到假玩家
             if (CommandUtils.isFakePlayerSelector(commands[3])) {
-                const fakeData = this.fakePlayerData.get(commands[3]);
-                if (!fakeData) {
-                    const data = new Map<vscode.Uri, number[]>();
-                    data.set(uri, [lineNumber]);
-                    this.fakePlayerData.set(commands[3], data);
-                }
-                else {
-                    const def = fakeData.get(uri);
-                    if (def) {
-                        def.push(lineNumber);
-                    }
-                    else {
-                        fakeData.set(uri, [lineNumber]);
-                    }
-                }
             }
         }
-        else if (commands[1] === 'players' && commands[2] === 'tag' && commands.length > 5) {
+        else if (commands[1] === 'players' && commands[2] === 'tag' && commands[4] === 'add' && commands.length > 5) {
             // scoreboard players tag @s add|remove xxx
-            this.addTag(commands[5]);
+            this.addTag(commands[5], uri, lineNumber);
         }
         else if (commands[1] === 'teams') {
             // scoreboard teams add xxx
@@ -340,7 +424,7 @@ export class DataLoader {
     }
 
 
-    async extractFunctionData(uri: vscode.Uri, lineNumber: number, commands: string[], mode: number) {
+    async extractFunctionData(uri: vscode.Uri, lineNumber: number, commands: string[]) {
         // 验证函数存在
 
         const funcData = this.functionData.get(commands[1]);
@@ -365,9 +449,9 @@ export class DataLoader {
 
     }
 
-    private extractSummonData(uri: vscode.Uri, lineNumber: number, commands: string[], mode: number): void {
+    private extractSummonData(uri: vscode.Uri, lineNumber: number, commands: string[]): void {
         if (commands.length < 5) { return; }
-        // summon xxx x y z {}
+        // summon xxx x y z {Tags:["demo"]}
         const nbt = commands[5];
         const start_index = nbt.indexOf("Tags:[");
         if (start_index >= 0) {
@@ -375,7 +459,7 @@ export class DataLoader {
             const end_index = tags.indexOf('"]');
             if (end_index >= 0) {
                 const tag_list = tags.slice(0, end_index).split(",").map(tag => tag.replaceAll('"', ''));
-                tag_list.forEach(tag => this.addTag(tag));
+                tag_list.forEach(tag => this.addTag(tag, uri, lineNumber));
             }
         };
     }

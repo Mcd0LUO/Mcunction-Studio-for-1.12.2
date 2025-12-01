@@ -192,9 +192,7 @@ export class MinecraftUtils {
 
 
     }
-    public static getFunctionResName(uri: vscode.Uri) : string | undefined {
-        return this.parseFunctionUri(uri)?.join(':');
-    }
+
 
     /**
      * 解析资源路径为命名空间和具体路径（带缓存优化）
@@ -254,22 +252,20 @@ export class MinecraftUtils {
     }
 
 
-    public static buildFunctionCallByUri(uri: vscode.Uri): string | null {
+    public static buildFunctionCall(uri: vscode.Uri): string | null {
         const result = this.parseFunctionUri(uri);
         if (!result) {
             return null;
         }
-        const [namespace, resourcePath] = result;
-        return `${namespace}:${resourcePath}`;
+        return result.join(':');
     }
 
-    public static buildAdvancementCallByUri(uri: vscode.Uri): string | null {
+    public static buildAdvancementCall(uri: vscode.Uri): string | null {
         const result = this.parseAdvancementUri(uri);
         if (!result) {
             return null;
         }
-        const [namespace, resourcePath] = result;
-        return `${namespace}:${resourcePath}`;
+        return result.join(':');
     }
 
     // ====================================== 辅助工具方法 ======================================

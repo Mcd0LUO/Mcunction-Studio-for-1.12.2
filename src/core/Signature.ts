@@ -109,16 +109,15 @@ export class McFunctionSignatureHelpProvider implements vscode.SignatureHelpProv
 
     private provideScoreboardSignatureHelp(commands: string[]): vscode.SignatureHelp {
         const signatureHelp = new vscode.SignatureHelp();
-        if (commands[1] === 'players') {
+        if (commands[1] === 'players' && commands[2] !== 'tag') {
             const signature = new vscode.SignatureInformation(
                 '<目标> <记分板> <数值>',
-                '>设置实体的记分板数值'
             );
             // 参数说明
             signature.parameters = [
-                new vscode.ParameterInformation('<目标>', '选择器'),
-                new vscode.ParameterInformation('<记分板>', '已定义的记分板名称'),
-                new vscode.ParameterInformation('<数值>', 'int（如100、-5）')
+                new vscode.ParameterInformation('<目标>'),
+                new vscode.ParameterInformation('<记分板>'),
+                new vscode.ParameterInformation('<数值>')
             ];
             signatureHelp.signatures = [signature];
             signatureHelp.activeSignature = 0;

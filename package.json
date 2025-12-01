@@ -50,6 +50,11 @@
         "command": "mcf-studio.reloadWorkspace",
         "title": "刷新函数|计分板|进度|标签池",
         "category": "Mcfunction Studio"
+      },
+      {
+        "command": "mcf-studio.checkDocCache",
+        "title": "查看文档缓存",
+        "category": "Mcfunction Studio"
       }
     ],
     "keybindings": [

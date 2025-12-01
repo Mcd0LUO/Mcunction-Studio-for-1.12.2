@@ -44,6 +44,19 @@ export function activate(context: vscode.ExtensionContext) {
 		}),
 		vscode.commands.registerCommand('mcf-studio.createFunctionFile', MinecraftUtils.createNewFunctionFile),
 	);
+	// 注册辅助命令
+	vscode.commands.registerCommand('mcf-studio.checkDocCache', () => {
+		const docCache = dataloader.getDocCache().get(MinecraftUtils.buildFunctionCall(vscode.workspace.textDocuments[0].uri)??'');
+		if (!docCache) {
+			console.log('no cache');
+			return;
+		}
+		// 遍历docCache
+		for (const [key, value] of docCache) {
+			console.log(key + 1,value);
+		}
+		
+	});
 
 
 
