@@ -88,7 +88,7 @@ export class StatsCompletionProvider extends BaseCompletionProvider {
                 if (commands[1] === 'entity') {
                     // 修复：传入所需参数
                     const inputLength = commands[6] ? commands[6].length : 0;
-                    return this.provideScoreboardCompletions();
+                    return this.provideScoreboardCompletions(this.getWordRange(document, position, inputLength));
                 }
                 if (commands[1] === "block") {
                     return TYPE_OPTIONS.map(type => {
@@ -110,7 +110,7 @@ export class StatsCompletionProvider extends BaseCompletionProvider {
             case 9:
                 if (commands[1] === "block") {
                     // 获取计分板数据，类型为Map<string, [string, string]>
-                    this.provideScoreboardCompletions();
+                    this.provideScoreboardCompletions(this.getWordRange(document, position, commands[8].length));
                 }
         }
         return [];

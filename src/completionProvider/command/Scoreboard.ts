@@ -303,7 +303,7 @@ export class ScoreboardCompletionProvider extends BaseCompletionProvider {
         }
         else if (commands.length === 4) {
             if (commands[2] === "remove") {
-                return this.provideScoreboardCompletions();
+                return this.provideScoreboardCompletions(this.getWordRange(document, position, commands[3].length));
             }
             else if (commands[2] === "add") {
                 return [
@@ -399,7 +399,7 @@ export class ScoreboardCompletionProvider extends BaseCompletionProvider {
         }
 
         else if (commands.length === 5 && commands[2] === "setdisplay") {
-            return this.provideScoreboardCompletions();
+            return this.provideScoreboardCompletions(this.getWordRange(document, position, commands[4].length));
         }
 
         return [];
@@ -456,7 +456,7 @@ export class ScoreboardCompletionProvider extends BaseCompletionProvider {
             return this.provideSelectorCompletions(commands[3]);
         }
         if (commands.length === 5 && ["add", "remove", "reset", "operation", "set"].includes(commands[2])) {
-            return this.provideScoreboardCompletions();
+            return this.provideScoreboardCompletions(this.getWordRange(document, position, commands[4].length));
         }
         // scoreboard players tag @s add xxx
         if ("tag" === commands[2]) {
@@ -479,7 +479,7 @@ export class ScoreboardCompletionProvider extends BaseCompletionProvider {
                 ];
             }
             if (commands.length === 6) {
-                return this.provideTagCompletions(commands[5]);
+                return this.provideTagCompletions(this.getWordRange(document, position, commands[5].length));
             }
             if (commands.length === 7) {
                 return this.provideItemNbtCompletions();
@@ -547,7 +547,7 @@ export class ScoreboardCompletionProvider extends BaseCompletionProvider {
                 return this.provideSelectorCompletions(commands[6]);
             }
             if (commands.length === 8) {
-                return this.provideScoreboardCompletions();
+                return this.provideScoreboardCompletions(this.getWordRange(document, position, commands[7].length));
             }
         }
 

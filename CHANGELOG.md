@@ -1,6 +1,14 @@
 # Change Log
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
+## [1.1.1] - 2025-12-2
+### 更新
+- 更新了一键重命名函数，可自动更改函数调用
+- 优化了函数逻辑，加强并发
+### 修复
+- 修复了插件无法运行的bug
+### 已知问题
+- 加载提示有误
 
 ## [1.1.0]
 ### 更新

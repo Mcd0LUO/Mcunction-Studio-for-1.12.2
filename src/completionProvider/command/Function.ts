@@ -14,7 +14,9 @@ export class FunctionCompletionProvider extends BaseCompletionProvider {
 
     public async provideCommandCompletions(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken, context: vscode.CompletionContext, commands: string[]): Promise<vscode.CompletionItem[]> {
         if (commands.length === 2) {
-            return this.provideFunctionCompletions();
+            // 计算range
+            const range = this.getWordRange(document, position, commands[1].length);
+            return this.provideFunctionCompletions(range);
         } 
         if (commands.length === 3) {
             return [

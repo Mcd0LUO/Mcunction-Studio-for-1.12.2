@@ -79,6 +79,7 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
         token: vscode.CancellationToken,
         context: vscode.CompletionContext,
         commands: string[],
+
     ): vscode.CompletionItem[] | Promise<vscode.CompletionItem[]>;
 
     /**
@@ -143,17 +144,19 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
 
 
     protected async provideFunctionCompletions(
+        range: vscode.Range | undefined = undefined
     ): Promise<vscode.CompletionItem[]> {
         return DataLoader.getInstance().getFunctionResNames().map(resName => this.createCompletionItem(
             resName,
             "",
             resName,
             true,
-            vscode.CompletionItemKind.Function
+            vscode.CompletionItemKind.Function,
+            range
         ));
     }
 
-    protected provideTeamCompletions(): vscode.CompletionItem[] {
+    protected provideTeamCompletions(range: vscode.Range | undefined = undefined): vscode.CompletionItem[] {
         return Array.from(DataLoader.getInstance().getTeamsData().keys()).map(team => this.createCompletionItem(
             team,
             "",
@@ -163,13 +166,14 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
         ));
     }
 
-    protected provideTagCompletions(add: string = ''): vscode.CompletionItem[] {
+    protected provideTagCompletions(range: vscode.Range | undefined = undefined): vscode.CompletionItem[] {
         const arr = Array.from(DataLoader.getInstance().getTagsData().keys()).map(tag => this.createCompletionItem(
             tag,
             "",
             tag,
             false,
-            vscode.CompletionItemKind.Constant
+            vscode.CompletionItemKind.Constant,
+            range
         ));
         return arr;
     }
@@ -208,7 +212,7 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
         ));
     }
 
-    protected provideScoreboardCompletions(): vscode.CompletionItem[] {
+    protected provideScoreboardCompletions(range: vscode.Range | undefined = undefined): vscode.CompletionItem[] {
         return Array.from(DataLoader.getInstance().getScoreboardsData().keys()).map(scoreboard => {
             const scoreboardData = DataLoader.getInstance().getScoreboardsData().get(scoreboard);
             return this.createCompletionItem(
@@ -216,7 +220,8 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
                 `${scoreboardData?.type} ${scoreboardData?.desc}`,
                 scoreboard,
                 false,
-                vscode.CompletionItemKind.Field
+                vscode.CompletionItemKind.Field,
+                range
             );
         }
         );

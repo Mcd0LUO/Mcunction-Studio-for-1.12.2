@@ -192,7 +192,7 @@ export class CommandUtils {
     public static isFakePlayerSelector(selector: string): boolean {
         return !selector.startsWith('@');
     }
-
+    // 获取文本中的选择器
     public static extractSelector(command: string): Map<string, string> | null {
         let startIdx = command.indexOf('@');
         if (startIdx === -1) {
@@ -211,6 +211,12 @@ export class CommandUtils {
 
     }
 
+    /**
+     * 检查当前光标处是否处于选择器中
+     * @param lineText 当前行文本
+     * @param currentIdx 光标索引
+     * @returns 是否处于选择器中
+     */
     public static isInSelector(lineText: string, currentIdx: number): boolean {
         let startIdx = lineText.indexOf('@');
         let endIdx = lineText.indexOf(']',startIdx);
@@ -218,6 +224,11 @@ export class CommandUtils {
         return (startIdx !== -1 && startIdx <= currentIdx && endIdx >= currentIdx);
     }
 
+    /**
+     * 检查选择器是否为简单选择器（a/s/p/e/r）
+     * @param selector 选择器
+     * @returns 是否为简单选择器
+     */
     public static isSimpleSelector(selector: string): boolean {
         return ['@a', '@s', '@p', '@e', '@r'].includes(selector);
     }

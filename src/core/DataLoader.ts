@@ -11,14 +11,14 @@ interface ScoreboardData {
 }
 
 interface functionData {
-    ref: Map<vscode.Uri, number[]>;  // 被哪些函数引用  uri:行索引
+    ref: Map<string, number[]>;  // 被哪些函数引用  uri:行索引
 }
 interface TeamData {
     color?: string;
     rule?: string;
     def: [vscode.Uri, number];  // 函数定义位置 uri:行索引
 }
-enum DataType {
+export enum DataType {
     Scoreboard = 0,
     Function = 1,
     Tag = 2,
@@ -250,6 +250,32 @@ export class DataLoader {
         }
     }
 
+    public clearSingleFileAllCache(uri: vscode.Uri) {
+        const resName = MinecraftUtils.buildFunctionCall(uri) ?? '';
+        const docCacheEntry = this.docCache.get(resName);
+        if (!docCacheEntry) {console.log('no cache'); return;}
+        for (const [lineNumber, lineMeta] of docCacheEntry) {
+             lineMeta.forEach(meta => {
+                if (meta.type === DataType.Scoreboard) {
+                    // 删除缓存
+                    this.scoreboardsData.delete(meta.value);
+                }
+                else if (meta.type === DataType.Team) {
+                    // 删除缓存
+                    this.teamsData.delete(meta.value);
+                }
+                else if (meta.type === DataType.Tag) {
+                    // 删除缓存
+                    this.tagsData.delete(meta.value);
+                }
+                else if (meta.type === DataType.FakePlayer) {
+                    // 删除缓存
+                    this.fakePlayerData.delete(meta.value);
+                }
+            });
+        }
+    }
+
 
 
     /**
@@ -453,30 +479,33 @@ export class DataLoader {
 
     }
 
-
+    /**
+     * 提取函数命令数据
+     * @param uri 当前函数路径
+     * @param lineNumber 当前行号
+     * @param commands 命令组
+     */
     async extractFunctionData(uri: vscode.Uri, lineNumber: number, commands: string[]) {
-        // 验证函数存在
-
-        const funcData = this.functionData.get(commands[1]);
-        // 检查该函数的data是否已经初始化
-        if (funcData) {
-            if (funcData.ref && funcData.ref.get(uri)) {
-                funcData.ref.get(uri)?.push(lineNumber);
-            }
-            else {
-                const funcData: functionData = { ref: new Map<vscode.Uri, number[]>() };
-                funcData.ref.set(uri, [lineNumber]);
-                this.functionData.set(commands[1], funcData);
-            }
+        // 设置函数引用
+        let funcData = this.functionData.get(commands[1]);
+        if (!funcData) {
+            // 创建该行函数缓存
+            const newMap = { ref: new Map<string, number[]>()} as functionData;
+            this.functionData.set(commands[1], newMap);
         }
-        else {
-            const data = new Map<vscode.Uri, number[]>();
-            data.set(uri, [lineNumber]);
-            this.functionData.set(commands[1], { ref: data });
-        }
+        funcData = this.functionData.get(commands[1]);
+        // 本函数res
+        const resName = MinecraftUtils.buildFunctionCall(uri)?? '';
+        // 设置函数引用
+        const lines = funcData?.ref.get(resName) ?? [];
+        lines.push(lineNumber);
+        funcData?.ref.set(resName, lines);
 
-
-
+        // 修复错误：正确地设置docCache
+        const cache = this.docCache.get(resName) ?? new Map<number, { type: DataType, value: string }[]>();
+        const linemeta: { type: DataType, value: string }[] = cache.get(lineNumber) ?? [];
+        linemeta.push({ type: DataType.Function, value: commands[1] });
+        cache.set(lineNumber, linemeta);
     }
 
     private extractSummonData(uri: vscode.Uri, lineNumber: number, commands: string[]): void {
