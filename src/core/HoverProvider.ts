@@ -1,11 +1,13 @@
 import * as vscode from 'vscode';
 import { CommandUtils } from '../utils/CommandUtils';
+import { DataLoader } from './DataLoader';
 
 export class McFunctionHoverProvider implements vscode.HoverProvider {
 
     private readonly performance: string[] = ["bad", "ok", "good", "excellent"];
 
     provideHover(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): vscode.ProviderResult<vscode.Hover> {
+        if (!DataLoader.getInstance().getConfig().HoverProvider.SelecterDiagnostics) { return null; }
         // 诊断
         const lineText = document.lineAt(position.line).text;
         const hover = this.provideSelecterDiagnostics(document, position, token, lineText);

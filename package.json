@@ -19,7 +19,8 @@
     "Programming Languages",
     "Visualization"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "languages": [
@@ -30,8 +31,7 @@
           "mcfunction"
         ],
         "extensions": [
-          ".mcfunction",
-          ".json"
+          ".mcfunction"
         ],
         "icon": {
           "light": "icons/light.png",
@@ -74,7 +74,13 @@
           "when": "explorerResourceIsFolder || filesExplorerFocus"
         }
       ]
-    }
+    },
+    "jsonValidation": [
+      {
+        "fileMatch": "McfunctionStudio.json",
+        "url": "./schemas/McfunctionSutdio.schema.json"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

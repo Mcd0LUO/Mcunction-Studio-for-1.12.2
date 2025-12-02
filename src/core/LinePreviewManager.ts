@@ -149,7 +149,7 @@ export class LinePreviewManager implements vscode.Disposable {
      */
     private updatePreview() {
         // 是否取消预览
-        if (DataLoader.getInstance().getConfig().JsonPreview.LinePreview === false) { return; }
+        if (!DataLoader.getInstance().getConfig().JsonPreview.LinePreview) { return; }
         // 获取当前活动的文本编辑器
         const editor = vscode.window.activeTextEditor;
         if (!editor) { return; }

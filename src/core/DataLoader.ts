@@ -35,7 +35,12 @@ interface ConfigData {
         LinePreview: boolean,
         HoverPreview:boolean
     },
-    SelecterDiagnostics: boolean,
+    FileProcessing: {
+        MaxConcurrentReads: number
+    }
+    HoverProvider: {
+        SelecterDiagnostics: boolean,
+    },
     CommandSchemaCheck: boolean
 
 }
@@ -59,17 +64,27 @@ export class DataLoader {
             LinePreview: true,
             HoverPreview: true
         },
+        FileProcessing: {
+            MaxConcurrentReads: 100
+        },
+        HoverProvider: {
+            SelecterDiagnostics: true,
+        },
         Signature: true,
-        SelecterDiagnostics: true,
         CommandSchemaCheck: true
     }; // 配置数据
 
     private docCache: Map<string, Map<number, { type: DataType, value: string }[]>> = new Map(); // uri -> 行号: { 类型 , 值 }
 
     private constructor() {
-        this.loadData(false);
-
+        this.init();
     }
+
+    private async init(): Promise<void> { 
+        await this.loadExtensionConfig();
+        this.loadData(true, this.configData.FileProcessing.MaxConcurrentReads);
+    }
+
 
     public static getInstance(): DataLoader {
         if (!DataLoader.instance) {
@@ -112,7 +127,7 @@ export class DataLoader {
     }
     // 加载数据
     // 修改loadData方法，支持切换加载模式（可选）
-    public async loadData(useConcurrentControl: boolean = false, concurrency: number = 10): Promise<any> {
+    public async loadData(useConcurrentControl: boolean = true, concurrency: number = 100): Promise<any> {
         this.scoreboardsData.clear();
         this.functionResNames = [];
         this.advancementResNames = [];
@@ -143,6 +158,27 @@ export class DataLoader {
     public getConfig(): ConfigData {
         return this.configData;
 
+    }
+
+    public static getDefaultConfig(): ConfigData {
+        return {
+            IgnorePattern: {
+                function: [],
+                advancement: []
+            },
+            JsonPreview: {
+                LinePreview: true,
+                HoverPreview: true
+            },
+            FileProcessing: {
+                MaxConcurrentReads: 100
+            },
+            HoverProvider: {
+                SelecterDiagnostics: true,
+            },
+            Signature: true,
+            CommandSchemaCheck: true
+        };
     }
 
     public getFunctionResNames(): string[] {
@@ -313,6 +349,96 @@ export class DataLoader {
         this.functionResNames = this.functionResNames.filter(name => name !== resName);
     }
 
+    public async loadExtensionConfig(): Promise<void> {
+        if (!rootDir) { return; }
+        const configUri = vscode.Uri.joinPath(rootDir, 'McfunctionStudio.json');
+        // 定义基础默认配置（完整结构）
+        const defaultConfig: ConfigData = {
+            IgnorePattern: {
+                function: [],
+                advancement: []
+            },
+            JsonPreview: {
+                LinePreview: true,
+                HoverPreview: true
+            },
+            FileProcessing: {
+                MaxConcurrentReads: 100
+            },
+            HoverProvider: {
+                SelecterDiagnostics: true
+            },
+            Signature: true,
+            CommandSchemaCheck: true
+        };
+
+        try {
+            // 尝试读取文件
+            const configContent = await vscode.workspace.fs.readFile(configUri);
+            let userConfig: Partial<ConfigData>;
+
+            try {
+                // 尝试解析用户配置
+                userConfig = JSON.parse(configContent.toString());
+            } catch (parseError) {
+                // JSON 语法错误：使用默认配置并提示
+                vscode.window.showWarningMessage(`配置文件格式错误，已自动修复。错误：${(parseError as Error).message}`);
+                userConfig = {}; // 解析失败视为空配置
+            }
+
+            // 合并用户配置到默认配置（补充缺失字段）
+            this.configData = this.mergeConfigs(defaultConfig, userConfig);
+
+            // 无论原配置是否完整，都写入完整配置（确保结构正确）
+            const finalConfigContent = Buffer.from(JSON.stringify(this.configData, null, 2), 'utf-8');
+            await vscode.workspace.fs.writeFile(configUri, finalConfigContent);
+
+            console.log('配置文件加载并修复完成:', this.configData);
+            vscode.window.showInformationMessage('Mcfunction Studio 配置文件已加载');
+
+        } catch (error) {
+            // 文件不存在或读取失败：创建默认配置
+            if ((error as NodeJS.ErrnoException).code === 'FileNotFound') {
+                try {
+                    this.configData = defaultConfig;
+                    const configContent = Buffer.from(JSON.stringify(defaultConfig, null, 2), 'utf-8');
+                    await vscode.workspace.fs.writeFile(configUri, configContent);
+                    vscode.window.showInformationMessage('配置文件不存在，已创建默认配置');
+                } catch (writeError) {
+                    vscode.window.showErrorMessage(`创建默认配置失败: ${(writeError as Error).message}`);
+                }
+            } else {
+                // 其他错误（如权限问题）
+                vscode.window.showErrorMessage(`加载配置失败: ${(error as Error).message}`);
+                // 至少保证内存中的配置是完整的默认配置
+                this.configData = defaultConfig;
+            }
+        }
+    }
+
+    /**
+     * 递归合并用户配置到默认配置（用户配置缺失的字段用默认值补充）
+     * @param defaultConfig 完整的默认配置
+     * @param userConfig 用户提供的不完整配置
+     */
+    private mergeConfigs<T extends object>(defaultConfig: T, userConfig: Partial<T>): T {
+        const merged: any = { ...defaultConfig };
+        for (const key in userConfig) {
+            if (Object.prototype.hasOwnProperty.call(userConfig, key)) {
+                const defaultVal = merged[key];
+                const userVal = userConfig[key];
+                // 如果是对象且不是数组，递归合并（避免覆盖嵌套结构）
+                if (defaultVal !== null && typeof defaultVal === 'object' && !Array.isArray(defaultVal) && userVal !== null && typeof userVal === 'object') {
+                    merged[key] = this.mergeConfigs(defaultVal, userVal as object);
+                } else {
+                    // 基本类型或数组：直接使用用户配置（如果存在）
+                    merged[key] = userVal !== undefined ? userVal : defaultVal;
+                }
+            }
+        }
+        return merged as T;
+    }
+
 
 
     /**
@@ -378,7 +504,7 @@ export class DataLoader {
      */
     public async loadFunctionData(
         useConcurrentControl: boolean = false,
-        concurrency: number = 10
+        concurrency: number = 50
     ): Promise<number | null> {
         try {
             const functionsUri = vscode.Uri.joinPath(rootDir, 'functions');
@@ -412,17 +538,18 @@ export class DataLoader {
                     }
                 });
             } else {
-                // 模式2：原有全量并发加载
-                await Promise.all(
-                    functionPaths.map(path => {
-                        const resName = MinecraftUtils.buildFunctionCall(path);
-                        if (!resName) return Promise.resolve();
-                        this.docCache.set(resName, new Map());
-                        return this.loadSingleFileByUri(path).catch(err => {
-                            vscode.window.showWarningMessage(`解析函数文件失败：${path.path}，原因：${err.message}`);
-                        });
-                    })
-                );
+                // 全量并发模式（优化：减少Promise嵌套，直接映射执行）
+                const loadPromises = functionPaths.map(async (path) => {
+                    const resName = MinecraftUtils.buildFunctionCall(path);
+                    if (!resName) return;
+                    this.docCache.set(resName, new Map());
+                    try {
+                        await this.loadSingleFileByUri(path);
+                    } catch (err) {
+                        vscode.window.showWarningMessage(`解析失败：${path.path}，原因：${(err as Error).message}`);
+                    }
+                });
+                await Promise.all(loadPromises); // 直接等待所有Promise，减少中间变量
             }
 
             // 计算并输出运行时间

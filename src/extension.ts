@@ -3,8 +3,8 @@ import { CommandRegistry } from './core/CommandRegistry';
 import { MinecraftCompletionProvider } from './completionProvider/Minecraft';
 import { DataLoader } from './core/DataLoader';
 import { MinecraftUtils } from './utils/MinecraftUtils';
-import { McFunctionSignatureHelpProvider, registerSignatureHelp } from './core/Signature';
-import { registerCodeLens } from './core/CodeLens';
+import {  registerSignatureHelp } from './core/Signature';
+import { registerConfigFileCodeLens } from './core/CodeLens';
 import { registerFunctionDefinitionProvider } from './core/McFunctionDefinitionProvider';
 import { registerHoverProvider } from './core/HoverProvider';
 import { DynamicDocManager } from './core/DynamicDocManager';
@@ -23,15 +23,14 @@ export function activate(context: vscode.ExtensionContext) {
 	);
 	context.subscriptions.push(code_provider);
 
-	// 注册命令
-	CommandRegistry.autoRegisterProviders(context);
 	// 读取函数数据
 	const dataloader =  DataLoader.getInstance();
-	// 注册嵌入提示
+	// 注册命令
+	CommandRegistry.autoRegisterProviders(context);
 	// 注册Signature Help
 	registerSignatureHelp();
 	// 注册CodeLens 快速命令
-	registerCodeLens();
+	registerConfigFileCodeLens(context);
 	// 注册定义跳转
 	registerFunctionDefinitionProvider(context);
 	// 注册Hover
@@ -41,7 +40,8 @@ export function activate(context: vscode.ExtensionContext) {
 	// 注册编辑器命令
 	context.subscriptions.push(
 		vscode.commands.registerCommand('mcf-studio.reloadWorkspace', async () => {
-			await dataloader.loadData();
+			await dataloader.loadExtensionConfig();
+			dataloader.loadData(true,dataloader.getConfig().FileProcessing.MaxConcurrentReads);
 		}),
 		vscode.commands.registerCommand('mcf-studio.createFunctionFile', MinecraftUtils.createNewFunctionFile),
 	);

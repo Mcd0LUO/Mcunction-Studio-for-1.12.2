@@ -1,67 +1,90 @@
 import * as vscode from 'vscode';
+import { rootDir } from '../extension';
+import { DataLoader } from '../core/DataLoader';
 
 /**
- * 代码透镜提供器（示例：function命令的快捷操作）
+ * 配置文件专属的 CodeLens 提供器
  */
-class McFunctionCodeLensProvider implements vscode.CodeLensProvider {
+class ConfigFileCodeLensProvider implements vscode.CodeLensProvider {
+    // 判断是否是目标配置文件
+    private isTargetConfigFile(document: vscode.TextDocument): boolean {
+        return document.fileName.endsWith('McfunctionStudio.json')
+            && (rootDir ? document.uri.fsPath.startsWith(rootDir.fsPath) : true);
+    }
+
     provideCodeLenses(
         document: vscode.TextDocument,
         token: vscode.CancellationToken
     ): vscode.ProviderResult<vscode.CodeLens[]> {
         const codeLenses: vscode.CodeLens[] = [];
 
-        // // 遍历所有行，识别function命令
-        // for (let line = 0; line < document.lineCount; line++) {
-        //     const lineText = document.lineAt(line).text;
-        //     const functionMatch = lineText.match(/function\s+(\w+:\w+)/);
+        if (!this.isTargetConfigFile(document)) {
+            return codeLenses;
+        }
 
-        //     if (functionMatch) {
-        //         const funcPath = functionMatch[1];
-        //         const range = new vscode.Range(line, 0, line, lineText.length);
+        // 1. 第一行开头：重载配置
+        const firstLineRange = document.lineAt(0).range;
+        const reloadLens = new vscode.CodeLens(firstLineRange, {
+            title: '▶️ 重载配置',
+            command: 'mcf-studio.reloadConfig',
+            arguments: [document.uri]
+        });
+        codeLenses.push(reloadLens);
 
-        //         // 1. 运行函数的透镜
-        //         const runLens = new vscode.CodeLens(range, {
-        //             title: `▶️ 运行 ${funcPath}`,
-        //             command: 'mcfunction.runFunction',
-        //             arguments: [funcPath]
-        //         });
-        //         codeLenses.push(runLens);
-
-        //         // 2. 查看引用的透镜
-        //         const refLens = new vscode.CodeLens(range, {
-        //             title: `🔍 查看引用`,
-        //             command: 'mcfunction.findReferences',
-        //             arguments: [funcPath]
-        //         });
-        //         // 自定义透镜位置（行尾）
-        //         refLens.range = new vscode.Range(line, lineText.length, line, lineText.length);
-        //         codeLenses.push(refLens);
-        //     }
-        // }
+        // 2. 第二行开头（若文件不足两行则用最后一行）：重载并重启拓展
+        const secondLineNumber = Math.min(1, document.lineCount - 1); // 防止越界
+        const secondLineRange = document.lineAt(secondLineNumber).range;
+        const resetLens = new vscode.CodeLens(secondLineRange, {
+            title: '🔄 重载并重启拓展',
+            command: 'mcf-studio.ApplayConfig',
+            arguments: [document.uri]
+        });
+        codeLenses.push(resetLens);
 
         return codeLenses;
     }
+
+    resolveCodeLens?(codeLens: vscode.CodeLens, token: vscode.CancellationToken): vscode.ProviderResult<vscode.CodeLens> {
+        return codeLens;
+    }
 }
 
-// 注册CodeLens + 注册透镜触发的命令
-export function registerCodeLens() {
-    // 注册CodeLens提供器
-    const codeLensDisposable = vscode.languages.registerCodeLensProvider(
-        { language: 'mcfunction', scheme: 'file' },
-        new McFunctionCodeLensProvider()
+/**
+ * 注册配置文件的 CodeLens 及对应命令
+ */
+export function registerConfigFileCodeLens(context: vscode.ExtensionContext): void {
+    const disposables: vscode.Disposable[] = [];
+
+    // 注册 CodeLens 提供器
+    disposables.push(
+        vscode.languages.registerCodeLensProvider(
+            { pattern: '**/McfunctionStudio.json', scheme: 'file' },
+            new ConfigFileCodeLensProvider()
+        )
     );
 
-    // // 注册“运行函数”命令
-    // const runFuncDisposable = vscode.commands.registerCommand('mcfunction.runFunction', (funcPath) => {
-    //     vscode.window.showInformationMessage(`正在运行函数：${funcPath}`);
-    //     // 这里可扩展实际运行逻辑（如调用Minecraft命令）
-    // });
+    // 注册「重载配置」命令
+    disposables.push(
+        vscode.commands.registerCommand('mcf-studio.reloadConfig', async (uri: vscode.Uri) => {
+            try {
+                await DataLoader.getInstance().loadExtensionConfig();
+            } catch (error) {
+                vscode.window.showErrorMessage(`重载配置失败：${(error as Error).message}`);
+            }
+        })
+    );
 
-    // // 注册“查看引用”命令
-    // const findRefDisposable = vscode.commands.registerCommand('mcfunction.findReferences', (funcPath) => {
-    //     vscode.window.showInformationMessage(`查找 ${funcPath} 的引用...`);
-    //     // 这里可扩展查找引用的逻辑
-    // });
+    // 注册「重载并重启拓展」命令（补充实现）
+    disposables.push(
+        vscode.commands.registerCommand('mcf-studio.ApplayConfig', async (uri: vscode.Uri) => {
+            try {
+                await DataLoader.getInstance().loadExtensionConfig();
+                DataLoader.getInstance().loadData(true, DataLoader.getInstance().getConfig().FileProcessing.MaxConcurrentReads);
+            } catch (error) {
+                vscode.window.showErrorMessage(`重载并重启拓展失败：${(error as Error).message}`);
+            }
+        })
+    );
 
-    return [codeLensDisposable];
+    context.subscriptions.push(...disposables);
 }

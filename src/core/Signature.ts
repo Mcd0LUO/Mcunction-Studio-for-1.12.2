@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { CommandUtils } from '../utils/CommandUtils';
+import { DataLoader } from './DataLoader';
 
 /**
  * 命令签名帮助提供器（示例：scoreboard/function命令参数提示）
@@ -12,6 +13,7 @@ export class McFunctionSignatureHelpProvider implements vscode.SignatureHelpProv
         position: vscode.Position,
         token: vscode.CancellationToken
     ): vscode.ProviderResult<vscode.SignatureHelp> {
+        if (!DataLoader.getInstance().getConfig().Signature) { return null; }
         const lineText = document.lineAt(position.line).text;
         const commands = CommandUtils.extraceActiveCommand(lineText);
         // 匹配 scoreboard players set 命令
