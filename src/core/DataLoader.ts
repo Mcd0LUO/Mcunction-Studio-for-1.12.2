@@ -67,7 +67,8 @@ export class DataLoader {
     private docCache: Map<string, Map<number, { type: DataType, value: string }[]>> = new Map(); // uri -> 行号: { 类型 , 值 }
 
     private constructor() {
-        this.loadData();
+        this.loadData(false);
+
     }
 
     public static getInstance(): DataLoader {
@@ -76,8 +77,42 @@ export class DataLoader {
         }
         return DataLoader.instance;
     }
+
+    /**
+     * 并发控制工具函数：限制同时执行的Promise数量
+     * @param concurrency 最大并发数
+     * @param items 待处理项数组
+     * @param processor 处理函数
+     */
+    private async concurrentMap<T>(
+        concurrency: number,
+        items: T[],
+        processor: (item: T) => Promise<void>
+    ): Promise<void> {
+        const results: Promise<void>[] = [];
+        const executing: Promise<void>[] = [];
+
+        for (const item of items) {
+            // 创建处理当前项的Promise
+            const p = Promise.resolve().then(() => processor(item));
+            results.push(p);
+
+            // 当并发数达到上限时，等待任一Promise完成再继续
+            if (concurrency <= items.length) {
+                const e: Promise<void> = p.then(() => { executing.splice(executing.indexOf(e), 1); }) as Promise<void>;
+                executing.push(e);
+                if (executing.length >= concurrency) {
+                    await Promise.race(executing);
+                }
+            }
+        }
+
+        // 等待所有处理完成
+        await Promise.all(results);
+    }
     // 加载数据
-    public async loadData(): Promise<any> {
+    // 修改loadData方法，支持切换加载模式（可选）
+    public async loadData(useConcurrentControl: boolean = false, concurrency: number = 10): Promise<any> {
         this.scoreboardsData.clear();
         this.functionResNames = [];
         this.advancementResNames = [];
@@ -85,26 +120,26 @@ export class DataLoader {
         this.functionData.clear();
         this.fakePlayerData.clear();
         this.teamsData.clear();
-        // 并行执行
-        const promise1 = this.loadFunctionData();
+
+        // 传入加载模式参数
+        const promise1 = this.loadFunctionData(useConcurrentControl, concurrency);
         const promise2 = this.loadAdvancementData();
 
         try {
-            // 并行等待解析
             const [result1, result2] = await Promise.all([promise1, promise2]);
 
             if (result1 && result2) {
-                vscode.window.showInformationMessage(
-                    `加载 ${this.functionResNames.length} 个函数，提取到 ${this.scoreboardsData.size} 个记分板, ${this.tagsData.size} 个标签, ${this.advancementResNames.length} 个进度, ${this.fakePlayerData.size} 个假玩家`
-                );
+                // 在底层状态栏显示
+                vscode.window.setStatusBarMessage(`加载函数 ${this.functionResNames.length} | 记分板 ${this.scoreboardsData.size} | 标签 ${this.tagsData.size} | 队伍 ${this.teamsData.size} | 进度 ${this.advancementResNames.length} | 假玩家 ${this.fakePlayerData.size} |  耗时>> ${result1}s <<`, 3000);
+                vscode.window.showInformationMessage(`McfunctionStudio 初始化完成, 耗时 ${result1} s`);
             }
         } catch (error) {
-            // 处理任一函数执行失败的情况
             vscode.window.showErrorMessage(`加载数据失败: ${error}`);
         }
 
         return 0;
     }
+
     public getConfig(): ConfigData {
         return this.configData;
 
@@ -274,6 +309,8 @@ export class DataLoader {
                 }
             });
         }
+        this.docCache.delete(resName);
+        this.functionResNames = this.functionResNames.filter(name => name !== resName);
     }
 
 
@@ -335,39 +372,65 @@ export class DataLoader {
 
     /**
      * 批量加载所有函数数据：
-     * 1. 提取所有函数的标准名称（resName）
-     * 2. 并发解析所有函数文件，提取记分板和标签
+     * 支持两种加载模式，通过参数切换并统计运行时间
+     * @param useConcurrentControl 是否使用并发控制（true：限制并发数；false：全量并发）
+     * @param concurrency 并发控制模式下的最大并发数（默认50）
      */
-    public async loadFunctionData(): Promise<boolean | null> {
+    public async loadFunctionData(
+        useConcurrentControl: boolean = false,
+        concurrency: number = 10
+    ): Promise<number | null> {
         try {
             const functionsUri = vscode.Uri.joinPath(rootDir, 'functions');
             const functionPaths = await DataLoader.getAllFunctionsPaths(functionsUri);
-            // vscode.workspace.textDocuments
+
             if (functionPaths.length === 0) {
                 vscode.window.showInformationMessage('未找到任何 .mcfunction 函数文件');
                 return null;
             }
 
-            // 第一步：提取所有函数的标准名称（resName）
+            // 提取所有函数的标准名称（resName）
             this.functionResNames = functionPaths
                 .map(path => MinecraftUtils.buildFunctionCall(path))
-                .filter((resName): resName is string => !!resName); // 过滤无效名称
+                .filter((resName): resName is string => !!resName);
 
-            // 第二步：并发解析所有函数文件（I/O 操作并发执行，比串行更快）
-            await Promise.all(
-                functionPaths.map(path => {
+            // 记录开始时间
+            const startTime = Date.now();
+            const modeName = useConcurrentControl ? `限制并发（${concurrency}）` : '全量并发';
+
+            if (useConcurrentControl) {
+                // 模式1：使用并发控制加载
+                await this.concurrentMap(concurrency, functionPaths, async (path) => {
                     const resName = MinecraftUtils.buildFunctionCall(path);
                     if (!resName) return;
+
                     this.docCache.set(resName, new Map());
-                    this.loadSingleFileByUri(path).catch(err => {
-                    // 单个文件解析失败不中断整体流程
-                    vscode.window.showWarningMessage(`解析函数文件失败：${path.path}，原因：${err.message}`);
+                    try {
+                        await this.loadSingleFileByUri(path);
+                    } catch (err) {
+                        vscode.window.showWarningMessage(`解析函数文件失败：${path.path}，原因：${(err as Error).message}`);
+                    }
                 });
-            })
-            );
+            } else {
+                // 模式2：原有全量并发加载
+                await Promise.all(
+                    functionPaths.map(path => {
+                        const resName = MinecraftUtils.buildFunctionCall(path);
+                        if (!resName) return Promise.resolve();
+                        this.docCache.set(resName, new Map());
+                        return this.loadSingleFileByUri(path).catch(err => {
+                            vscode.window.showWarningMessage(`解析函数文件失败：${path.path}，原因：${err.message}`);
+                        });
+                    })
+                );
+            }
 
+            // 计算并输出运行时间
+            const endTime = Date.now();
+            const duration = (endTime - startTime) / 1000; // 转换为秒
+            console.log(`【函数加载性能测试】模式：${modeName}，文件数量：${functionPaths.length}，耗时：${duration.toFixed(2)}秒`);
 
-            return true;
+            return duration;
         } catch (error) {
             vscode.window.showErrorMessage(`加载函数数据失败：${(error as Error).message}`);
             return null;

@@ -13,6 +13,13 @@ export class DynamicDocManager {
 
 
     private bindEvents() {
+        vscode.workspace.onDidCreateFiles(event => {
+            // 新增文件时：创建新的函数文件
+            event.files.forEach(file => {
+                console.log(file);
+                DataLoader.getInstance().addFunctionRes(file);
+            });
+        });
         // 文档内容变更时：更新受影响行的缓存和标签/计分板数据
         vscode.workspace.onDidChangeTextDocument(event => {
             if (event.document.languageId !== 'mcfunction') {
