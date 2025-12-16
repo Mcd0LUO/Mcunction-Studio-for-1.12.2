@@ -9,6 +9,7 @@ import { registerFunctionDefinitionProvider } from './core/McFunctionDefinitionP
 import { registerHoverProvider } from './core/HoverProvider';
 import { DynamicDocManager } from './core/DynamicDocManager';
 import { LinePreviewManager } from './core/LinePreviewManager';
+import { VsCommandProcessor } from './core/VsCommandProcessor';
 
 export let rootDir: vscode.Uri;
 
@@ -39,11 +40,15 @@ export function activate(context: vscode.ExtensionContext) {
 	const docManager = DynamicDocManager.getInstance();
 	// 注册编辑器命令
 	context.subscriptions.push(
+		// 重载工作区
 		vscode.commands.registerCommand('mcf-studio.reloadWorkspace', async () => {
 			await dataloader.loadExtensionConfig();
 			dataloader.loadData(true,dataloader.getConfig().FileProcessing.MaxConcurrentReads);
 		}),
-		vscode.commands.registerCommand('mcf-studio.createFunctionFile', MinecraftUtils.createNewFunctionFile),
+		// 新建函数文件
+		vscode.commands.registerCommand('mcf-studio.createFunctionFile', VsCommandProcessor.createNewFunctionFile),
+		// 快速debug tellraw
+		vscode.commands.registerCommand('mcf-studio.fastScoreboardDebug', VsCommandProcessor.fastScoreboardDebug)
 	);
 	// 注册json预览
 	const linePre = new LinePreviewManager(); 

@@ -8,7 +8,7 @@
             "type": "object",
             "description": "需要忽略的模式配置（函数和进度）",
             "properties": {
-                "function": {
+                "Function": {
                     "type": "array",
                     "description": "需要忽略的函数模式列表",
                     "items": {
@@ -16,7 +16,7 @@
                     },
                     "default": []
                 },
-                "advancement": {
+                "Advancement": {
                     "type": "array",
                     "description": "需要忽略的进度模式列表",
                     "items": {
@@ -26,8 +26,8 @@
                 }
             },
             "required": [
-                "function",
-                "advancement"
+                "Function",
+                "Advancement"
             ],
             "additionalProperties": false
         },

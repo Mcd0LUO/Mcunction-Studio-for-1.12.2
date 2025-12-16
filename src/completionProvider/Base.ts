@@ -3,6 +3,7 @@ import { CommandRegistry } from '../core/CommandRegistry';
 import { CommandUtils } from '../utils/CommandUtils';
 import { DataLoader } from '../core/DataLoader';
 import { BlockNameMap, EntityNameList, ItemNameMap } from '../utils/EnumLib';
+import { MinecraftUtils } from '../utils/MinecraftUtils';
 
 /**
  * 选择器参数补全数据（如 score、tag、type 等）
@@ -146,7 +147,7 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
     protected async provideFunctionCompletions(
         range: vscode.Range | undefined = undefined
     ): Promise<vscode.CompletionItem[]> {
-        return DataLoader.getInstance().getFunctionResNames().map(resName => this.createCompletionItem(
+        const arr = DataLoader.getInstance().getFunctionResNames().map(resName => this.createCompletionItem(
             resName,
             "",
             resName,
@@ -154,6 +155,25 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
             vscode.CompletionItemKind.Function,
             range
         ));
+        
+        const activeEditor = vscode.window.activeTextEditor;
+        if (activeEditor) {
+            const resName = MinecraftUtils.buildFunctionCall(activeEditor.document.uri);
+            if (resName) {
+                const item = this.createCompletionItem(
+                    "THIS",
+                    "当前函数",
+                    resName,
+                    false,
+                    vscode.CompletionItemKind.Snippet,
+                    range
+                );
+                item.sortText = "0";
+                arr.push(item);
+            }
+        }
+        
+        return arr;
     }
 
     protected provideTeamCompletions(range: vscode.Range | undefined = undefined): vscode.CompletionItem[] {

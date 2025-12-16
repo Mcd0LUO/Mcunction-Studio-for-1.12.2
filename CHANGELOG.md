@@ -1,6 +1,13 @@
 # Change Log
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
+
+## [1.1.3] - 2025-12-16
+### 更新
+- 函数补全新增 "THIS" 补全当前函数
+- 新增了快捷当前函数记分板debug功能 (右键菜单-插入快速记分板debug)
+
+
 ## [1.1.2] - 2025-12-2
 ### 修复
 - 修复了新增函数不会添加到函数池的问题

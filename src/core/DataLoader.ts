@@ -27,8 +27,8 @@ export enum DataType {
 }
 interface ConfigData {
     IgnorePattern: {
-        function: string[];
-        advancement: string[];
+        Function: string[];
+        Advancement: string[];
     },
     Signature: boolean,
     JsonPreview: {
@@ -55,26 +55,9 @@ export class DataLoader {
     private fakePlayerData: Map<string, number> = new Map();  // 假玩家数据
     private tagsData: Map<string, number> = new Map(); // 标签数据   标签:个数
     private teamsData: Map<string, TeamData> = new Map(); // 队伍数据
-    private configData: ConfigData = {
-        IgnorePattern: {
-            function: [],
-            advancement: []
-        },
-        JsonPreview: {
-            LinePreview: true,
-            HoverPreview: true
-        },
-        FileProcessing: {
-            MaxConcurrentReads: 100
-        },
-        HoverProvider: {
-            SelecterDiagnostics: true,
-        },
-        Signature: true,
-        CommandSchemaCheck: true
-    }; // 配置数据
+    private configData: ConfigData = DataLoader.getDefaultConfig();
 
-    private docCache: Map<string, Map<number, { type: DataType, value: string }[]>> = new Map(); // uri -> 行号: { 类型 , 值 }
+    private docCache: Map<string, Map<number, { type: DataType, value: string }[]>> = new Map(); // resName -> 行号: { 类型 , 值 }
 
     private constructor() {
         this.init();
@@ -163,8 +146,8 @@ export class DataLoader {
     public static getDefaultConfig(): ConfigData {
         return {
             IgnorePattern: {
-                function: [],
-                advancement: []
+                Function: [],
+                Advancement: []
             },
             JsonPreview: {
                 LinePreview: true,
@@ -353,24 +336,7 @@ export class DataLoader {
         if (!rootDir) { return; }
         const configUri = vscode.Uri.joinPath(rootDir, 'McfunctionStudio.json');
         // 定义基础默认配置（完整结构）
-        const defaultConfig: ConfigData = {
-            IgnorePattern: {
-                function: [],
-                advancement: []
-            },
-            JsonPreview: {
-                LinePreview: true,
-                HoverPreview: true
-            },
-            FileProcessing: {
-                MaxConcurrentReads: 100
-            },
-            HoverProvider: {
-                SelecterDiagnostics: true
-            },
-            Signature: true,
-            CommandSchemaCheck: true
-        };
+        const defaultConfig: ConfigData = DataLoader.getDefaultConfig();
 
         try {
             // 尝试读取文件
@@ -393,7 +359,7 @@ export class DataLoader {
             const finalConfigContent = Buffer.from(JSON.stringify(this.configData, null, 2), 'utf-8');
             await vscode.workspace.fs.writeFile(configUri, finalConfigContent);
 
-            console.log('配置文件加载并修复完成:', this.configData);
+            console.log('配置文件加载并修复完成:');
             vscode.window.showInformationMessage('Mcfunction Studio 配置文件已加载');
 
         } catch (error) {
