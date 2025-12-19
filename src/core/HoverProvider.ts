@@ -34,7 +34,7 @@ export class McFunctionHoverProvider implements vscode.HoverProvider {
         const markdown = new vscode.MarkdownString();
         const funcData = DataLoader.getInstance().getFunctionData().get(commandInfo.resource);
         if (funcData) {
-            const entries = Array.from(funcData.ref.entries()).map(([uri, lines]) => `- [${uri}](${MinecraftUtils.buildFunctionUri(uri)})}\n`).join('');
+            const entries = Array.from(funcData.ref.entries()).map(([uri, lines]) => `- [${uri}](${MinecraftUtils.buildFunctionUri(uri)})\n`).join('');
             markdown.appendMarkdown(`### ${commandInfo.resource}\n引用:\n${entries}`) ;
         }
         return new vscode.Hover(markdown);
