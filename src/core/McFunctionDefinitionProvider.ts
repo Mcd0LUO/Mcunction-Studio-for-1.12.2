@@ -6,7 +6,7 @@ import { CommandUtils } from '../utils/CommandUtils';
 /**
  * 命令类型枚举（用于区分不同跳转目标）
  */
-enum CommandType {
+export enum CommandType {
     Function = 'function',
     Advancement = 'advancement',
     Scoreboard = 'scoreboard',
@@ -18,13 +18,15 @@ enum CommandType {
 /**
  * 解析出的命令信息
  */
-interface CommandInfo {
+export interface CommandInfo {
     type: CommandType;
-    resourcePath: string; // 资源路径（如标签名、记分板名等）
+    resource: string; // 资源名（如标签名、记分板名等）
     range: vscode.Range | null; // 匹配的文本范围
 }
 
 export class McFunctionDefinitionProvider implements vscode.DefinitionProvider {
+
+    public static instance: McFunctionDefinitionProvider = new McFunctionDefinitionProvider();
     /**
      * 核心：提供定义跳转
      */
@@ -35,14 +37,8 @@ export class McFunctionDefinitionProvider implements vscode.DefinitionProvider {
     ): vscode.ProviderResult<vscode.DefinitionLink[]> {
         const lineText = document.lineAt(position.line).text;
 
-        // 1. 先判断光标是否在选择器内，若是则优先解析选择器中的tag/score
-        const selectorInfo = this.matchSelectorPredicate(lineText, position);
-        if (selectorInfo) {
-            return this.buildDefinitionLink(selectorInfo);
-        }
-
-        // 2. 若不在选择器内，解析其他命令中的tag/score等
-        const commandInfo = this.parseOtherCommands(lineText, position);
+        // 解析命令信息（包括选择器内和选择器外的情况）
+        const commandInfo = this.parseCommandInfo(lineText, position);
         if (commandInfo) {
             return this.buildDefinitionLink(commandInfo);
         }
@@ -54,11 +50,11 @@ export class McFunctionDefinitionProvider implements vscode.DefinitionProvider {
      * 构建跳转链接（抽离复用）
      */
     private buildDefinitionLink(commandInfo: CommandInfo): vscode.DefinitionLink[] | null {
-        if (!commandInfo.resourcePath || !commandInfo.range) {
+        if (!commandInfo.resource || !commandInfo.range) {
             return null;
         }
 
-        const targetInfo = this.getTargetInfo(commandInfo.type, commandInfo.resourcePath);
+        const targetInfo = this.getTargetInfo(commandInfo.type, commandInfo.resource);
         if (!targetInfo) {
             return null;
         }
@@ -71,10 +67,17 @@ export class McFunctionDefinitionProvider implements vscode.DefinitionProvider {
     }
 
     /**
-     * 解析选择器外的其他命令（tag/scoreboard等）
+     * 解析命令信息（统一处理选择器内外的情况）
      */
-    private parseOtherCommands(lineText: string, position: vscode.Position): CommandInfo | null {
-        // 按优先级顺序匹配：先匹配更具体的命令
+    public parseCommandInfo(lineText: string, position: vscode.Position): CommandInfo | null {
+        // 1. 先判断光标是否在选择器内
+        const params = CommandUtils.getCursorPredicate(lineText, position.character);
+        if (params) {
+            // 在选择器内，解析选择器谓词
+            return this.parsePredicateType(...params, position.line);
+        }
+
+        // 2. 不在选择器内，按优先级顺序匹配各种命令
         const tagCommand = this.matchTagCommand(lineText, position);
         if (tagCommand) {return tagCommand;}
 
@@ -92,6 +95,7 @@ export class McFunctionDefinitionProvider implements vscode.DefinitionProvider {
 
         return null;
     }
+
     /**
      * 匹配scoreboard teams命令中的队伍名
      * 格式示例：scoreboard teams add myteam、scoreboard teams remove myteam、scoreboard teams join myteam @a
@@ -104,9 +108,10 @@ export class McFunctionDefinitionProvider implements vscode.DefinitionProvider {
 
         const teamName = match[2];
         const range = this.getWordRange(lineText, position, teamName);
-        return range ? { type: CommandType.Team, resourcePath: teamName, range } : null;
+        return range ? { type: CommandType.Team, resource: teamName, range } : null;
     }
 
+    // 已合并到parseCommandInfo方法中，此方法已废弃
     /**
      * 匹配选择器内的predicate（仅处理选择器范围内的tag/score/team）
      */
@@ -130,14 +135,14 @@ export class McFunctionDefinitionProvider implements vscode.DefinitionProvider {
         const range = new vscode.Range(line, startIdx, line, endIdx);
 
         if (predicate.startsWith('tag=')) {
-            return { type: CommandType.Tag, resourcePath: predicate.slice(4), range };
+            return { type: CommandType.Tag, resource: predicate.slice(4), range };
         } else if (predicate.startsWith('score_') && (predicate.includes('_min=') || predicate.includes('='))) {
             const scoreboardName = predicate.includes('_min=')
                 ? predicate.split('_min=')[0].slice(6)
                 : predicate.split('=')[0].slice(6);
-            return { type: CommandType.Scoreboard, resourcePath: scoreboardName, range };
+            return { type: CommandType.Scoreboard, resource: scoreboardName, range };
         } else if (predicate.startsWith('team=')) {
-            return { type: CommandType.Team, resourcePath: predicate.slice(5), range };
+            return { type: CommandType.Team, resource: predicate.slice(5), range };
         }
 
         return null;
@@ -155,7 +160,7 @@ export class McFunctionDefinitionProvider implements vscode.DefinitionProvider {
 
         const tagName = match[2];
         const range = this.getWordRange(lineText, position, tagName);
-        return range ? { type: CommandType.Tag, resourcePath: tagName, range } : null;
+        return range ? { type: CommandType.Tag, resource: tagName, range } : null;
     }
 
     /**
@@ -168,7 +173,7 @@ export class McFunctionDefinitionProvider implements vscode.DefinitionProvider {
         if (objectivesMatch) {
             const scoreboardName = objectivesMatch[2];
             const range = this.getWordRange(lineText, position, scoreboardName);
-            return range ? { type: CommandType.Scoreboard, resourcePath: scoreboardName, range } : null;
+            return range ? { type: CommandType.Scoreboard, resource: scoreboardName, range } : null;
         }
 
         // 2. 匹配 players 子命令（操作记分板数据）
@@ -177,7 +182,7 @@ export class McFunctionDefinitionProvider implements vscode.DefinitionProvider {
         if (playersNormalMatch) {
             const scoreboardName = playersNormalMatch[3];
             const range = this.getWordRange(lineText, position, scoreboardName);
-            return range ? { type: CommandType.Scoreboard, resourcePath: scoreboardName, range } : null;
+            return range ? { type: CommandType.Scoreboard, resource: scoreboardName, range } : null;
         }
 
         // 3. 匹配 players operation 子命令
@@ -190,7 +195,7 @@ export class McFunctionDefinitionProvider implements vscode.DefinitionProvider {
             for (const board of [scoreboard1, scoreboard2]) {
                 const range = this.getWordRange(lineText, position, board);
                 if (range) {
-                    return { type: CommandType.Scoreboard, resourcePath: board, range };
+                    return { type: CommandType.Scoreboard, resource: board, range };
                 }
             }
         }
@@ -208,7 +213,7 @@ export class McFunctionDefinitionProvider implements vscode.DefinitionProvider {
 
         const resourcePath = match[1];
         const range = this.getWordRange(lineText, position, resourcePath);
-        return { type: CommandType.Function, resourcePath, range };
+        return { type: CommandType.Function, resource: resourcePath, range };
     }
 
     /**
@@ -221,7 +226,7 @@ export class McFunctionDefinitionProvider implements vscode.DefinitionProvider {
 
         const resourcePath = match[3];
         const range = this.getWordRange(lineText, position, resourcePath);
-        return { type: CommandType.Advancement, resourcePath, range };
+        return { type: CommandType.Advancement, resource: resourcePath, range };
     }
 
     /**

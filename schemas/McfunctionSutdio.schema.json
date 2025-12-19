@@ -10,7 +10,7 @@
             "properties": {
                 "Function": {
                     "type": "array",
-                    "description": "需要忽略的函数模式列表",
+                    "description": "需要忽略的函数模式列表 [填写相对于functions的文件路径\n如文件夹: **/misc 或 system/misc\n文件:  **/misc/init.mcfunction    ]",
                     "items": {
                         "type": "string"
                     },

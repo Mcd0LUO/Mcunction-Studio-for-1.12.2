@@ -1,6 +1,11 @@
 # Change Log
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
+## [1.1.4] - 2025-12-19
+### 更新
+- 完善了配置文件的IgnorePattern部分
+- 新增了鼠标悬浮 scoreboard | function 快速查看信息
+
 
 ## [1.1.3] - 2025-12-16
 ### 更新

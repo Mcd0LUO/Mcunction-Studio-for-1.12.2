@@ -346,22 +346,21 @@ export class DataLoader {
             try {
                 // 尝试解析用户配置
                 userConfig = JSON.parse(configContent.toString());
+                
+                // 合并用户配置到默认配置（补充缺失字段）
+                this.configData = this.mergeConfigs(defaultConfig, userConfig);
             } catch (parseError) {
                 // JSON 语法错误：使用默认配置并提示
                 vscode.window.showWarningMessage(`配置文件格式错误，已自动修复。错误：${(parseError as Error).message}`);
-                userConfig = {}; // 解析失败视为空配置
+                this.configData = defaultConfig;
+                
+                // 仅在出现语法错误时才写回文件
+                const finalConfigContent = Buffer.from(JSON.stringify(this.configData, null, 2), 'utf-8');
+                await vscode.workspace.fs.writeFile(configUri, finalConfigContent);
             }
 
-            // 合并用户配置到默认配置（补充缺失字段）
-            this.configData = this.mergeConfigs(defaultConfig, userConfig);
-
-            // 无论原配置是否完整，都写入完整配置（确保结构正确）
-            const finalConfigContent = Buffer.from(JSON.stringify(this.configData, null, 2), 'utf-8');
-            await vscode.workspace.fs.writeFile(configUri, finalConfigContent);
-
-            console.log('配置文件加载并修复完成:');
+            console.log('配置文件加载完成');
             vscode.window.showInformationMessage('Mcfunction Studio 配置文件已加载');
-
         } catch (error) {
             // 文件不存在或读取失败：创建默认配置
             if ((error as NodeJS.ErrnoException).code === 'FileNotFound') {
@@ -422,10 +421,14 @@ export class DataLoader {
         try {
             // 2. 核心：用 glob 模式 **/*.mcfunction 递归匹配所有函数文件
             // glob 格式：{functions目录路径}/**/*.mcfunction（** 表示所有子目录）
-            const globPattern = new vscode.RelativePattern(functionsUri, '**/*.mcfunction');
+            const excludeFolders = this.instance.configData.IgnorePattern.Function;
+            const includePattern = new vscode.RelativePattern(functionsUri, '**/*.mcfunction');
+            const excludePattern = excludeFolders.length > 0 
+                ? new vscode.RelativePattern(functionsUri, `{${excludeFolders.join(',')}}`)
+                : undefined;
 
             // 3. 调用 VS Code API 查找文件（自动递归，无需手动遍历）
-            const functionUris = await vscode.workspace.findFiles(globPattern);
+            const functionUris = await vscode.workspace.findFiles(includePattern, excludePattern);
 
             console.log(`在 ${functionsUri.path} 下找到 ${functionUris.length} 个 函数文件`);
             return functionUris;
@@ -450,9 +453,13 @@ export class DataLoader {
         try {
             // 2. 核心：用 glob 模式 **/*.json 递归匹配所有函数文件
             // glob 格式：{functions目录路径}/**/*.json（** 表示所有子目录）
+            const excludeFolders = this.instance.configData.IgnorePattern.Advancement;
             const globPattern = new vscode.RelativePattern(advancementsUri, '**/*.json');
+            const excludePattern = excludeFolders.length > 0
+                ? new vscode.RelativePattern(advancementsUri, `{${excludeFolders.join(',')}}`)
+                : undefined;
 
-            const AdvancementsUris = await vscode.workspace.findFiles(globPattern);
+            const AdvancementsUris = await vscode.workspace.findFiles(globPattern, excludePattern);
 
             console.log(`在 ${advancementsUri.path} 下找到 ${AdvancementsUris.length} 个 进度文件`);
             return AdvancementsUris;

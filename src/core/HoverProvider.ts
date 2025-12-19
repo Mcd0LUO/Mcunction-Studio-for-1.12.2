@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { CommandUtils } from '../utils/CommandUtils';
 import { DataLoader } from './DataLoader';
+import { CommandInfo, CommandType, McFunctionDefinitionProvider } from './McFunctionDefinitionProvider';
+import { MinecraftUtils } from '../utils/MinecraftUtils';
 
 export class McFunctionHoverProvider implements vscode.HoverProvider {
 
@@ -14,7 +16,32 @@ export class McFunctionHoverProvider implements vscode.HoverProvider {
         if (hover) {
             return hover;
         }
-        return hover;
+        const commandInfo = McFunctionDefinitionProvider.instance.parseCommandInfo(lineText, position);
+        if (!commandInfo) {
+            return null;
+        }
+        switch (commandInfo.type) {
+            case CommandType.Scoreboard:
+                return this.provideScoreboardInfo(document, position, token, commandInfo);
+            case CommandType.Team:
+                return this.provideTeamInfo(document, position, token, commandInfo);
+            case CommandType.Function:
+                return this.provideFunctionInfo(document, position, token, commandInfo);
+        }
+        return null;
+    }
+    provideFunctionInfo(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken, commandInfo: CommandInfo): vscode.ProviderResult<vscode.Hover> {
+        const markdown = new vscode.MarkdownString();
+        const funcData = DataLoader.getInstance().getFunctionData().get(commandInfo.resource);
+        if (funcData) {
+            const entries = Array.from(funcData.ref.entries()).map(([uri, lines]) => `- [${uri}](${MinecraftUtils.buildFunctionUri(uri)})}\n`).join('');
+            markdown.appendMarkdown(`### ${commandInfo.resource}\n引用:\n${entries}`) ;
+        }
+        return new vscode.Hover(markdown);
+        
+    }
+    provideTeamInfo(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken, commandInfo: CommandInfo): vscode.ProviderResult<vscode.Hover> {
+        return null;
     }
     private provideSelecterDiagnostics(
         document: vscode.TextDocument,
@@ -52,6 +79,21 @@ export class McFunctionHoverProvider implements vscode.HoverProvider {
         // 构建美化的 Markdown 内容
         const hoverContent = this.buildHoverMarkdown(diagnostics, performanceLevel);
         return new vscode.Hover(hoverContent);
+    }
+
+    private provideScoreboardInfo(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken, info: CommandInfo): vscode.Hover | null {
+        const markdown = new vscode.MarkdownString();
+        // 获取记分板相关
+        const scoreboardData = DataLoader.getInstance().getScoreboardsData().get(info.resource);
+        if (scoreboardData) {
+            markdown.appendMarkdown(`### ${info.resource}  
+    - 描述：${scoreboardData.desc}  
+    - 类型：${scoreboardData.type}  
+    - 定义: ${MinecraftUtils.buildFunctionCall(scoreboardData.def[0])}
+            `);
+        }
+        markdown.isTrusted = true;
+        return new vscode.Hover(markdown);
     }
 
     /**
