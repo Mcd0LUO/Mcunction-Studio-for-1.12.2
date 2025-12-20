@@ -1,6 +1,11 @@
 # Change Log
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
+## [1.1.5] - 2025-12-20
+### 更新
+- 支持了较小范围的原始json消息文本补全，需在引号内按ctrl + space 触发补全
+
+
 ## [1.1.4] - 2025-12-19
 ### 更新
 - 完善了配置文件的IgnorePattern部分
