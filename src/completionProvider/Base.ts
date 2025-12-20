@@ -5,6 +5,13 @@ import { DataLoader } from '../core/DataLoader';
 import { BlockNameMap, EntityNameList, ItemNameMap } from '../utils/EnumLib';
 import { MinecraftUtils } from '../utils/MinecraftUtils';
 
+export const COLORS = [
+    "red", "blue", "green", "yellow", "white", "black",
+    "gray", "dark_gray", "light_gray", "aqua", "dark_aqua",
+    "dark_blue", "dark_green", "dark_purple", "dark_red",
+    "gold", "pink", "purple"
+];
+
 /**
  * 选择器参数补全数据（如 score、tag、type 等）
  * 包含显示文本、描述和插入文本（带前缀符号）
@@ -368,6 +375,8 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
     }
 
 
+
+
     /**
      * 获取当前输入文本的范围
      * @param document 当前文档
@@ -383,4 +392,8 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
         const adjustedPosition = position.with(position.line, position.character - inputLength);
         return document.getWordRangeAtPosition(adjustedPosition);
     }
+
+
+    
+    
 }

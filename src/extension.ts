@@ -20,7 +20,7 @@ export function activate(context: vscode.ExtensionContext) {
 	const code_provider = vscode.languages.registerCompletionItemProvider(
 		'mcfunction',
 		MinecraftCompletionProvider.instance,
-		' ', '[', ',', '=','.', '{'
+		' ', '[', ',', '=','.', '{','"'
 	);
 	context.subscriptions.push(code_provider);
 
