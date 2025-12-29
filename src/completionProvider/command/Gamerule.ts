@@ -42,7 +42,9 @@ export class GameruleCompletionProvider extends BaseCompletionProvider {
         { name: 'sendCommandFeedback', desc: '是否发送命令反馈', type: 'boolean' },
         { name: 'showDeathMessages', desc: '是否显示死亡信息', type: 'boolean' },
         { name: 'spawnRadius', desc: '重生点半径', type: 'integer' },
-        { name: 'spectatorsGenerateChunks', desc: '旁观者是否生成区块', type: 'boolean' }
+        { name: 'spectatorsGenerateChunks', desc: '旁观者是否生成区块', type: 'boolean' },
+        { name: 'doLimitedCrafting', desc: '合成配方是否需要解锁', type: 'boolean' },
+        { name: 'gameloopfunction', desc: '游戏tick循环函数', type: 'function' }
     ];
 
     /**
@@ -53,9 +55,9 @@ export class GameruleCompletionProvider extends BaseCompletionProvider {
      * @param position 光标位置
      * @returns 补全项数组
      */
-    public provideCommandCompletions(
+    public async provideCommandCompletions(
         document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext, commands: string[]
-    ): vscode.CompletionItem[] {
+    ): Promise<vscode.CompletionItem[]> {
         switch (commands.length) {
             case 2:
                 // 第二个参数是游戏规则名称
@@ -110,6 +112,10 @@ export class GameruleCompletionProvider extends BaseCompletionProvider {
                                 vscode.CompletionItemKind.Value
                             )
                         ];
+                    }
+                    else if (rule.type === 'function') {
+                        // 函数类型规则，提供函数补全
+                        return await this.provideFunctionCompletions();
                     }
                 }
                 

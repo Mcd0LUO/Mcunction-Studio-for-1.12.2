@@ -1,8 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { rootDir } from '../extension';
-import { DataLoader } from '../core/DataLoader';
 
 /**
  * Minecraft相关工具类（性能优化版）
@@ -171,7 +169,6 @@ export class MinecraftUtils {
         const [nameSpace, resourcePath] = pathParts.length === 1
             ? ['minecraft', pathParts[0].trim()]  // 无冒号：补全命名空间
             : [pathParts[0].trim(), pathParts[1].trim()];  // 有冒号：直接拆分
-
         // 4. 验证解析结果有效性
         const parseResult = (nameSpace && resourcePath) ? [nameSpace, resourcePath] as [string, string] : null;
         // 5. 缓存解析结果并设置过期时间
@@ -348,7 +345,6 @@ export class MinecraftUtils {
     // 3. 正则匹配 saves/存档名/data 结构
     const dataPathRegex = /(saves[\\/][^\\/]+[\\/]data)([\\/]|$)/i;
     const matchResult = workspacePath.match(dataPathRegex);
-
     if (!matchResult || !matchResult[1]) {
         throw new Error(
             `工作区路径未包含 saves/存档名/data 结构！\n当前路径：${workspacePath}\n请打开正确的存档目录`
@@ -357,7 +353,6 @@ export class MinecraftUtils {
 
     // 4. 截断得到 data 目录完整路径
     const dataDirFullPath = workspacePath.slice(0, workspacePath.indexOf(matchResult[1]) + matchResult[1].length);
-
     // 5. 第一步验证：data 目录本身是否存在（防止路径截断异常）
     if (!fs.existsSync(dataDirFullPath)) {
         throw new Error(`提取到的 data 目录不存在！\n路径：${dataDirFullPath}`);

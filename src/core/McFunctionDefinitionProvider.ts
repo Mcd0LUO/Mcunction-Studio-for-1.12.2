@@ -93,7 +93,25 @@ export class McFunctionDefinitionProvider implements vscode.DefinitionProvider {
         const teamCommand = this.matchTeamCommand(lineText, position);
         if (teamCommand) {return teamCommand;}
 
+        const triggerCommand = this.matchTriggerCommand(lineText, position);
+        if (triggerCommand) {return triggerCommand;}
+
         return null;
+    }
+
+    /**
+     * 匹配trigger命令
+     * 格式示例：trigger myobjective、trigger myobjective add 1
+     */
+    private matchTriggerCommand(lineText: string, position: vscode.Position): CommandInfo | null {
+        // 匹配 trigger <记分板名> [值] 结构，支持包括中文在内的任意字符
+        const triggerRegex = /trigger\s+([^\s]+)/u;
+        const match = lineText.match(triggerRegex);
+        if (!match) { return null; }
+
+        const objectiveName = match[1];
+        const range = this.getWordRange(lineText, position, objectiveName);
+        return range ? { type: CommandType.Scoreboard, resource: objectiveName, range } : null;
     }
 
     /**
@@ -168,10 +186,11 @@ export class McFunctionDefinitionProvider implements vscode.DefinitionProvider {
      */
     private matchScoreboardCommand(lineText: string, position: vscode.Position): CommandInfo | null {
         // 1. 匹配 objectives 子命令（定义记分板）
-        const objectivesRegex = /scoreboard\s+objectives\s+(add|remove|modify)\s+([^\s]+)/u;
+        const objectivesRegex = /scoreboard\s+objectives\s+(add|remove)\s+([^\s]+)/u;
         const objectivesMatch = lineText.match(objectivesRegex);
         if (objectivesMatch) {
             const scoreboardName = objectivesMatch[2];
+            console.log(position);
             const range = this.getWordRange(lineText, position, scoreboardName);
             return range ? { type: CommandType.Scoreboard, resource: scoreboardName, range } : null;
         }
@@ -232,8 +251,8 @@ export class McFunctionDefinitionProvider implements vscode.DefinitionProvider {
     /**
      * 获取目标文本在当前行的范围（辅助方法）
      */
-    private getWordRange(lineText: string, position: vscode.Position, targetText: string): vscode.Range | null {
-        const startIdx = lineText.indexOf(targetText);
+    private getWordRange(lineText: string, position: vscode.Position, targetText: string, ): vscode.Range | null {
+        const startIdx = lineText.indexOf(targetText, position.character - targetText.length);
         if (startIdx === -1) {return null;}
 
         const endIdx = startIdx + targetText.length;

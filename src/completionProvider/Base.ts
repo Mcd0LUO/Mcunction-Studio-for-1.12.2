@@ -239,19 +239,36 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
         ));
     }
 
-    protected provideScoreboardCompletions(range: vscode.Range | undefined = undefined): vscode.CompletionItem[] {
-        return Array.from(DataLoader.getInstance().getScoreboardsData().keys()).map(scoreboard => {
-            const scoreboardData = DataLoader.getInstance().getScoreboardsData().get(scoreboard);
-            return this.createCompletionItem(
-                scoreboard,
-                `${scoreboardData?.type} ${scoreboardData?.desc}`,
-                scoreboard,
-                false,
-                vscode.CompletionItemKind.Field,
-                range
-            );
+    protected provideScoreboardCompletions(range: vscode.Range | undefined = undefined, type?: string): vscode.CompletionItem[] {
+        const scoreboardData = DataLoader.getInstance().getScoreboardsData();
+        
+        if (type) {
+            // 按指定类型过滤记分板，同时映射到CompletionItem
+            return Array.from(scoreboardData.entries())
+                .filter(([scoreboard, data]) => data?.type === type)
+                .map(([scoreboard, data]) => {
+                    return this.createCompletionItem(
+                        scoreboard,
+                        `${data?.type} ${data?.desc}`,
+                        scoreboard,
+                        false,
+                        vscode.CompletionItemKind.Field,
+                        range
+                    );
+                });
+        } else {
+            // 返回所有记分板
+            return Array.from(scoreboardData.entries()).map(([scoreboard, data]) => {
+                return this.createCompletionItem(
+                    scoreboard,
+                    `${data?.type} ${data?.desc}`,
+                    scoreboard,
+                    false,
+                    vscode.CompletionItemKind.Field,
+                    range
+                );
+            });
         }
-        );
     }
 
     protected provideSimpleSelectorCompletions(): vscode.CompletionItem[] {

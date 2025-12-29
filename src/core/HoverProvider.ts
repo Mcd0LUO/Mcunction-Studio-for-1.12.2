@@ -51,7 +51,6 @@ export class McFunctionHoverProvider implements vscode.HoverProvider {
     ): vscode.Hover | null {
         const selector = CommandUtils.getCursorFullSelector(lineText, position.character);
         if (!selector) { return null; }
-
         // 初始化诊断状态
         const diagnostics = {
             selfOnly: selector[1] === 's',
@@ -78,7 +77,7 @@ export class McFunctionHoverProvider implements vscode.HoverProvider {
 
         // 构建美化的 Markdown 内容
         const hoverContent = this.buildHoverMarkdown(diagnostics, performanceLevel);
-        return new vscode.Hover(hoverContent);
+        return null;
     }
 
     private provideScoreboardInfo(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken, info: CommandInfo): vscode.Hover | null {

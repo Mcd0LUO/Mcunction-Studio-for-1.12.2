@@ -10,6 +10,7 @@ const lazyData = {
   MinecraftStats: null as any | null,
   MinecraftStatsDetail: null as any | null,
   ParticleNames: null as any | null,
+  Enchantments: null as any | null,
 };
 
 
@@ -358,7 +359,7 @@ export const EntityNameList = {
         { name: 'dragon_fireball', desc: '龙火球' },
         { name: 'egg', desc: '鸡蛋' },
         { name: 'elder_guardian', desc: '远古守卫者' },
-        { name: 'ender_crystal', desc: '末影水晶' },
+        { name: 'ender_crystal', desc: '末地水晶' },
         { name: 'ender_dragon', desc: '末影龙' },
         { name: 'ender_pearl', desc: '末影珍珠' },
         { name: 'enderman', desc: '末影人' },
@@ -1048,6 +1049,54 @@ export const ParticleNames = {
   }
 };
 
+export const Enchantments = {
+  get all(): Array<{ name: string; desc: string }> {
+    if (!lazyData.Enchantments) {
+      lazyData.Enchantments = [
+        { name: "minecraft:aqua_affinity", desc: "水下速掘" },
+        { name: "minecraft:bane_of_arthropods", desc: "节肢杀手" },
+        { name: "minecraft:binding_curse", desc: "绑定诅咒" },
+        { name: "minecraft:blast_protection", desc: "爆炸保护" },
+        { name: "minecraft:depth_strider", desc: "深海探索者" },
+        { name: "minecraft:efficiency", desc: "效率" },
+        { name: "minecraft:feather_falling", desc: "摔落保护" },
+        { name: "minecraft:fire_aspect", desc: "火焰附加" },
+        { name: "minecraft:fire_protection", desc: "火焰保护" },
+        { name: "minecraft:flame", desc: "火矢" },
+        { name: "minecraft:fortune", desc: "时运" },
+        { name: "minecraft:frost_walker", desc: "冰霜行者" },
+        { name: "minecraft:infinity", desc: "无限" },
+        { name: "minecraft:knockback", desc: "击退" },
+        { name: "minecraft:looting", desc: "抢夺" },
+        { name: "minecraft:luck_of_the_sea", desc: "海之眷顾" },
+        { name: "minecraft:lure", desc: "饵钓" },
+        { name: "minecraft:mending", desc: "经验修补" },
+        { name: "minecraft:power", desc: "力量" },
+        { name: "minecraft:projectile_protection", desc: "弹射物保护" },
+        { name: "minecraft:protection", desc: "保护" },
+        { name: "minecraft:punch", desc: "冲击" },
+        { name: "minecraft:respiration", desc: "水下呼吸" },
+        { name: "minecraft:sharpness", desc: "锋利" },
+        { name: "minecraft:silk_touch", desc: "精准采集" },
+        { name: "minecraft:smite", desc: "亡灵杀手" },
+        { name: "minecraft:sweeping", desc: "横扫之刃" },
+        { name: "minecraft:thorns", desc: "荆棘" },
+        { name: "minecraft:unbreaking", desc: "耐久" },
+        { name: "minecraft:vanishing_curse", desc: "消失诅咒" }
+      ];
+    }
+    return [...lazyData.Enchantments]; // 返回副本避免外部修改
+  },
+
+  // 按前缀过滤枚举项
+  filterByPrefix(prefix: string): Array<{ name: string; desc: string }> {
+    const lowerPrefix = prefix.toLowerCase();
+    return this.all.filter(item =>
+      item.name.toLowerCase().startsWith(lowerPrefix)
+    );
+  }
+};
+
 
 export function refreshEnumCache() {
   lazyData.EntityNameList = null;
@@ -1055,5 +1104,6 @@ export function refreshEnumCache() {
   lazyData.MinecraftStats = null;
   lazyData.MinecraftStatsDetail = null;
   lazyData.ParticleNames = null;
+  lazyData.Enchantments = null;
 }
 

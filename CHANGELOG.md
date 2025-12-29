@@ -1,6 +1,15 @@
 # Change Log
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
+
+## [1.1.6] - 2025-12-29
+### 更新
+- 添加了命令difficulty, clone, enchant的支持
+- 修复了trigger <记分板> 链接失效问题
+- 完善了gamerule可选项
+### 变更
+- 暂时删除了选择器诊断
+
 ## [1.1.5] - 2025-12-20
 ### 更新
 - 支持了较小范围的原始json消息文本补全，需在引号内按ctrl + space 触发补全
