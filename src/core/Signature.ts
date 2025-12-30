@@ -7,7 +7,7 @@ import { DataLoader } from './DataLoader';
  */
 export class McFunctionSignatureHelpProvider implements vscode.SignatureHelpProvider {
 
-    
+
     provideSignatureHelp(
         document: vscode.TextDocument,
         position: vscode.Position,
@@ -34,7 +34,8 @@ export class McFunctionSignatureHelpProvider implements vscode.SignatureHelpProv
 
     }
     provideStatsSignatureHelp(commands: string[]): vscode.ProviderResult<vscode.SignatureHelp> {
-        if (commands.length >= 8) {return null;} 
+        if (commands.length >= 8) { return null; }
+        if (commands[1] === 'block' ) {return;}
         const signatureHelp = new vscode.SignatureHelp();
         // 匹配 stats 命令
         const signature = new vscode.SignatureInformation(
@@ -44,7 +45,7 @@ export class McFunctionSignatureHelpProvider implements vscode.SignatureHelpProv
             new vscode.ParameterInformation('<源>'),
             new vscode.ParameterInformation('<绑定对象>', '目标选择器'),
             new vscode.ParameterInformation('<操作>'),
-            new vscode.ParameterInformation('<事件>', '如minecraft:used/minecraft:used_on_block'),
+            new vscode.ParameterInformation('<事件>'),
             new vscode.ParameterInformation('<赋值对象>', '目标选择器'),
             new vscode.ParameterInformation('<记分项>')
         ];
@@ -54,7 +55,7 @@ export class McFunctionSignatureHelpProvider implements vscode.SignatureHelpProv
         return signatureHelp;
     }
     provideSummonSignatureHelp(commands: string[]): vscode.ProviderResult<vscode.SignatureHelp> {
-        if (commands.length >= 7) {return null;}
+        if (commands.length >= 7) { return null; }
         const signatureHelp = new vscode.SignatureHelp();
         // 匹配 summon 命令
         const signature = new vscode.SignatureInformation(
@@ -62,10 +63,10 @@ export class McFunctionSignatureHelpProvider implements vscode.SignatureHelpProv
         );
         signature.parameters = [
             new vscode.ParameterInformation('<实体ID>', '如minecraft:pig'),
-            new vscode.ParameterInformation('<x>', 'x坐标'),
-            new vscode.ParameterInformation('<y>', 'y坐标'),
-            new vscode.ParameterInformation('<z>', 'z坐标'),
-            new vscode.ParameterInformation('<NBT>', 'compound{}')
+            new vscode.ParameterInformation('<x>'),
+            new vscode.ParameterInformation('<y>'),
+            new vscode.ParameterInformation('<z>'),
+            new vscode.ParameterInformation('<NBT>')
         ];
         signatureHelp.signatures = [signature];
         signatureHelp.activeSignature = 0;
@@ -74,7 +75,7 @@ export class McFunctionSignatureHelpProvider implements vscode.SignatureHelpProv
         return signatureHelp;
     }
     provideExecuteSignatureHelp(commands: string[]): vscode.ProviderResult<vscode.SignatureHelp> {
-        if (commands.length <= 2 || commands.length > 5) {return null;}
+        if (commands.length <= 2 || commands.length > 5) { return null; }
         const signatureHelp = new vscode.SignatureHelp();
         const signature = new vscode.SignatureInformation(
             'vec3[<x> <y> <z>]',
@@ -86,11 +87,11 @@ export class McFunctionSignatureHelpProvider implements vscode.SignatureHelpProv
         ];
         signatureHelp.signatures = [signature];
         signatureHelp.activeSignature = 0;
-        signatureHelp.activeParameter = commands.length -3;
+        signatureHelp.activeParameter = commands.length - 3;
         return signatureHelp;
     }
     provideFunctionSignatureHelp(commands: string[]): vscode.SignatureHelp | null {
-        if (commands.length >= 3) {return null;}
+        if (commands.length >= 3) { return null; }
         const signatureHelp = new vscode.SignatureHelp();
         // 匹配 function 命令
         const signature = new vscode.SignatureInformation(
@@ -102,38 +103,58 @@ export class McFunctionSignatureHelpProvider implements vscode.SignatureHelpProv
         ];
         signatureHelp.signatures = [signature];
         signatureHelp.activeSignature = 0;
-        signatureHelp.activeParameter = commands[1].split(':').length -1;
-        
-        
+        signatureHelp.activeParameter = commands[1].split(':').length - 1;
+
+
 
         return signatureHelp;
     }
 
     private provideScoreboardSignatureHelp(commands: string[]): vscode.SignatureHelp {
         const signatureHelp = new vscode.SignatureHelp();
-        if (commands[1] === 'players' && commands[2] !== 'tag') {
-            const signature = new vscode.SignatureInformation(
-                '<目标> <记分板> <数值>',
-            );
-            // 参数说明
-            signature.parameters = [
-                new vscode.ParameterInformation('<目标>'),
-                new vscode.ParameterInformation('<记分板>'),
-                new vscode.ParameterInformation('<数值>')
-            ];
-            signatureHelp.signatures = [signature];
-            signatureHelp.activeSignature = 0;
+        if (commands[1] === 'players') {
+            if (['add', 'set', 'reset', 'remove'].includes(commands[2])) {
+                const signature = new vscode.SignatureInformation(
+                    '<目标> <记分板> <数值>',
+                );
+                // 参数说明
+                signature.parameters = [
+                    new vscode.ParameterInformation('<目标>'),
+                    new vscode.ParameterInformation('<记分板>'),
+                    new vscode.ParameterInformation('<数值>')
+                ];
+                signatureHelp.signatures = [signature];
+                signatureHelp.activeSignature = 0;
 
-            // 计算当前输入到第几个参数
-            const paramIndex = commands.length - 4;
-            signatureHelp.activeParameter = paramIndex;
+                // 计算当前输入到第几个参数
+                const paramIndex = commands.length - 4;
+                signatureHelp.activeParameter = paramIndex;
+            }
+            else if (commands[2] === 'test') {
+                const signature = new vscode.SignatureInformation(
+                    '<目标> <记分板> <最小值> <最大值>',
+                );
+                // 参数说明
+                signature.parameters = [
+                    new vscode.ParameterInformation('<目标>'),
+                    new vscode.ParameterInformation('<记分板>'),
+                    new vscode.ParameterInformation('<最小值>'),
+                    new vscode.ParameterInformation('<最大值>')
+
+                ];
+                signatureHelp.signatures = [signature];
+                signatureHelp.activeSignature = 0;
+                signatureHelp.activeParameter = commands.length - 4;
+                return signatureHelp;
+            }
+            
         }
         else if (commands[1] === 'teams') {
-            
+
         }
 
         return signatureHelp;
-}
+    }
 
 
 }

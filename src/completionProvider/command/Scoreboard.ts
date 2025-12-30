@@ -269,9 +269,9 @@ export class ScoreboardCompletionProvider extends BaseCompletionProvider {
                 ];
 
             }
-                    
-                
-            
+
+
+
         }
         return [];
     }
@@ -450,13 +450,29 @@ export class ScoreboardCompletionProvider extends BaseCompletionProvider {
                     undefined,
                     vscode.CompletionItemKind.Keyword
                 ),
+                this.createCompletionItem(
+                    'enable',
+                    '启用记分板',
+                    'enable'
+                ),
+                this.createCompletionItem(
+                    'list',
+                    '列出记分板',
+                    'list'
+                ),
+                this.createCompletionItem(
+                    'test',
+                    '检测',
+                    'test'
+                ),
+
             ];
         }
-        if (commands.length === 4 && ["add", "remove", "reset", "operation", "set", "tag"].includes(commands[2])) {
+        if (commands.length === 4 && ["add", "remove", "reset", "operation", "set", "tag", "enable", "test", "list"].includes(commands[2])) {
             return this.provideSelectorCompletions(commands[3]);
         }
-        if (commands.length === 5 && ["add", "remove", "reset", "operation", "set"].includes(commands[2])) {
-            return this.provideScoreboardCompletions(this.getWordRange(document, position, commands[4].length));
+        if (commands.length === 5 && ["add", "remove", "reset", "operation", "set", "enable", "test"].includes(commands[2])) {
+            return this.provideScoreboardCompletions(this.getWordRange(document, position, commands[4].length), commands[2] === "enable" ? "trigger" : undefined);
         }
         // scoreboard players tag @s add xxx
         if ("tag" === commands[2]) {

@@ -44,7 +44,7 @@ export class GameruleCompletionProvider extends BaseCompletionProvider {
         { name: 'spawnRadius', desc: '重生点半径', type: 'integer' },
         { name: 'spectatorsGenerateChunks', desc: '旁观者是否生成区块', type: 'boolean' },
         { name: 'doLimitedCrafting', desc: '合成配方是否需要解锁', type: 'boolean' },
-        { name: 'gameloopfunction', desc: '游戏tick循环函数', type: 'function' }
+        { name: 'gameLoopFunction', desc: '游戏tick循环函数', type: 'function' }
     ];
 
     /**

@@ -1,6 +1,12 @@
 # Change Log
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
+## [1.1.7] - 2025-12-30
+### 更新
+- 更新了对scoreboard players enable|list|test , playsound , stopsound的支持
+### 修复
+- 修复了gameLoopFunction的大小写问题与其后函数的跳转问题
+
 
 ## [1.1.6] - 2025-12-29
 ### 更新

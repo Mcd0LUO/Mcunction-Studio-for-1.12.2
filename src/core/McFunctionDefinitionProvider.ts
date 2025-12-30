@@ -96,7 +96,25 @@ export class McFunctionDefinitionProvider implements vscode.DefinitionProvider {
         const triggerCommand = this.matchTriggerCommand(lineText, position);
         if (triggerCommand) {return triggerCommand;}
 
+        const gameruleCommand = this.matchGameruleCommand(lineText, position);
+        if (gameruleCommand) {return gameruleCommand;}
+
         return null;
+    }
+
+    /**
+     * 匹配gamerule命令
+     * 格式示例：gamerule gameLoopFunction mynamespace:myfunction
+     */
+    private matchGameruleCommand(lineText: string, position: vscode.Position): CommandInfo | null {
+        // 匹配 gamerule gameLoopFunction <函数名> 结构
+        const gameruleFunctionRegex = /gamerule\s+gameLoopFunction\s+([^\s]+)/u;
+        const match = lineText.match(gameruleFunctionRegex);
+        if (!match) { return null; }
+
+        const resourcePath = match[1];
+        const range = this.getWordRange(lineText, position, resourcePath);
+        return range ? { type: CommandType.Function, resource: resourcePath, range } : null;
     }
 
     /**
@@ -190,13 +208,12 @@ export class McFunctionDefinitionProvider implements vscode.DefinitionProvider {
         const objectivesMatch = lineText.match(objectivesRegex);
         if (objectivesMatch) {
             const scoreboardName = objectivesMatch[2];
-            console.log(position);
             const range = this.getWordRange(lineText, position, scoreboardName);
             return range ? { type: CommandType.Scoreboard, resource: scoreboardName, range } : null;
         }
 
         // 2. 匹配 players 子命令（操作记分板数据）
-        const playersNormalRegex = /scoreboard\s+players\s+(set|add|remove|reset)\s+([^\s]+)\s+([^\s]+)/u;
+        const playersNormalRegex = /scoreboard\s+players\s+(set|add|remove|reset|enable|test)\s+([^\s]+)\s+([^\s]+)/u;
         const playersNormalMatch = lineText.match(playersNormalRegex);
         if (playersNormalMatch) {
             const scoreboardName = playersNormalMatch[3];

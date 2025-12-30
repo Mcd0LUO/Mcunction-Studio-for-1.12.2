@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { CommandRegistry } from '../core/CommandRegistry';
 import { CommandUtils } from '../utils/CommandUtils';
 import { DataLoader } from '../core/DataLoader';
-import { BlockNameMap, EntityNameList, ItemNameMap } from '../utils/EnumLib';
+import { BlockNameMap, EntityNameList, ItemNameMap, SoundNames } from '../utils/EnumLib';
 import { MinecraftUtils } from '../utils/MinecraftUtils';
 
 export const COLORS = [
@@ -236,6 +236,16 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
             key,
             false,
             vscode.CompletionItemKind.Struct
+        ));
+    }
+
+    protected provideSoundsCompletions(): vscode.CompletionItem[] {
+        return SoundNames.all.map(sound => this.createCompletionItem(
+            sound.name,
+            sound.desc,
+            sound.name,
+            false,
+            vscode.CompletionItemKind.Reference
         ));
     }
 

@@ -54,6 +54,9 @@ export class StatsCompletionProvider extends BaseCompletionProvider {
                         )
                     );
                 }
+                else if (commands[1] === "block") {
+                    return this.provideCoordinateCompletions();
+                }
                 return [];
             case 5:
                 if (commands[1] === "entity") {
@@ -66,6 +69,9 @@ export class StatsCompletionProvider extends BaseCompletionProvider {
                             vscode.CompletionItemKind.Keyword
                         )
                     );
+                }
+                else if (commands[1] === "block") {
+                    return this.provideCoordinateCompletions();
                 }
                 return [];
             case 6:
