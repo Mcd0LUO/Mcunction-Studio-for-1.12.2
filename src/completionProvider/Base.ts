@@ -68,10 +68,6 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
         const result = provider ? await provider.provideCommandCompletions(document, position, token, context, currentCommands) : this.provideRootCompletions(currentCommands[0]);
         return Array.isArray(result) ? result : await result;
     }
-    resolveCompletionItem?(item: vscode.CompletionItem, token: vscode.CancellationToken): vscode.ProviderResult<vscode.CompletionItem> {
-        throw new Error('Method not implemented.');
-    }
-
 
 
     /**

@@ -1,6 +1,12 @@
 # Change Log
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
+
+## [1.1.8] - 2025-1-9
+### 优化
+- 优化了存档结构解析逻辑，更具有鲁棒性，现在可以兼容任何合理的存档函数结构辣！！！
+- 删除了resolve函数的报错，避免占据大批量控制台空间。
+
 ## [1.1.7] - 2025-12-30
 ### 更新
 - 更新了对scoreboard players enable|list|test , playsound , stopsound的支持

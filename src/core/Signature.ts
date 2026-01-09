@@ -103,7 +103,7 @@ export class McFunctionSignatureHelpProvider implements vscode.SignatureHelpProv
         ];
         signatureHelp.signatures = [signature];
         signatureHelp.activeSignature = 0;
-        signatureHelp.activeParameter = commands[1].split(':').length - 1;
+        signatureHelp.activeParameter = commands[1]?.split(':').length - 1;
 
 
 

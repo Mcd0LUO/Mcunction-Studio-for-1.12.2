@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import { rootDir } from '../extension';
 
 /**
  * Minecraft相关工具类（性能优化版）
@@ -183,8 +184,8 @@ export class MinecraftUtils {
      * @returns [命名空间, 函数路径] | null 解析成功返回数组，格式错误（如多冒号）返回null
     */
     public static parseFunctionUri(uri: vscode.Uri) {
-        const releivePath = vscode.workspace.asRelativePath(uri);
-        const callPath = releivePath.split('/').slice(1).join('/').replace("/",":").slice(0,-11);
+        const releivePath = path.relative(rootDir.fsPath, uri.fsPath).split(path.sep);
+        const callPath = releivePath.slice(1).join('/').replace("/",":").slice(0,-11);
         return this.parseResourcePath(callPath);
 
 
@@ -198,7 +199,7 @@ export class MinecraftUtils {
      * @returns [命名空间, 函数路径] | null 解析成功返回数组，格式错误（如多冒号）返回null
     */
     public static parseAdvancementUri(uri: vscode.Uri) {
-        const releivePath = vscode.workspace.asRelativePath(uri);
+        const releivePath = path.relative(rootDir.fsPath, uri.fsPath).split(path.sep).join('/');
         const callPath = releivePath.split('/').slice(1).join('/').replace("/", ":").slice(0, -5);
         return this.parseResourcePath(callPath);
 
@@ -327,48 +328,43 @@ export class MinecraftUtils {
     }
 
     /**
- * 从工作区 URI 提取并验证 `saves/存档名/data` 目录（字符串截断+存在性校验）
- * 步骤：1. 提取路径 → 2. 验证 data 目录存在 → 3. 验证 functions 子目录存在
- * @returns 有效 data 目录的 Uri
- * @throws 未找到工作区、路径不匹配、目录无效时抛出错误
- */
+     * 查找项目中的根数据目录 (data directory)
+     * 功能：从当前工作区根目录开始，逐级向上查找名为 'data' 的目录，并验证其下是否存在 'functions' 子目录。
+     * @returns 包含 'functions' 子目录的有效 'data' 目录的 Uri。
+     * @throws 当未打开工作区，或未能找到符合 data/functions 结构的目录时抛出错误。
+     */
     public static getRootDir(): vscode.Uri {
-    // 1. 获取第一个工作区根 URI
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    if (!workspaceFolder) {
-        throw new Error('未找到工作区！请先打开包含 saves/xxx/data 的目录');
-    }
+        // 1. 获取第一个工作区根 URI
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+            throw new Error('未找到工作区！请先打开一个 Minecraft 1.12.2数据包项目。');
+        }
 
-    // 2. 转换为本地文件路径字符串
-    const workspacePath = workspaceFolder.uri.fsPath;
+        // 2. 转换为本地文件路径字符串
+        const workspacePath = workspaceFolder.uri.fsPath;
 
-    // 3. 正则匹配 saves/存档名/data 结构
-    const dataPathRegex = /(saves[\\/][^\\/]+[\\/]data)([\\/]|$)/i;
-    const matchResult = workspacePath.match(dataPathRegex);
-    if (!matchResult || !matchResult[1]) {
+        // 3. 从当前路径开始向上查找，定位 'data' 目录
+        let currentPath = workspacePath;
+        while (currentPath !== path.dirname(currentPath)) {
+            // 检查当前目录是否命名为 'data'
+            if (path.basename(currentPath).toLowerCase() === 'data') {
+                // 验证该 'data' 目录下是否存在 'functions' 子目录
+                const functionsDirPath = path.join(currentPath, 'functions');
+                if (fs.existsSync(functionsDirPath) && fs.lstatSync(functionsDirPath).isDirectory()) {
+                    console.log(`成功定位并验证项目根数据目录 (data directory): ${currentPath}`);
+                    return vscode.Uri.file(currentPath);
+                }
+            }
+            currentPath = path.dirname(currentPath);
+        }
+
+        // 如果没有找到有效的 data/functions 结构，抛出错误
         throw new Error(
-            `工作区路径未包含 saves/存档名/data 结构！\n当前路径：${workspacePath}\n请打开正确的存档目录`
+            `未在工作区路径中找到有效的 'data' 目录！\n` +
+            `期望结构: **/data/functions\n` +
+            `当前工作区路径: ${workspacePath}\n` +
+            `请确保您已打开正确的数据包项目根目录或其子目录。`
         );
-    }
-
-    // 4. 截断得到 data 目录完整路径
-    const dataDirFullPath = workspacePath.slice(0, workspacePath.indexOf(matchResult[1]) + matchResult[1].length);
-    // 5. 第一步验证：data 目录本身是否存在（防止路径截断异常）
-    if (!fs.existsSync(dataDirFullPath)) {
-        throw new Error(`提取到的 data 目录不存在！\n路径：${dataDirFullPath}`);
-    }
-
-    // 6. 第二步验证：data 目录下是否存在 functions 文件夹（核心校验）
-    const functionsDirPath = path.join(dataDirFullPath, 'functions');
-    if (!fs.existsSync(functionsDirPath) || !fs.lstatSync(functionsDirPath).isDirectory()) {
-        throw new Error(
-            `提取到的 data 目录无效！\n路径：${dataDirFullPath}\n原因：该目录下未找到 functions 子目录（可能不是有效 Minecraft 存档）`
-        );
-    }
-
-    // 7. 所有校验通过 → 返回 Uri
-    console.log(`成功提取并验证有效 data 目录：${dataDirFullPath}`);
-    return vscode.Uri.file(dataDirFullPath);
     }
 
 
