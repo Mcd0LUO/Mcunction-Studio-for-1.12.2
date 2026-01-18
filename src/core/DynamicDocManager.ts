@@ -68,6 +68,10 @@ export class DynamicDocManager {
                 DataLoader.getInstance().clearSingleFileAllCache(file.oldUri);
                 // 重建文档缓存
                 DataLoader.getInstance().loadSingleFileByUri(file.newUri);
+                // 添加到函数res池子
+                DataLoader.getInstance().addFunctionRes(file.newUri);
+                // 移除旧的res
+                DataLoader.getInstance().removeFunctionRes(resName);
             });
 
         });

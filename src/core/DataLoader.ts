@@ -234,6 +234,12 @@ export class DataLoader {
             this.functionResNames.push(resName);
         }
     }
+    public removeFunctionRes(resName: string): void { 
+        const index = this.functionResNames.indexOf(resName);
+        if (index > -1) {
+            this.functionResNames.splice(index, 1);
+        }
+    }
     public addFakePlayer(playerName: string, uri: vscode.Uri, lineNumber: number): void { 
         const fakeData = this.fakePlayerData.get(playerName)?? 0;
         this.fakePlayerData.set(playerName, fakeData + 1);
