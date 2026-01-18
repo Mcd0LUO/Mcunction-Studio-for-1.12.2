@@ -556,6 +556,21 @@ export class ScoreboardCompletionProvider extends BaseCompletionProvider {
                         undefined,
                         vscode.CompletionItemKind.Operator
                     ),
+                    this.createCompletionItem(
+                        '><',
+                        '交换两侧的值',
+                        '><',
+                        undefined,
+                        vscode.CompletionItemKind.Operator
+                    ),
+                    this.createCompletionItem(
+                        '=',
+                        '赋值',
+                        '=',
+                        undefined,
+                        vscode.CompletionItemKind.Operator
+                    ),
+
                 ];
 
             }

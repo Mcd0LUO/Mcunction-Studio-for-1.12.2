@@ -1,6 +1,9 @@
 # Change Log
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
+## [1.1.9] - 2025-1-18
+### 修复
+- 为scoreboard 的 operation 补充了 "=", "><" 运算符
 
 ## [1.1.8] - 2025-1-9
 ### 优化

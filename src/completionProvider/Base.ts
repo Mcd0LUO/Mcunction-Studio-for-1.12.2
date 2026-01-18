@@ -369,8 +369,7 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
             case "team":
                 return this.provideTeamCompletions();
             default:
-                if (lastSelector.startsWith("score_") && !fullLastSelector.includes("=")) {
-
+                if (lastSelector.startsWith("score_") && !fullLastSelector.endsWith("=") && !lastSelector.endsWith("_")) {
                     return Array.from(DataLoader.getInstance().getScoreboardsData().keys()).map(scoreboard => {
                         const scoreboardData = DataLoader.getInstance().getScoreboardsData().get(scoreboard);
                         return this.createCompletionItem(
@@ -381,6 +380,7 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
                             vscode.CompletionItemKind.Field);
                     });
                 }
+
                 if (fullLastSelector.endsWith("=")) {
                     return [];
                 }
@@ -391,8 +391,6 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
                     true,
                     vscode.CompletionItemKind.Property
                 ));
-
-
 
         }
     }
