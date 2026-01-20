@@ -39,7 +39,6 @@ interface ConfigData {
         MaxConcurrentReads: number
     }
     HoverProvider: {
-        SelecterDiagnostics: boolean,
     },
     CommandSchemaCheck: boolean
 
@@ -157,7 +156,6 @@ export class DataLoader {
                 MaxConcurrentReads: 100
             },
             HoverProvider: {
-                SelecterDiagnostics: true,
             },
             Signature: true,
             CommandSchemaCheck: true

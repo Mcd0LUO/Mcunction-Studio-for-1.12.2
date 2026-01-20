@@ -8,7 +8,6 @@ export class McFunctionHoverProvider implements vscode.HoverProvider {
     private readonly performance: string[] = ["bad", "ok", "good", "excellent"];
 
     provideHover(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): vscode.ProviderResult<vscode.Hover> {
-        if (!DataLoader.getInstance().getConfig().HoverProvider.SelecterDiagnostics) { return null; }
         // 诊断
         const lineText = document.lineAt(position.line).text;
 
