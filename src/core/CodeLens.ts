@@ -22,15 +22,6 @@ class ConfigFileCodeLensProvider implements vscode.CodeLensProvider {
             return codeLenses;
         }
 
-        // 1. 第一行开头：重载配置
-        const firstLineRange = document.lineAt(0).range;
-        const reloadLens = new vscode.CodeLens(firstLineRange, {
-            title: '▶️ 重载配置',
-            command: 'mcf-studio.reloadConfig',
-            arguments: [document.uri]
-        });
-        codeLenses.push(reloadLens);
-
         // 2. 第二行开头（若文件不足两行则用最后一行）：重载并重启拓展
         const secondLineNumber = Math.min(1, document.lineCount - 1); // 防止越界
         const secondLineRange = document.lineAt(secondLineNumber).range;
@@ -61,17 +52,6 @@ export function registerConfigFileCodeLens(context: vscode.ExtensionContext): vo
             { pattern: '**/McfunctionStudio.json', scheme: 'file' },
             new ConfigFileCodeLensProvider()
         )
-    );
-
-    // 注册「重载配置」命令
-    disposables.push(
-        vscode.commands.registerCommand('mcf-studio.reloadConfig', async (uri: vscode.Uri) => {
-            try {
-                await DataLoader.getInstance().loadExtensionConfig();
-            } catch (error) {
-                vscode.window.showErrorMessage(`重载配置失败：${(error as Error).message}`);
-            }
-        })
     );
 
     // 注册「重载并重启拓展」命令（补充实现）

@@ -6,6 +6,7 @@ All notable changes to the "mcfunction-studio-for-1-12" extension will be docume
 - 修复了假玩家名无法补全的bug
 ### 调整
 - 删除了记分板性能分析
+- 移除了仅重载配置，保留了重载并重启扩展
 
 ##  [1.1.10] - 2025-1-18
 ### 修复
