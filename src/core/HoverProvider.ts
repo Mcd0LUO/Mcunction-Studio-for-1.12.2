@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import { CommandUtils } from '../utils/CommandUtils';
 import { DataLoader } from './DataLoader';
 import { CommandInfo, CommandType, McFunctionDefinitionProvider } from './McFunctionDefinitionProvider';
 import { MinecraftUtils } from '../utils/MinecraftUtils';
@@ -12,11 +11,8 @@ export class McFunctionHoverProvider implements vscode.HoverProvider {
         if (!DataLoader.getInstance().getConfig().HoverProvider.SelecterDiagnostics) { return null; }
         // 诊断
         const lineText = document.lineAt(position.line).text;
-        const hover = this.provideSelecterDiagnostics(document, position, token, lineText);
-        if (hover) {
-            return hover;
-        }
-        const commandInfo = McFunctionDefinitionProvider.instance.parseCommandInfo(lineText, position);
+
+        const commandInfo = McFunctionDefinitionProvider.instance.parseCommandInfo(lineText, position, document);
         if (!commandInfo) {
             return null;
         }
@@ -41,42 +37,6 @@ export class McFunctionHoverProvider implements vscode.HoverProvider {
         
     }
     provideTeamInfo(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken, commandInfo: CommandInfo): vscode.ProviderResult<vscode.Hover> {
-        return null;
-    }
-    private provideSelecterDiagnostics(
-        document: vscode.TextDocument,
-        position: vscode.Position,
-        token: vscode.CancellationToken,
-        lineText: string
-    ): vscode.Hover | null {
-        const selector = CommandUtils.getCursorFullSelector(lineText, position.character);
-        if (!selector) { return null; }
-        // 初始化诊断状态
-        const diagnostics = {
-            selfOnly: selector[1] === 's',
-            typeLimit: false,
-            chunkLimit: false,
-            countLimit: false
-        };
-
-        // 解析选择器参数（非@s简单选择器时）
-        if (!diagnostics.selfOnly) {
-            const args = CommandUtils.getSelectorMap(selector.slice(2, selector.length - 1));
-            if (!args) { return null; }
-
-            diagnostics.typeLimit = !!args.get('type');
-            diagnostics.chunkLimit = !!args.get('r');
-            diagnostics.countLimit = !!args.get('c');
-        }
-        if (selector[1] === 'a' || selector[1] === 'p') {
-            diagnostics.typeLimit = true;
-        }
-
-        // 获取性能评级（仅自身优先最高级）
-        const performanceLevel = this.getPerformanceLevel(diagnostics);
-
-        // 构建美化的 Markdown 内容
-        const hoverContent = this.buildHoverMarkdown(diagnostics, performanceLevel);
         return null;
     }
 

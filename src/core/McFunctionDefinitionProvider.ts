@@ -38,7 +38,7 @@ export class McFunctionDefinitionProvider implements vscode.DefinitionProvider {
         const lineText = document.lineAt(position.line).text;
 
         // 解析命令信息（包括选择器内和选择器外的情况）
-        const commandInfo = this.parseCommandInfo(lineText, position);
+        const commandInfo = this.parseCommandInfo(lineText, position, document);
         if (commandInfo) {
             return this.buildDefinitionLink(commandInfo);
         }
@@ -69,7 +69,7 @@ export class McFunctionDefinitionProvider implements vscode.DefinitionProvider {
     /**
      * 解析命令信息（统一处理选择器内外的情况）
      */
-    public parseCommandInfo(lineText: string, position: vscode.Position): CommandInfo | null {
+    public parseCommandInfo(lineText: string, position: vscode.Position, doc: vscode.TextDocument): CommandInfo | null {
         // 1. 先判断光标是否在选择器内
         const params = CommandUtils.getCursorPredicate(lineText, position.character);
         if (params) {
@@ -279,6 +279,8 @@ export class McFunctionDefinitionProvider implements vscode.DefinitionProvider {
 
         return new vscode.Range(position.line, startIdx, position.line, endIdx);
     }
+
+    
 
     /**
      * 根据命令类型构建目标URI

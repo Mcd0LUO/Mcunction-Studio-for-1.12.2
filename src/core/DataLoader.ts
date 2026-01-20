@@ -630,6 +630,7 @@ export class DataLoader {
         else if (commands[1] === 'players' && ["add", "remove", "set", "operation"].includes(commands[2])) {
             // 如果有假玩家名，则添加到假玩家
             if (CommandUtils.isFakePlayerSelector(commands[3])) {
+                this.addFakePlayer(commands[3],uri, lineNumber);
             }
         }
         else if (commands[1] === 'players' && commands[2] === 'tag' && commands[4] === 'add' && commands.length > 5) {

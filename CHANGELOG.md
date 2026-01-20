@@ -1,6 +1,12 @@
 # Change Log
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
+## [1.1.11] - 2025-1-20
+### 修复
+- 修复了假玩家名无法补全的bug
+### 调整
+- 删除了记分板性能分析
+
 ##  [1.1.10] - 2025-1-18
 ### 修复
 - 修复了函数重命名不会更新函数资源池的bug
