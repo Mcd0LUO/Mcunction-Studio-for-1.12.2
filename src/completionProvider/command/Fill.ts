@@ -12,7 +12,7 @@ export class FillCompletionProvider extends BaseCompletionProvider {
             return this.provideCoordinateCompletions();
         }
         if (commands.length === 8) {
-            return this.provideItemCompletions();
+            return this.provideBlockCompletions();
         }
         if (commands.length === 9) {
             return [this.createCompletionItem(

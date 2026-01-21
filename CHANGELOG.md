@@ -2,6 +2,13 @@
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
 
+# [1.1.13] - 2025-1-22
+### 更新
+- 添加了 testfor|testforblock|testforblocks 的补全支持
+### 修复
+- 修复了fill 命令错误的补全item的bug(应为block)
+
+
 # [1.1.12] - 2025-1-21
 ### 修复
 - 修复了输入了score_后不弹出记分板补全的bug
