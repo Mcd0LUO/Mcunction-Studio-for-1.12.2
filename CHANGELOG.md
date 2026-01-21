@@ -1,6 +1,12 @@
 # Change Log
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
+
+# [1.1.12] - 2025-1-21
+### 修复
+- 修复了输入了score_后不弹出记分板补全的bug
+
+
 ## [1.1.11] - 2025-1-20
 ### 修复
 - 修复了假玩家名无法补全的bug

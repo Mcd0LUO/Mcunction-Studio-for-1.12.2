@@ -369,7 +369,7 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
             case "team":
                 return this.provideTeamCompletions();
             default:
-                if (lastSelector.startsWith("score_") && !fullLastSelector.endsWith("=") && !lastSelector.endsWith("_")) {
+                if (lastSelector.startsWith("score_") && !fullLastSelector.endsWith("=") && !lastSelector.endsWith("_min")) {
                     return Array.from(DataLoader.getInstance().getScoreboardsData().keys()).map(scoreboard => {
                         const scoreboardData = DataLoader.getInstance().getScoreboardsData().get(scoreboard);
                         return this.createCompletionItem(

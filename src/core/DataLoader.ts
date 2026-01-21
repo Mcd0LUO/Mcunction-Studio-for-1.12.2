@@ -625,7 +625,7 @@ export class DataLoader {
 
         }
         // scoreboard players add|set|operation|remove xxx yyy zzz
-        else if (commands[1] === 'players' && ["add", "remove", "set", "operation"].includes(commands[2])) {
+        else if (commands[1] === 'players' && ["add", "remove", "set", "operation", "reset"].includes(commands[2])) {
             // 如果有假玩家名，则添加到假玩家
             if (CommandUtils.isFakePlayerSelector(commands[3])) {
                 this.addFakePlayer(commands[3],uri, lineNumber);
