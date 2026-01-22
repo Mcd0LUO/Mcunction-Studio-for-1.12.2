@@ -4,6 +4,10 @@ import { CommandUtils } from '../utils/CommandUtils';
 import { DataLoader } from '../core/DataLoader';
 import { BlockNameMap, EntityNameList, ItemNameMap, SoundNames } from '../utils/EnumLib';
 import { MinecraftUtils } from '../utils/MinecraftUtils';
+import { NbtAst } from '../utils/nbt/NbtAst';
+import { NbtAstKeyValueNode, NbtAstLiteralNode } from '../utils/nbt/NbtAstNode';
+import { NbtTokenizer, NbtTokenType } from '../utils/nbt/NbtTokenizer';
+import { NBTUtils } from '../utils/nbt/NBTUtils';
 
 export const COLORS = [
     "red", "blue", "green", "yellow", "white", "black",
@@ -65,7 +69,7 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
         // 获取当前命令提供者
         const provider = CommandRegistry.getProvider(currentCommands[0]);
 
-        const result = provider ? await provider.provideCommandCompletions(document, position, token, context, currentCommands) : this.provideRootCompletions(currentCommands[0]);
+        const result = provider ? await provider.provideCommandCompletions(document, position, token, context, currentCommands, lineText) : this.provideRootCompletions(currentCommands[0]);
         return Array.isArray(result) ? result : await result;
     }
 
@@ -75,6 +79,9 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
      * @param commands 命令片段数组
      * @param document 当前文档
      * @param position 光标位置
+     * @param token 取消令牌
+     * @param context 补全上下文
+     * @param lineText 当前行文本
      * @returns 补全项数组
      */
     protected abstract provideCommandCompletions(
@@ -83,6 +90,7 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
         token: vscode.CancellationToken,
         context: vscode.CompletionContext,
         commands: string[],
+        lineText: string
 
     ): vscode.CompletionItem[] | Promise<vscode.CompletionItem[]>;
 
@@ -96,7 +104,7 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
      * @param range 
      * @returns 构建好的补全项
      */
-    protected createCompletionItem(
+    public createCompletionItem(
         label: string,
         desc: string,
         insertText: string | vscode.SnippetString,
@@ -158,7 +166,7 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
             vscode.CompletionItemKind.Function,
             range
         ));
-        
+
         const activeEditor = vscode.window.activeTextEditor;
         if (activeEditor) {
             const resName = MinecraftUtils.buildFunctionCall(activeEditor.document.uri);
@@ -175,7 +183,7 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
                 arr.push(item);
             }
         }
-        
+
         return arr;
     }
 
@@ -189,16 +197,25 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
         ));
     }
 
-    protected provideTagCompletions(range: vscode.Range | undefined = undefined): vscode.CompletionItem[] {
-        const arr = Array.from(DataLoader.getInstance().getTagsData().keys()).map(tag => this.createCompletionItem(
+    public provideTagCompletions(range: vscode.Range | undefined = undefined, wrapper: boolean | undefined = false): vscode.CompletionItem[] {
+        if (!wrapper) {
+            return Array.from(DataLoader.getInstance().getTagsData().keys()).map(tag => this.createCompletionItem(
+                tag,
+                "",
+                tag,
+                false,
+                vscode.CompletionItemKind.Constant,
+                range
+            ));
+        }
+        return Array.from(DataLoader.getInstance().getTagsData().keys()).map(tag => this.createCompletionItem(
             tag,
             "",
-            tag,
+            `"${tag}"`,
             false,
             vscode.CompletionItemKind.Constant,
             range
-        ));
-        return arr;
+        ));;
     }
     protected provideItemNbtCompletions(): vscode.CompletionItem[] {
         return [];
@@ -247,7 +264,7 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
 
     protected provideScoreboardCompletions(range: vscode.Range | undefined = undefined, type?: string): vscode.CompletionItem[] {
         const scoreboardData = DataLoader.getInstance().getScoreboardsData();
-        
+
         if (type) {
             // 按指定类型过滤记分板，同时映射到CompletionItem
             return Array.from(scoreboardData.entries())
@@ -395,6 +412,33 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
         }
     }
 
+    protected provideEntityNbtCompletions(nbt: string): vscode.CompletionItem[] | Promise<vscode.CompletionItem[]> {
+        const ast = new NbtAst(nbt);
+        const tokens = ast.getTokens();
+        const lastKeyNode = ast.getLastKeyValue();
+        // ----------------Tags______________
+        if (!lastKeyNode) {
+            return [];
+        }
+        if (lastKeyNode.key === 'Tags') {
+            if (!lastKeyNode.value.children) { return []; }
+            const tagsArrNode = lastKeyNode.value.children;
+            const last_tag = tagsArrNode.at(-1) as NbtAstLiteralNode;
+            if (last_tag.value === '""') {
+                return this.provideTagCompletions();
+            }
+            else if (NbtTokenizer.isTokenInIdentifierRange(tokens, tokens.length - 1, lastKeyNode.start)) {
+                return this.provideTagCompletions(undefined, true);
+            }
+        }
+        //
+
+
+
+
+        return NBTUtils.provideEntityNBTCompletions(this.createCompletionItem);
+    }
+
 
 
 
@@ -415,6 +459,6 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
     }
 
 
-    
-    
+
+
 }

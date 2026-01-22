@@ -2,6 +2,10 @@
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
 
+# [1.2.0] - 2025-1-22
+### 更新
+- 现在summon 命令支持对nbt内的Tags进行补全
+
 # [1.1.13] - 2025-1-22
 ### 更新
 - 添加了 testfor|testforblock|testforblocks 的补全支持

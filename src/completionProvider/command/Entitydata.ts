@@ -1,7 +1,7 @@
 import { TextDocument, Position, CancellationToken, CompletionContext, CompletionItem } from "vscode";
 import * as vscode from "vscode";
 import { BaseCompletionProvider } from '../Base';
-import { NBTUtils } from "../../utils/NBTUtils";
+import { NBTUtils } from "../../utils/nbt/NBTUtils";
 
 
 
