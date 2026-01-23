@@ -129,9 +129,17 @@ export class CommandUtils {
                     paramStage: -1
                 };
             }
-            if (commandName === 'detect') {
+            else if (commandName === 'detect' && currentCommands.length >=7) {
                 currentCommands = currentCommands.slice(6);
                 continue;
+            }
+            else if (commandName === 'detect') {
+                return {
+                    isExecute: true,
+                    isComplete: false,
+                    currentCommands,
+                    paramStage: -1
+                };
             }
 
             // 是 execute 命令：判断是否完整
