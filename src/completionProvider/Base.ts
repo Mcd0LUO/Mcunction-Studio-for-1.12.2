@@ -68,7 +68,6 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
         const { isExecute, isComplete, currentCommands, paramStage } = CommandUtils.findActiveCommand(full_commands);
         // 获取当前命令提供者
         const provider = CommandRegistry.getProvider(currentCommands[0]);
-
         const result = provider ? await provider.provideCommandCompletions(document, position, token, context, currentCommands, lineText) : this.provideRootCompletions(currentCommands[0]);
         return Array.isArray(result) ? result : await result;
     }

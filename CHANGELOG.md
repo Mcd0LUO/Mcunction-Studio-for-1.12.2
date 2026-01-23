@@ -2,6 +2,10 @@
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
 
+# [1.2.1] - 2025-1-23
+### 修复
+- 修复了detect子命令后命令参数补全失效的问题
+
 # [1.2.0] - 2025-1-22
 ### 更新
 - 现在summon 命令支持对nbt内的Tags进行补全

@@ -120,15 +120,18 @@ export class CommandUtils {
 
         while (true) {
             const commandName = currentCommands[0];
-
             // 非 execute 命令：直接作为活跃命令
-            if (commandName !== 'execute') {
+            if (commandName !== 'execute' && commandName !== 'detect') {
                 return {
                     isExecute: false,
                     isComplete: true,
                     currentCommands,
                     paramStage: -1
                 };
+            }
+            if (commandName === 'detect') {
+                currentCommands = currentCommands.slice(6);
+                continue;
             }
 
             // 是 execute 命令：判断是否完整
