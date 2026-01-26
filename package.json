@@ -42,6 +42,12 @@
     ],
     "commands": [
       {
+        "command": "mcf-studio.runFile", 
+        "title": "Run MCFunction File",
+        "category": "McFunction Studio", 
+        "icon": "$(play)"
+      },
+      {
         "command": "mcf-studio.createFunctionFile",
         "title": "新建mcfunction文件",
         "category": "Mcfunction Studio"
@@ -86,6 +92,13 @@
           "group": "z_McfunctionStudio",
           "when": "editorTextFocus && editorLangId == mcfunction"
 
+        }
+      ],
+      "editor/title/run": [
+        {
+          "command": "mcf-studio.runFile",
+          "when": "resourceExtname == .mcfunction",
+          "group": "navigation"
         }
       ]
     },

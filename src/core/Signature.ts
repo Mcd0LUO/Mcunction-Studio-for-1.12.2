@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
 import { CommandUtils } from '../utils/CommandUtils';
 import { DataLoader } from './DataLoader';
+import { MacroCompletionProvider } from '../completionProvider/macro/MacroCompletionProvider';
+import { MacroRegistry } from '../macro/MacroRegistry';
+import { MacroApply } from '../macro/MacroaApply';
 
 /**
  * 命令签名帮助提供器（示例：scoreboard/function命令参数提示）
@@ -14,9 +17,11 @@ export class McFunctionSignatureHelpProvider implements vscode.SignatureHelpProv
         token: vscode.CancellationToken
     ): vscode.ProviderResult<vscode.SignatureHelp> {
         if (!DataLoader.getInstance().getConfig().Signature) { return null; }
-        const lineText = document.lineAt(position.line).text;
+        const lineText = document.lineAt(position.line).text.trimStart();
+        if (lineText.startsWith('$')) {
+            return this.provideMacroSignatureHelp(lineText);
+        }
         const commands = CommandUtils.extraceActiveCommand(lineText);
-        // 匹配 scoreboard players set 命令
         switch (commands[0]) {
             case 'scoreboard':
                 return this.provideScoreboardSignatureHelp(commands);
@@ -29,13 +34,47 @@ export class McFunctionSignatureHelpProvider implements vscode.SignatureHelpProv
             case 'stats':
                 return this.provideStatsSignatureHelp(commands);
             default:
-                return null;
+                return;
         }
 
     }
+    provideMacroSignatureHelp(text: string): vscode.ProviderResult<vscode.SignatureHelp> {
+        const args = MacroApply.parseCommand(text);
+        const signatureHelp = new vscode.SignatureHelp();
+        if (args.length <= 2) {
+            const signature = new vscode.SignatureInformation(
+                '<namespace>.<macroName>'
+            );
+            signature.parameters = [
+                new vscode.ParameterInformation('<namespace>'),
+                new vscode.ParameterInformation('<macroName>'),
+            ];
+            signatureHelp.signatures = [signature];
+            signatureHelp.activeSignature = 0;
+            signatureHelp.activeParameter = args.length - 1;
+            return signatureHelp;
+        }
+        if (args.length === 3) {
+            const macro = MacroRegistry.getInstance().getMacroByNameSpaceAndName(args[0] as string, args[1] as string);
+            if (!macro) { return; };
+            const params: string[] = [];
+            macro.params.forEach(param => {
+                params.push(`${param.name}: ${param.type}`);
+            });
+            const signature = new vscode.SignatureInformation(
+                params.join(', '));
+            signature.parameters = params.map(param => {
+                return new vscode.ParameterInformation(param);
+            });
+            signatureHelp.signatures.push(signature);
+            signatureHelp.activeSignature = 0;
+            signatureHelp.activeParameter = args[2].length - 1;
+        }
+        return signatureHelp;
+    }
     provideStatsSignatureHelp(commands: string[]): vscode.ProviderResult<vscode.SignatureHelp> {
         if (commands.length >= 8) { return null; }
-        if (commands[1] === 'block' ) {return;}
+        if (commands[1] === 'block') { return; }
         const signatureHelp = new vscode.SignatureHelp();
         // 匹配 stats 命令
         const signature = new vscode.SignatureInformation(
@@ -147,7 +186,7 @@ export class McFunctionSignatureHelpProvider implements vscode.SignatureHelpProv
                 signatureHelp.activeParameter = commands.length - 4;
                 return signatureHelp;
             }
-            
+
         }
         else if (commands[1] === 'teams') {
 
@@ -164,6 +203,6 @@ export function registerSignatureHelp() {
     return vscode.languages.registerSignatureHelpProvider(
         { language: 'mcfunction', scheme: 'file' },
         new McFunctionSignatureHelpProvider(),
-        ...[' ']
+        ...[' ', '$', '(', ',']
     );
 }

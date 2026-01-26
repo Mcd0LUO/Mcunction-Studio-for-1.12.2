@@ -3,6 +3,11 @@ import * as vscode from 'vscode';
 import { MinecraftUtils } from '../utils/MinecraftUtils';
 import { rootDir } from '../extension';
 import { CommandUtils } from '../utils/CommandUtils';
+import { MacroDefinition, MacroRegistry } from '../macro/MacroRegistry';
+import { MacroAstParser } from '../macro/MacroAst';
+import { MacroTokenizer } from '../macro/MacroTokenizer';
+import * as path from 'path';
+import { MacroAstVisualizer } from '../macro/MacroPrint';
 
 interface ScoreboardData {
     type: string;
@@ -121,11 +126,12 @@ export class DataLoader {
         // 传入加载模式参数
         const promise1 = this.loadFunctionData(useConcurrentControl, concurrency);
         const promise2 = this.loadAdvancementData();
+        const promise3 = this.loadMacroData();
 
         try {
-            const [result1, result2] = await Promise.all([promise1, promise2]);
+            const [result1, result2, result3] = await Promise.all([promise1, promise2, promise3]);
 
-            if (result1 && result2) {
+            if (result1 && result2 && result3) {
                 // 在底层状态栏显示
                 vscode.window.setStatusBarMessage(`加载函数 ${this.functionResNames.length} | 记分板 ${this.scoreboardsData.size} | 标签 ${this.tagsData.size} | 队伍 ${this.teamsData.size} | 进度 ${this.advancementResNames.length} | 假玩家 ${this.fakePlayerData.size} |  耗时>> ${result1}s <<`, 3000);
                 vscode.window.showInformationMessage(`McfunctionStudio 初始化完成, 耗时 ${result1} s`);
@@ -280,7 +286,7 @@ export class DataLoader {
         // 文档缓存
         const resName = MinecraftUtils.buildFunctionCall(doc.uri) ?? '';
         const docCacheEntry = this.docCache.get(resName);
-        if (!docCacheEntry) {console.log('no cache'); return;};
+        if (!docCacheEntry) {return;};
         // 遍历行缓存
         for (let i = startLine; i <= endLine; i++) {
             const lineCache = docCacheEntry.get(i);
@@ -311,7 +317,7 @@ export class DataLoader {
     public clearSingleFileAllCache(uri: vscode.Uri) {
         const resName = MinecraftUtils.buildFunctionCall(uri) ?? '';
         const docCacheEntry = this.docCache.get(resName);
-        if (!docCacheEntry) {console.log('no cache'); return;}
+        if (!docCacheEntry) {return;}
         for (const [lineNumber, lineMeta] of docCacheEntry) {
              lineMeta.forEach(meta => {
                 if (meta.type === DataType.Scoreboard) {
@@ -474,6 +480,34 @@ export class DataLoader {
     }
 
     /**
+     * 获取所有宏定义文件路径
+     */
+    public static async getAllMacroPaths(macroUri: vscode.Uri): Promise<vscode.Uri[]> {
+        try {
+            await vscode.workspace.fs.stat(macroUri);
+        } catch (error) {
+            // vscode.window.showErrorMessage(`宏目录不存在: ${rootDir.path}/advancements`);
+            return [];
+        }
+
+        try {
+
+            const excludeFolders = this.instance.configData.IgnorePattern.Advancement;
+            const globPattern = new vscode.RelativePattern(macroUri, '**/*.mcmacro');
+            const excludePattern = excludeFolders.length > 0
+                ? new vscode.RelativePattern(macroUri, `{${excludeFolders.join(',')}}`)
+                : undefined;
+
+            const MacroUris = await vscode.workspace.findFiles(globPattern, excludePattern);
+            console.log(`在 ${macroUri.path} 中找到 ${MacroUris.length} 个宏文件`);
+            return MacroUris;
+        } catch (error) {
+            vscode.window.showErrorMessage(`查找宏文件失败: ${(error as Error).message}`);
+            return [];
+        }
+    }
+
+    /**
      * 批量加载所有函数数据：
      * 支持两种加载模式，通过参数切换并统计运行时间
      * @param useConcurrentControl 是否使用并发控制（true：限制并发数；false：全量并发）
@@ -514,19 +548,6 @@ export class DataLoader {
                         vscode.window.showWarningMessage(`解析函数文件失败：${path.path}，原因：${(err as Error).message}`);
                     }
                 });
-            } else {
-                // 全量并发模式（优化：减少Promise嵌套，直接映射执行）
-                const loadPromises = functionPaths.map(async (path) => {
-                    const resName = MinecraftUtils.buildFunctionCall(path);
-                    if (!resName) return;
-                    this.docCache.set(resName, new Map());
-                    try {
-                        await this.loadSingleFileByUri(path);
-                    } catch (err) {
-                        vscode.window.showWarningMessage(`解析失败：${path.path}，原因：${(err as Error).message}`);
-                    }
-                });
-                await Promise.all(loadPromises); // 直接等待所有Promise，减少中间变量
             }
 
             // 计算并输出运行时间
@@ -550,6 +571,90 @@ export class DataLoader {
         }
         return true;
 
+    }
+
+    public async loadMacroData(): Promise<boolean> {
+        const macroRoot = vscode.Uri.joinPath(rootDir, 'mcmacro');
+        const macroPaths = await DataLoader.getAllMacroPaths(macroRoot);
+        const macroRegistry = MacroRegistry.getInstance();
+        macroRegistry.clear();
+        macroRegistry.setConflictStrategy('strict');
+        for (const macroUri of macroPaths) {
+            await this.parseMacroFile(macroUri, macroRoot);
+        }
+
+
+        return true;
+    }
+
+
+    /**
+     * 解析单个宏文件，提取宏定义并注册
+     * @param macroUri 宏文件Uri
+     * @param mcmacroRootUri mcmacro根目录Uri
+     */
+    private async parseMacroFile(macroUri: vscode.Uri, mcmacroRootUri: vscode.Uri): Promise<void> {
+        try {
+            // 1. 读取文件内容
+            const fileContent = await vscode.workspace.fs.readFile(macroUri);
+            const text = Buffer.from(fileContent).toString('utf8');
+
+            // 2. 词法分析 + AST解析（使用之前的Lexer和Parser）
+            const lexer = new MacroTokenizer(text);
+            const tokens = lexer.parse();
+            const parser = new MacroAstParser(tokens);
+            console.log(tokens);
+            const ast = parser.parse(); // 得到McFunctionFile AST
+            MacroAstVisualizer.print(ast);
+
+            // 3. 生成文件的命名空间（基于相对于mcmacro根目录的路径）
+            const namespace = this.getNamespaceFromPath(macroUri, mcmacroRootUri);
+
+            // 4. 遍历AST中的宏定义，提取并注册
+            if (ast.macros && ast.macros.length > 0) {
+                for (const macroNode of ast.macros) {
+                    // 4.1 提取宏参数签名（如 "a,b"）
+                    const paramSignature = macroNode.parameters.map(p => p.name).join(',');
+                    // 4.2 生成宏完整标识
+                    const fullId = `${namespace}.${macroNode.name}(${paramSignature})`;
+                    // 4.3 构建宏定义对象
+                    const macroDef: MacroDefinition = {
+                        fullId,
+                        name: macroNode.name,
+                        namespace,
+                        params: macroNode.parameters.map(p => ({ name: p.name, type: p.paramType || 'score' })),
+                        paramSignature,
+                        body: macroNode.body,
+                        filePath: macroUri.fsPath,
+                        position: new vscode.Position(
+                            macroNode.position.start.line - 1, // 转换为VSCode的0行起始
+                            macroNode.position.start.column - 1
+                        )
+                    };
+
+                    // 4.4 注册宏
+                    MacroRegistry.getInstance().registerMacro(macroDef);
+                }
+            }
+        } catch (error) {
+            vscode.window.showErrorMessage(`解析宏文件失败 ${macroUri.fsPath}：${(error as Error).message}`);
+            console.error(error);
+        }
+    }
+
+    /**
+     * 基于文件路径生成命名空间
+     * @param fileUri 宏文件Uri
+     * @param rootUri mcmacro根目录Uri
+     * @returns string 命名空间（如 player::skill）
+     */
+    private getNamespaceFromPath(fileUri: vscode.Uri, rootUri: vscode.Uri): string {
+        // 获取文件相对于mcmacro根目录的路径（如 player/skill/c.mcmacro）
+        const relativePath = path.relative(rootUri.fsPath, fileUri.fsPath).replace(/\\/g, '/');
+        // 去掉文件名和后缀，保留目录部分
+        const dirPath = relativePath.substring(0, relativePath.lastIndexOf('/'));
+        // 根目录文件 → default，子目录 → 目录名用::分隔
+        return dirPath === '' ? 'default' : dirPath.replace(/\//g, '.');
     }
 
     /**

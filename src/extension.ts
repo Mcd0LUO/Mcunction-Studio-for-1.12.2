@@ -10,6 +10,8 @@ import { registerHoverProvider } from './core/HoverProvider';
 import { DynamicDocManager } from './core/DynamicDocManager';
 import { LinePreviewManager } from './core/LinePreviewManager';
 import { VsCommandProcessor } from './core/VsCommandProcessor';
+import { registerMcfunctionDebugConfigProvider } from './macro/MacroRegistry';
+
 
 export let rootDir: vscode.Uri;
 
@@ -20,7 +22,7 @@ export function activate(context: vscode.ExtensionContext) {
 	const code_provider = vscode.languages.registerCompletionItemProvider(
 		'mcfunction',
 		MinecraftCompletionProvider.instance,
-		' ', '[', ',', '=','.', '{','"'
+		' ', '[','(', ',', '=','.', '{','"','$'
 	);
 	context.subscriptions.push(code_provider);
 
@@ -65,6 +67,9 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 		
 	});
+	// 注册运行/debug
+	registerMcfunctionDebugConfigProvider(context);
+
 
 
 

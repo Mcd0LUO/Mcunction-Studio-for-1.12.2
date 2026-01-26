@@ -8,6 +8,8 @@ import { NbtAst } from '../utils/nbt/NbtAst';
 import { NbtAstKeyValueNode, NbtAstLiteralNode } from '../utils/nbt/NbtAstNode';
 import { NbtTokenizer, NbtTokenType } from '../utils/nbt/NbtTokenizer';
 import { NBTUtils } from '../utils/nbt/NBTUtils';
+import { text } from 'stream/consumers';
+import { MacroCompletionProvider } from './macro/MacroCompletionProvider';
 
 export const COLORS = [
     "red", "blue", "green", "yellow", "white", "black",
@@ -60,11 +62,16 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
         // 获取光标前片段
         const lineText = document.lineAt(position.line).text;
         const textBeforeCursor = lineText.substring(0, position.character);
-        if (textBeforeCursor.length === 0) {
+        const trimmedText = textBeforeCursor.trimStart();
+        if (trimmedText.length === 0) {
             return this.provideRootCompletions('');
         }
+        if (trimmedText.startsWith("#")) {return [];}
+        if (trimmedText.startsWith('$')) {
+            return MacroCompletionProvider.getInstance().provideCompletionItems(document, position, token, context, lineText);
+        }
         // 解析片段
-        const full_commands = CommandUtils.extractCommand(textBeforeCursor);
+        const full_commands = CommandUtils.extractCommand(trimmedText);
         const { isExecute, isComplete, currentCommands, paramStage } = CommandUtils.findActiveCommand(full_commands);
         // 获取当前命令提供者
         const provider = CommandRegistry.getProvider(currentCommands[0]);
@@ -120,7 +127,7 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
         if (insertText instanceof vscode.SnippetString) {
             item.insertText = insertText;
         } else {
-            item.insertText = new vscode.SnippetString(insertText + this.global_sufiix);
+            item.insertText = new vscode.SnippetString(insertText);
         }
 
         // 自动触发下一级补全（提升用户体验，无需手动按 Ctrl+Space）
@@ -261,7 +268,7 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
         ));
     }
 
-    protected provideScoreboardCompletions(range: vscode.Range | undefined = undefined, type?: string): vscode.CompletionItem[] {
+    public provideScoreboardCompletions(range: vscode.Range | undefined = undefined, type?: string): vscode.CompletionItem[] {
         const scoreboardData = DataLoader.getInstance().getScoreboardsData();
 
         if (type) {
