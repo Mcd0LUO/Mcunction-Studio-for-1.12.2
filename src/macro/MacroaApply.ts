@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { MacroRegistry } from './MacroRegistry';
-import { McFunctionStatement } from './MacroAst';
 
 
 export class MacroApply {

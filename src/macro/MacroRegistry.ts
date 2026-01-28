@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
-import { MacroTokenizer } from './MacroTokenizer'; // 之前的词法分析器
-import { McFunctionStatement } from './MacroAst';
 import { MacroApply } from './MacroaApply';
+import { CommandStatement } from './MacroAst';
 
 /** 宏参数类型 */
 export interface MacroParam {
@@ -22,7 +21,7 @@ export interface MacroDefinition {
     /** 参数签名（如 "a,b"，用于判断参数是否一致） */
     paramSignature: string;
     /** 宏体内容（AST节点） */
-    body: McFunctionStatement[]; // 替换为你定义的McFunctionStatement[]类型
+    body: CommandStatement[]; // 替换为你定义的McFunctionStatement[]类型
     /** 宏文件路径 */
     filePath: string;
     /** 宏定义在文件中的位置 */

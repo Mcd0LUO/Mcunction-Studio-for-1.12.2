@@ -4,10 +4,8 @@ import { MinecraftUtils } from '../utils/MinecraftUtils';
 import { rootDir } from '../extension';
 import { CommandUtils } from '../utils/CommandUtils';
 import { MacroDefinition, MacroRegistry } from '../macro/MacroRegistry';
-import { MacroAstParser } from '../macro/MacroAst';
 import { MacroTokenizer } from '../macro/MacroTokenizer';
 import * as path from 'path';
-import { MacroAstVisualizer } from '../macro/MacroPrint';
 
 interface ScoreboardData {
     type: string;
@@ -602,40 +600,12 @@ export class DataLoader {
             // 2. 词法分析 + AST解析（使用之前的Lexer和Parser）
             const lexer = new MacroTokenizer(text);
             const tokens = lexer.parse();
-            const parser = new MacroAstParser(tokens);
-            console.log(tokens);
-            const ast = parser.parse(); // 得到McFunctionFile AST
-            MacroAstVisualizer.print(ast);
+
 
             // 3. 生成文件的命名空间（基于相对于mcmacro根目录的路径）
             const namespace = this.getNamespaceFromPath(macroUri, mcmacroRootUri);
 
-            // 4. 遍历AST中的宏定义，提取并注册
-            if (ast.macros && ast.macros.length > 0) {
-                for (const macroNode of ast.macros) {
-                    // 4.1 提取宏参数签名（如 "a,b"）
-                    const paramSignature = macroNode.parameters.map(p => p.name).join(',');
-                    // 4.2 生成宏完整标识
-                    const fullId = `${namespace}.${macroNode.name}(${paramSignature})`;
-                    // 4.3 构建宏定义对象
-                    const macroDef: MacroDefinition = {
-                        fullId,
-                        name: macroNode.name,
-                        namespace,
-                        params: macroNode.parameters.map(p => ({ name: p.name, type: p.paramType || 'score' })),
-                        paramSignature,
-                        body: macroNode.body,
-                        filePath: macroUri.fsPath,
-                        position: new vscode.Position(
-                            macroNode.position.start.line - 1, // 转换为VSCode的0行起始
-                            macroNode.position.start.column - 1
-                        )
-                    };
 
-                    // 4.4 注册宏
-                    MacroRegistry.getInstance().registerMacro(macroDef);
-                }
-            }
         } catch (error) {
             vscode.window.showErrorMessage(`解析宏文件失败 ${macroUri.fsPath}：${(error as Error).message}`);
             console.error(error);
