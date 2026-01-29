@@ -1,5 +1,6 @@
 import { start } from "repl";
 import { CharStream } from "./CharStream";
+import { StringBuilder } from "./StringBuilder";
 
 /**
  * 终极修复版 Tokenizer：彻底解决Token流生成问题
@@ -14,11 +15,6 @@ export enum TokenType {
     BLOCK_COMMENT = "BLOCK_COMMENT",   // 块注释
     OPERATOR = "OPERATOR",             // 运算符
     WHITESPACE = "WHITESPACE",         // 空白符
-    // 标记专用
-    FIELD_START = "FIELD_START",      // 字段开始( {
-    FIELD_END = "FIELD_END",          // 字段结束 ) }
-
-
 
     // 宏专用类型
     KEYWORD = "KEYWORD", // 关键字 define
@@ -60,7 +56,7 @@ export class MacroTokenizer {
     private maxParseRound: number = 5e4;
     private isWaitingForBodyOpen: boolean = false;  // 是否等待宏体开始
     private lastCloseParenPos: number | null = null; // 记录上一个右括号位置
-
+    private readonly stringBuilder: StringBuilder; // 文本块构建器
     // 配置：可扩展
     private readonly operators = new Set(['=']);
     private readonly keywords = new Set(["define", "import"]);
@@ -78,6 +74,7 @@ export class MacroTokenizer {
     constructor(text: string) {
         this.text = text;
         this.stream = new CharStream(text);
+        this.stringBuilder = new StringBuilder();
     }
 
     /**
@@ -108,11 +105,6 @@ export class MacroTokenizer {
         let count = 0;
 
         while (!this.stream.isEOF()) {
-            // 根据当前状态处理不同的解析
-            if (/\s/.test(this.stream.current())) {
-                this.consumeWhitespace();
-                continue;
-            }
             switch (this.state) {
                 case ScanState.INIT:
                     this.parseInit();
@@ -136,12 +128,14 @@ export class MacroTokenizer {
     }
 
     private parseInit(): void {
+        this.consumeWhitespace();
         const current = this.stream.current();
         const startPos = this.stream.getPosition();
         // 处理文档注释 | 块注释
         if (current === '/' && this.stream.peek() === '*') {
-            const comment = this.stream.match('/**') ? this.consumeBlockComment() : this.consumeNormalBlockComment();
-            const tokenType = this.stream.match('/**') ? TokenType.DOC_COMMENT : TokenType.BLOCK_COMMENT;
+            const is_doc = this.stream.match('/**');
+            const comment = is_doc ? this.consumeDocComment() : this.consumeBlockComment();
+            const tokenType = is_doc ? TokenType.DOC_COMMENT : TokenType.BLOCK_COMMENT;
             this.addToken(tokenType, comment, this.stream.getPosition());
             return;
         } else if (current === '/' && this.stream.peek() === '/') {
@@ -149,7 +143,8 @@ export class MacroTokenizer {
             this.addToken(TokenType.LINE_COMMENT, comment, startPos);
         }
         else if (this.stream.match('define')) {
-            this.addToken(TokenType.KEYWORD, this.stream.consumeN(6), startPos);
+            const keyword = this.stream.consumeN(6);
+            this.addToken(TokenType.KEYWORD, keyword, startPos);
             this.state = ScanState.MACRO;
         }
         else {
@@ -161,6 +156,7 @@ export class MacroTokenizer {
      * 解析宏定义
      */
     private parseMacro(): void {
+        this.consumeWhitespace();
         const current = this.stream.current();
         const startPos = this.stream.getPosition();
         // 标识符
@@ -198,8 +194,9 @@ export class MacroTokenizer {
             return;
         }
         if (current === '/' && this.stream.peek() === '*') {
-            const comment = this.stream.match('/**') ? this.consumeBlockComment() : this.consumeNormalBlockComment();
-            const tokenType = this.stream.match('/**') ? TokenType.DOC_COMMENT : TokenType.BLOCK_COMMENT;
+            const is_doc = this.stream.match('/**');
+            const comment = is_doc ? this.consumeDocComment() : this.consumeBlockComment();
+            const tokenType = is_doc ? TokenType.DOC_COMMENT : TokenType.BLOCK_COMMENT;
             this.addToken(tokenType, comment, this.stream.getPosition());
             return;
         }
@@ -217,18 +214,20 @@ export class MacroTokenizer {
 
 
     private parseMacroBody(): void {
+        this.consumeWhitespace();
         const current = this.stream.current();
         const startPos = this.stream.getPosition();
         // 1. 处理宏体内注释（单独生成Comment Token）
         if (current === '/' && this.stream.peek() === '/') {
             const comment = this.consumeLineComment();
-            this.addToken(TokenType.LINE_COMMENT, comment, this.stream.getPosition());
+            this.addToken(TokenType.LINE_COMMENT, comment, startPos);
             return;
         }
         if (current === '/' && this.stream.peek() === '*') {
-            const comment = this.stream.match('/**') ? this.consumeBlockComment() : this.consumeNormalBlockComment();
-            const tokenType = this.stream.match('/**') ? TokenType.DOC_COMMENT : TokenType.BLOCK_COMMENT;
-            this.addToken(tokenType, comment, this.stream.getPosition());
+            const is_doc = this.stream.match('/**');
+            const comment = is_doc ? this.consumeDocComment() : this.consumeBlockComment();
+            const tokenType = is_doc ? TokenType.DOC_COMMENT : TokenType.BLOCK_COMMENT;
+            this.addToken(tokenType, comment, startPos);
             return;
         }
         // 2. 处理宏引用 $(xxx) → 独立Token
@@ -237,13 +236,13 @@ export class MacroTokenizer {
             // 4.1 $(xxx) → 宏变量引用
             if (this.stream.peek() === '(') {
                 const macroRef = this.consumeMacroReference(); // 原方法：解析$(a)
-                this.addToken(TokenType.MACRO_REFERENCE, macroRef, this.stream.getPosition());
+                this.addToken(TokenType.MACRO_REFERENCE, macroRef, startPos);
                 return;
             }
             // 4.2 $宏名(...) → 嵌套宏调用
             else if (this.VAR_NAME_FIRST_CHAR.test(this.stream.peek())) {
                 const macroInvoke = this.consumeMacroInvocation(); // 新增：解析$宏名(参数,参数)
-                this.addToken(TokenType.MACRO_INVOCATION, macroInvoke, this.stream.getPosition());
+                this.addToken(TokenType.MACRO_INVOCATION, macroInvoke, startPos);
                 return;
             }
         }
@@ -251,22 +250,22 @@ export class MacroTokenizer {
         if (this.punctuators.has(current)) {
             // 分号/} 特殊处理（终止符/宏体结束）
             if (current === ';') {
-                this.addToken(TokenType.PUNCTUATOR, this.stream.consume(), this.stream.getPosition());
+                this.addToken(TokenType.PUNCTUATOR, this.stream.consume(), startPos);
                 return;
             }
             if (current === '}') {
-                this.addToken(TokenType.PUNCTUATOR, this.stream.consume(), this.stream.getPosition());
+                this.addToken(TokenType.PUNCTUATOR, this.stream.consume(), startPos);
                 this.state = ScanState.INIT; // 切回初始状态
                 return;
             }
             // 普通标点（,/(/)）
-            this.addToken(TokenType.PUNCTUATOR, this.stream.consume(), this.stream.getPosition());
+            this.addToken(TokenType.PUNCTUATOR, this.stream.consume(), startPos);
             return;
         }
         // 5. 处理普通命令文本（运算符/@s/字母等 → 合并为IDENTIFIER）
         const cmdText = this.consumeMacroBodyText(); // 消费直到$、}、注释、EOF
         if (cmdText) {
-            this.addToken(TokenType.IDENTIFIER, cmdText, this.stream.getPosition());
+            this.addToken(TokenType.IDENTIFIER, cmdText, startPos);
         }
     }
 
@@ -499,57 +498,69 @@ export class MacroTokenizer {
      * 消费多行注释（/** ... *\/ 开头），若当前位置不是则返回空
      * @returns 被消费的注释内容（含 /* 和 *\/），未匹配则返回空；若注释未闭合，返回已消费部分
      */
-    private consumeBlockComment(): string {
+    private consumeDocComment(): string {
         if (!this.stream.match('/**')) { return ''; }
 
         const marker = this.stream.savePosition();
-        let commentContent = '/**';
-        this.stream.consumeN(2); // 消费 /*
+        this.stringBuilder.clear();
 
         let isClosed = false;
         while (!this.stream.isEOF()) {
-            // 匹配 */ 结束符
             if (this.stream.match('*/')) {
-                commentContent += '*/';
+                this.stringBuilder.append('*/');
                 this.stream.consumeN(2);
                 isClosed = true;
                 break;
             }
-            commentContent += this.stream.consume();
+            // 逐字符追加（复用 builder，无临时字符串）
+            this.stringBuilder.append(this.stream.consume());
         }
 
         // 若注释未闭合，回溯并返回空（避免返回不完整的注释）
         if (!isClosed) {
             this.stream.restorePosition(marker);
+            this.stringBuilder.clear(); // 兜底清空，避免残留
             return '';
         }
-        return commentContent;
+        const result = this.stringBuilder.toString();
+        this.stringBuilder.clear();
+        return result;
     }
 
     // 新增：处理普通多行注释（/*）
-    private consumeNormalBlockComment(): string {
+    private consumeBlockComment(): string {
         if (!this.stream.match('/*')) { return ''; }
+
         const marker = this.stream.savePosition();
-        let commentContent = '/*';
-        this.stream.consumeN(2);
+        this.stringBuilder.clear();
+
+        // // 消费 /* 并追加到 builder
+        // const startChars = this.stream.consumeN(2);
+        // this.stringBuilder.append(Array.isArray(startChars) ? startChars.join('') : startChars);
 
         let isClosed = false;
         while (!this.stream.isEOF()) {
             if (this.stream.match('*/')) {
-                commentContent += '*/';
+                this.stringBuilder.append('*/');
                 this.stream.consumeN(2);
                 isClosed = true;
                 break;
             }
-            commentContent += this.stream.consume();
+            // 逐字符追加（复用 builder，无临时字符串）
+            this.stringBuilder.append(this.stream.consume());
         }
 
+        // 未闭合则回滚位置，返回空
         if (!isClosed) {
             this.stream.restorePosition(marker);
+            this.stringBuilder.clear(); // 兜底清空，避免残留
             return '';
         }
-        return commentContent;
-    }
+
+        const result = this.stringBuilder.toString();
+        this.stringBuilder.clear();
+        return result;
+      }
     // 步骤1：移除单行注释（// 直到换行）
     private removeLineComment = (s: string) => s.replace(/\/\/.*$/gm, '');
     // 步骤2：移除多行注释（/* ... */）

@@ -39,8 +39,8 @@ export class McFunctionSignatureHelpProvider implements vscode.SignatureHelpProv
 
     }
     provideMacroSignatureHelp(text: string): vscode.ProviderResult<vscode.SignatureHelp> {
-        const args = MacroApply.parseCommand(text);
         const signatureHelp = new vscode.SignatureHelp();
+        const args: string[] = [];
         if (args.length <= 2) {
             const signature = new vscode.SignatureInformation(
                 '<namespace>.<macroName>'
@@ -55,20 +55,6 @@ export class McFunctionSignatureHelpProvider implements vscode.SignatureHelpProv
             return signatureHelp;
         }
         if (args.length === 3) {
-            const macro = MacroRegistry.getInstance().getMacroByNameSpaceAndName(args[0] as string, args[1] as string);
-            if (!macro) { return; };
-            const params: string[] = [];
-            macro.params.forEach(param => {
-                params.push(`${param.name}: ${param.type}`);
-            });
-            const signature = new vscode.SignatureInformation(
-                params.join(', '));
-            signature.parameters = params.map(param => {
-                return new vscode.ParameterInformation(param);
-            });
-            signatureHelp.signatures.push(signature);
-            signatureHelp.activeSignature = 0;
-            signatureHelp.activeParameter = args[2].length - 1;
         }
         return signatureHelp;
     }

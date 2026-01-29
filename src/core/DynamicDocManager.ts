@@ -16,7 +16,6 @@ export class DynamicDocManager {
         vscode.workspace.onDidCreateFiles(event => {
             // 新增文件时：创建新的函数文件
             event.files.forEach(file => {
-                console.log(file);
                 DataLoader.getInstance().addFunctionRes(file);
             });
         });
@@ -38,42 +37,13 @@ export class DynamicDocManager {
         });
         // 重命名文件时：清理缓存和标签/计分板数据
         vscode.workspace.onDidRenameFiles(event => {
-            const edit = new vscode.WorkspaceEdit();
-            // 删除文件时：清理缓存和标签/计分板数据
             event.files.forEach(file => {
-                // 修改相关函数的引用
-                const resName = MinecraftUtils.buildFunctionCall(file.oldUri) ?? '';
-                const newResName = MinecraftUtils.buildFunctionCall(file.newUri) ?? '';
-                const funcData = DataLoader.getInstance().getFunctionData().get(resName);
-                // 遍历函数
-                funcData?.ref.forEach(async (lines, funcName) => {
-                    const funcUri = MinecraftUtils.buildFunctionUri(funcName);
-                    if (!funcUri) { return; };
-                    // 读取文档内容
-                    const doc = await vscode.workspace.openTextDocument(funcUri);
-                    // 遍历行替换
-                    for (const i of lines) {
-                        const line = doc.lineAt(i);
-                        const newContent = line.text.replace(resName, newResName);
-                        edit.replace(funcUri, line.range, newContent);
-                        const success = await vscode.workspace.applyEdit(edit);
-                        if (!success) {
-                            vscode.window.showErrorMessage(`Failed to update function reference at ${funcName}`);
-                        }
-                    }
-                    doc.save();
-
-                });
                 // 删除文档缓存
                 DataLoader.getInstance().clearSingleFileAllCache(file.oldUri);
-                // 重建文档缓存
-                DataLoader.getInstance().loadSingleFileByUri(file.newUri);
-                // 添加到函数res池子
+                // 重新加载
+                DataLoader.getInstance().loadSingleFuncFileByUri(file.newUri);
                 DataLoader.getInstance().addFunctionRes(file.newUri);
-                // 移除旧的res
-                DataLoader.getInstance().removeFunctionRes(resName);
             });
-
         });
 
     }
@@ -100,7 +70,7 @@ export class DynamicDocManager {
         const needAdjustLineOrder = isInsertNewLine || isDeleteNewLine;
         if (needAdjustLineOrder) {
             DataLoader.getInstance().clearCache(document, startLine);
-            DataLoader.getInstance().loadSingleFileByDoc(document, startLine);
+            DataLoader.getInstance().loadSingleFuncFileByDoc(document, startLine);
         }
         else {
             DataLoader.getInstance().clearCache(document, startLine, startLine);

@@ -1,44 +1,23 @@
 import * as vscode from 'vscode';
+import { MacroDefinition } from './MacroAst';
+import { rootDir } from '../extension';
+import * as path from 'path';
 import { MacroApply } from './MacroaApply';
-import { CommandStatement } from './MacroAst';
 
-/** 宏参数类型 */
-export interface MacroParam {
-    name: string;
-    type: string; // 如 "score"
-}
-
-/** 宏定义信息（包含位置、内容、命名空间） */
-export interface MacroDefinition {
-    /** 宏完整标识：命名空间.宏名(参数1,参数2) */
-    fullId: string;
-    /** 宏名（如 c） */
-    name: string;
-    /** 命名空间（如 player.skill） */
-    namespace: string;
-    /** 参数列表 */
-    params: MacroParam[];
-    /** 参数签名（如 "a,b"，用于判断参数是否一致） */
-    paramSignature: string;
-    /** 宏体内容（AST节点） */
-    body: CommandStatement[]; // 替换为你定义的McFunctionStatement[]类型
-    /** 宏文件路径 */
-    filePath: string;
-    /** 宏定义在文件中的位置 */
-    position: vscode.Position;
-}
-
-/** 宏注册表（单例） */
+/** 宏注册表（单例）- 聚焦「按命名空间查全量宏」 */
 export class MacroRegistry {
     private static instance: MacroRegistry;
-    /** 全局宏注册表：key=fullId，value=宏定义 */
-    private macros: Map<string, MacroDefinition> = new Map();
-    /** 冲突处理策略：strict=严格（报错），override=覆盖，ignore=忽略 */
+    /** 核心：命名空间 → 该空间下的所有宏（无需fullId，直接按命名空间分组） */
+    private namespaceMacros: Map<string, MacroDefinition[]> = new Map();
+    /** 兜底：全局宏Map（通过fullId精准查单个，非必需） */
+    private fullIdMap: Map<string, MacroDefinition> = new Map();
+    private macroRootUri: vscode.Uri;
     private conflictStrategy: 'strict' | 'override' | 'ignore' = 'strict';
 
-    private constructor() { }
+    private constructor() {
+        this.macroRootUri = vscode.Uri.joinPath(rootDir, 'mcmacro');
+    }
 
-    /** 获取单例实例 */
     public static getInstance(): MacroRegistry {
         if (!MacroRegistry.instance) {
             MacroRegistry.instance = new MacroRegistry();
@@ -46,115 +25,102 @@ export class MacroRegistry {
         return MacroRegistry.instance;
     }
 
-    /** 设置冲突处理策略 */
+    /**
+     * 注册宏（自动按命名空间分组，无需关心fullId）
+     * @param macro 宏定义
+     * @param uri 宏文件路径（用于推导命名空间）
+     */
+    public registerMacro(macro: MacroDefinition, uri?: vscode.Uri): void {
+        // 1. 推导命名空间（核心：分组的依据）
+        const namespace = this.getUriNameSpace(uri ?? this.macroRootUri, this.macroRootUri);
+        // 2. 生成fullId（仅用于全局去重，查询时完全不用）
+        const fullId = `${namespace}.${macro.name}.${macro.params.map(p => p.paramType).join('|')}`;
+
+        // 3. 冲突处理（避免重复注册）
+        if (this.fullIdMap.has(fullId)) {
+            switch (this.conflictStrategy) {
+                case 'strict': throw new Error(`宏重复：${macro.name}（命名空间${namespace}）`);
+                case 'ignore': return;
+                case 'override': this.removeMacro(fullId, namespace); break;
+            }
+        }
+
+        // 4. 补充宏的元信息（非必需，但便于后续使用）
+        macro.namespace = namespace;
+        macro.uid = fullId;
+        macro.uri = uri;
+
+        // 5. 核心：按命名空间分组存储（查询的关键）
+        if (!this.namespaceMacros.has(namespace)) {
+            this.namespaceMacros.set(namespace, []); // 初始化该命名空间的宏数组
+        }
+        this.namespaceMacros.get(namespace)!.push(macro);
+        this.fullIdMap.set(fullId, macro); // 全局去重用
+    }
+
+    /**
+     * 🔥 核心方法：无需fullId，仅用命名空间获取所有宏
+     * @param namespace 命名空间（如'test'/'builtin'）
+     * @returns 该命名空间下所有宏定义（空数组=无）
+     */
+    public getMacrosByNamespace(namespace: string): MacroDefinition[] {
+        // 直接返回该命名空间的宏数组，无需遍历、无需fullId
+        return this.namespaceMacros.get(namespace) ?? [];
+    }
+
+    /**
+     * 🔥 扩展方法：获取所有命名空间（用于遍历/下拉选择等场景）
+     * @returns 所有已注册的命名空间数组
+     */
+    public getAllNamespaces(): string[] {
+        return Array.from(this.namespaceMacros.keys());
+    }
+
+    /**
+     * 🔥 扩展方法：获取命名空间下指定名称的宏（无需fullId）
+     * @param namespace 命名空间
+     * @param macroName 宏名（如'取百分比'）
+     * @returns 匹配的宏数组（支持重载：同名不同参数类型）
+     */
+    public getMacroByNameInNamespace(namespace: string, macroName: string): MacroDefinition[] {
+        return this.getMacrosByNamespace(namespace).filter(macro => macro.name === macroName);
+    }
+
+    public getAllFullId(): string[] {
+        return Array.from(this.fullIdMap.keys());
+    }
+
+    public getAllMacros(): MacroDefinition[] {
+        return Array.from(this.fullIdMap.values());
+    }
+
+
+    // ---------------- 辅助方法（无需关注） ----------------
+    private removeMacro(fullId: string, namespace: string): void {
+        const macro = this.fullIdMap.get(fullId);
+        if (!macro) {return;}
+        // 从命名空间数组中删除
+        this.namespaceMacros.set(
+            namespace,
+            this.namespaceMacros.get(namespace)!.filter(m => m.uid !== fullId)
+        );
+        // 空数组则删除命名空间
+        if (this.namespaceMacros.get(namespace)!.length === 0) {
+            this.namespaceMacros.delete(namespace);
+        }
+        this.fullIdMap.delete(fullId);
+    }
+
+    private getUriNameSpace(uri: vscode.Uri, root: vscode.Uri): string {
+        const relativePath = path.relative(root.fsPath, uri.fsPath);
+        const pathParts = relativePath.split(path.sep);
+        return pathParts.length > 1 ? pathParts[0] : 'builtin';
+    }
+
     public setConflictStrategy(strategy: 'strict' | 'override' | 'ignore'): void {
         this.conflictStrategy = strategy;
     }
-
-    /** 注册宏定义 */
-    public registerMacro(macro: MacroDefinition): boolean {
-        const existing = this.macros.get(macro.fullId);
-        // 无冲突，直接注册
-        if (!existing) {
-            this.macros.set(macro.fullId, macro);
-            return true;
-        }
-
-        // 处理冲突
-        switch (this.conflictStrategy) {
-            case 'strict':
-                vscode.window.showWarningMessage(
-                    `宏冲突：${macro.fullId} 已在 ${existing.filePath} 中定义，当前文件 ${macro.filePath} 中的定义被忽略`
-                );
-                return false;
-            case 'override':
-                vscode.window.showInformationMessage(
-                    `宏覆盖：${macro.fullId} 被 ${macro.filePath} 覆盖原有定义（${existing.filePath}）`
-                );
-                this.macros.set(macro.fullId, macro);
-                return true;
-            case 'ignore':
-                return false;
-        }
-    }
-
-    /** 根据命名空间+宏名+参数签名查找宏 */
-    public getMacro(namespace: string, name: string, paramSignature: string): MacroDefinition | undefined {
-        const fullId = `${namespace}.${name}(${paramSignature})`;
-        return this.macros.get(fullId);
-    }
-
-    /** 获取所有宏定义 */
-    public getAllMacros(): MacroDefinition[] {
-        return Array.from(this.macros.values());
-    }
-
-    /**
-     * 获取所有已注册的命名空间（去重）
-     * @returns string[] 命名空间列表（如 ["default", "player", "player.skill"]）
-     */
-    public getAllNamespaces(): string[] {
-        const namespaces = new Set<string>();
-        // 遍历所有宏，提取namespace并去重
-        this.macros.forEach(macro => {
-            namespaces.add(macro.namespace);
-        });
-        // 转为数组返回，保持有序（可选：排序）
-        return Array.from(namespaces).sort();
-    }
-
-    /**
-     * 获取指定命名空间下的所有宏名（去重，忽略参数签名）
-     * @param namespace 目标命名空间（如 "player"）
-     * @returns string[] 宏名列表（如 ["c", "d"]）
-     */
-    public getMacroNamesByNamespace(namespace: string): string[] {
-        const macroNames = new Set<string>();
-        this.macros.forEach(macro => {
-            // 匹配指定命名空间
-            if (macro.namespace === namespace) {
-                macroNames.add(macro.name);
-            }
-        });
-        return Array.from(macroNames).sort();
-    }
-
-    /**
-     * 扩展：获取指定命名空间下的所有宏定义（包含完整信息）
-     * @param namespace 目标命名空间
-     * @returns MacroDefinition[] 宏定义列表
-     */
-    public getMacrosByNamespace(namespace: string): MacroDefinition[] {
-        const result: MacroDefinition[] = [];
-        this.macros.forEach(macro => {
-            if (macro.namespace === namespace) {
-                result.push(macro);
-            }
-        });
-        // 按宏名+参数签名排序，方便查看
-        return result.sort((a, b) => {
-            if (a.name !== b.name) {
-                return a.name.localeCompare(b.name);
-            }
-            return a.paramSignature.localeCompare(b.paramSignature);
-        });
-    }
-
-    public getMacroByNameSpaceAndName(namespace: string, name: string): MacroDefinition | null {
-        for (const macro of this.macros.values()) {
-            if (macro.namespace === namespace && macro.name === name) {
-                return macro;
-            }
-        }
-        return null;
-    }
-
-    /** 清空注册表（重新加载时调用） */
-    public clear(): void {
-        this.macros.clear();
-    }
 }
-
 
 
 /**
@@ -163,7 +129,6 @@ export class MacroRegistry {
 export function registerMcfunctionDebugConfigProvider(context: vscode.ExtensionContext) {
     // 注册“运行 mcfunction 文件”命令（和package.json中的command ID对应）
     const runCommand = vscode.commands.registerCommand('mcf-studio.runFile', () => {
-        // 仅做基础校验 + 提示（你可后续替换为自己的逻辑）
         const editor = vscode.window.activeTextEditor;
         if (!editor || editor.document.languageId !== 'mcfunction') {
             vscode.window.showErrorMessage('请打开 .mcfunction 文件后再运行！');
@@ -173,7 +138,17 @@ export function registerMcfunctionDebugConfigProvider(context: vscode.ExtensionC
 
     });
 
+    const foldMacro = vscode.commands.registerCommand('mcf-studio.foldMacro', () => { 
+        const editor = vscode.window.activeTextEditor;
+        if (!editor || editor.document.languageId !== 'mcfunction') {
+            vscode.window.showErrorMessage('请打开 .mcfunction 文件后再运行！');
+            return;
+        }
+        MacroApply.getInstance().foldMacro(editor.document);
+    });
+
     // 将命令加入插件生命周期，确保插件销毁时清理
     context.subscriptions.push(runCommand);
+    context.subscriptions.push(foldMacro);
 }
 

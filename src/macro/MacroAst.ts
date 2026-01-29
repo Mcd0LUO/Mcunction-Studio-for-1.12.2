@@ -1,3 +1,5 @@
+import * as vscode from 'vscode';
+
 /**
  * 修复 TS/ESLint 错误后的 AST 解析器
  * 解决问题：
@@ -5,6 +7,7 @@
  * 2. ESLint：curly 规则（if 条件后缺少大括号）
  */
 import { Token, TokenType } from './MacroTokenizer';
+import { StringBuilder } from './StringBuilder';
 import { TokenStream } from './TokenStream';
 
 // ====================== AST 节点类型 ======================
@@ -12,6 +15,13 @@ export interface ASTNode {
     type: string;
     position: Token['position']
 }
+
+export interface Program extends ASTNode {
+    type: 'Program';
+    body: (MacroDefinition | LineComment | MacroInvocation | DOCComment | BlockComment)[]; // 所有顶级节点
+    // 可选：文件元信息（如文件名、路径）
+    source?: string;
+  }
 
 
 // 1. 宏参数节点（对应 a: score = 1）
@@ -30,20 +40,25 @@ export interface MacroDefinition extends ASTNode {
     params: MacroParam[]; // 参数列表：[MacroParam, MacroParam]
     body: MacroBody; // 宏体节点
     docComment?: string; // 文档注释：/** 宏函数文档注释... */（可选）
+    uid?: string; // 宏定义唯一id namespace:name:params
+    uri?: vscode.Uri // 宏定义文件
 }
+
+export type MacroInvocationArgType = 'Identifier' | 'MacroParamRef';
 
 // 3. 宏调用节点（对应 $A.交换($(a),b)）
 export interface MacroInvocation extends ASTNode {
-    type: 'MacroCall';
+    type: 'MacroInvocation';
     fullName: string; // 完整宏名（含命名空间）：A.交换
     namespace?: string[]; // 命名空间拆分：['A']（方便后续解析）
     name: string; // 纯宏名：交换
-    args: MacroCallArg[]; // 调用参数：[MacroParamRef, Identifier]
+    args: MacroInvocationArg[]; // 调用参数：[MacroParamRef, Identifier]
 }
 
+
 // 4. 宏调用参数节点（区分普通参数/宏引用参数）
-export interface MacroCallArg extends ASTNode {
-    type: 'MacroCallArg';
+export interface MacroInvocationArg extends ASTNode {
+    type: 'MacroInvocationArg';
     value: string | MacroParamRef; // 普通值：b / 宏引用：$(a)
     valueType: 'Identifier' | 'MacroParamRef'; // 标记参数类型
 }
@@ -59,10 +74,19 @@ export interface LineComment extends ASTNode {
     value: string; // 注释内容
 }
 
+export interface BlockComment extends ASTNode {
+    type: 'BlockComment';
+    value: string; // 注释内容
+}
+export interface DOCComment extends ASTNode {
+    type: 'DOCComment';
+    value: string; // 注释内容
+}
+
 // 6. 宏体节点（对应 {} 内的内容）
 export interface MacroBody extends ASTNode {
     type: 'MacroBody';
-    statements: (CommandStatement | MacroInvocation | LineComment)[]; // 宏体内的语句/宏调用/注释
+    statements: (CommandStatement | MacroInvocation )[]; // 宏体内的语句/宏调用/注释
 }
 
 // 7. 命令语句节点（对应 scoreboard...; / function...;）
@@ -96,15 +120,13 @@ enum BuildState {
 
 // ====================== 解析器核心实现 ======================
 export class MacroASTBuilder {
-    private tokens: Token[]; // 你的 Token 数组
-    private cursor: number = 0; // Token 游标
+    private readonly tokens: Token[]; // 你的 Token 数组
     private parseErrors: ParseError[];
     private stream: TokenStream;
     private current_state: BuildState = BuildState.INIT;
 
     constructor(tokens: Token[]) {
         this.tokens = tokens;
-        this.cursor = 0;
         this.parseErrors = [];
         this.stream = new TokenStream(tokens);
     }
@@ -147,14 +169,104 @@ export class MacroASTBuilder {
         return [...this.parseErrors];
     }
 
-    public build(): ASTNode | null { 
-        // 跳过注释/空白
-        this.stream.skipWhitespaceAndComment();
-        if (this.stream.match(TokenType.KEYWORD, "define")) {
-            const macroDef = this.buildMacroDefinition();
-            return this.hasErrors() ? null : macroDef;
+    /**
+     * 入口方法：构建整个文件的 AST（根节点为 Program）
+     * @param source 可选：文件名/路径（用于元信息）
+     * @returns Program 根节点 | null（有错误时返回 null）
+     */
+    public build(source?: string): Program | null {
+        const programBody: Program['body'] = [];
+        // 记录 Program 节点的起始/结束位置
+        let programStartPos = this.stream.current()?.position.start || { line: 0, column: 0, pos: 0 };
+        let programEndPos = programStartPos;
+
+        // 遍历整个 Token 流，解析所有顶级节点
+        while (!this.stream.isEOF()) {
+            const currentToken = this.stream.current();
+            if (!currentToken) {break;}
+
+            // 更新 Program 结束位置
+            programEndPos = currentToken.position.end;
+
+
+            // 解析顶级节点类型
+            switch (currentToken.type) {
+                // 1. 解析宏定义（define）
+                case TokenType.KEYWORD:
+                    if (currentToken.value === 'define') {
+                        const macroDef = this.buildMacroDefinition();
+                        if (macroDef) {
+                            programBody.push(macroDef);
+                            // 更新 Program 结束位置为宏定义的结束位置
+                            programEndPos = macroDef.position.end;
+                        }
+                    } else {
+                        this.addParseError(
+                            ErrorType.SyntaxError,
+                            `不支持的顶级关键字：${currentToken.value}`,
+                            currentToken.position,
+                            currentToken
+                        );
+                        this.stream.consume(); // 消费错误 Token，继续解析后续内容
+                    }
+                    break;
+
+                // 3. 解析顶级行注释（保留到 AST 中）
+                case TokenType.LINE_COMMENT:
+                    const commentNode: LineComment = {
+                        type: 'LineComment',
+                        value: currentToken.value,
+                        position: currentToken.position
+                    };
+                    // programBody.push(commentNode);
+                    this.stream.consume(); 
+                    programEndPos = commentNode.position.end;
+                    break;
+                case TokenType.BLOCK_COMMENT: 
+                    const blockCommentNode: BlockComment = {
+                        type: 'BlockComment',
+                        value: currentToken.value,
+                        position: currentToken.position
+                    };
+                    // programBody.push(blockCommentNode);
+                    this.stream.consume();
+                    programEndPos = blockCommentNode.position.end;
+                    break;
+                case TokenType.DOC_COMMENT:
+                    const docCommentNode: DOCComment = {
+                        type: 'DOCComment',
+                        value: currentToken.value,
+                        position: currentToken.position
+                    };
+                    programBody.push(docCommentNode);
+                    this.stream.consume(); // 消费注释 Token
+                    programEndPos = docCommentNode.position.end;
+                    break;  
+                // 4. 未知的顶级 Token（报错但继续解析）
+                default:
+                    this.addParseError(
+                        ErrorType.SyntaxError,
+                        `不支持的顶级 Token 类型：${currentToken.type}（值：${currentToken.value}）`,
+                        currentToken.position,
+                        currentToken
+                    );
+                    this.stream.consume(); // 消费错误 Token，避免死循环
+                    break;
+            }
         }
-        return null;
+
+        // 构建 Program 根节点
+        const program: Program = {
+            type: 'Program',
+            body: programBody,
+            source: source,
+            position: {
+                start: programStartPos,
+                end: programEndPos
+            }
+        };
+
+        return this.hasErrors() ? null : program;
     }
 
     public buildMacroDefinition(): MacroDefinition | null {
@@ -348,7 +460,7 @@ export class MacroASTBuilder {
      */
     private buildMacroBody(leftBraceToken: Token): MacroBody {
         this.stream.consume(); // 消费 { Token
-        const statements: (CommandStatement | MacroInvocation | LineComment)[] = [];
+        const statements: (CommandStatement | MacroInvocation)[] = [];
         let macroBodyEndPos = leftBraceToken.position; // 初始化结束位置
 
         // 循环解析宏体内的语句，直到遇到 }
@@ -364,7 +476,6 @@ export class MacroASTBuilder {
                     value: currentToken.value,
                     position: currentToken.position,
                 };
-                statements.push(commentNode);
                 this.stream.consume();
                 continue;
             }
@@ -372,21 +483,16 @@ export class MacroASTBuilder {
             // 解析宏调用（$开头）
             if (currentToken.type === TokenType.MACRO_INVOCATION) {
                 // 宏调用解析逻辑可后续补全，先占位
-                const macroCallNode: MacroInvocation = {
-                    type: 'MacroCall',
-                    fullName: currentToken.value.replace(/^\$/, '').replace(/\(.*$/, ''),
-                    name: currentToken.value.replace(/^\$/, '').replace(/\(.*$/, ''),
-                    args: [],
-                    position: currentToken.position,
-                };
-                statements.push(macroCallNode);
-                this.stream.consume();
+                const macroCallNode: MacroInvocation | null = this.buildMacroInvocation();
+                if (macroCallNode) {
+                    statements.push(macroCallNode);
+                }
                 continue;
             }
 
             // 解析命令语句（默认）
             const commandTokens = this.stream.consumeUntil((t) => t.type === TokenType.PUNCTUATOR && t.value === ';');
-            const commandContent = commandTokens.map((t) => t.value).join(' ');
+            const commandContent = this.reconstructCommandContent(commandTokens);
             // 提取命令内的宏引用（简化版，后续可完善）
             const macroRefs: MacroParamRef[] = commandTokens
                 .filter((t) => t.type === TokenType.MACRO_REFERENCE)
@@ -430,6 +536,135 @@ export class MacroASTBuilder {
         };
     }
 
+    // -------------------- 新增：构建单个宏调用（顶级/宏体内都能用） --------------------
+    private buildMacroInvocation(): MacroInvocation | null {
+        const callToken = this.stream.current();
+        if (!callToken || callToken.type !== TokenType.MACRO_INVOCATION) {
+            this.addParseError(
+                ErrorType.SyntaxError,
+                `期望宏调用 Token（MACRO_CALL），实际找到：${callToken?.type || 'EOF'}`,
+                callToken?.position || { start: { line: 0, column: 0, pos: 0 }, end: { line: 0, column: 0, pos: 0 } },
+                callToken
+            );
+            return null;
+        }
+
+        // 解析宏调用的完整名称（含命名空间）
+        const fullName = callToken.value.replace(/^\$/, '').replace(/\(.*$/, '');
+        // 拆分命名空间（如 A.交换 → ['A'], 交换 → []）
+        const namespaceParts = fullName.split('.').filter(part => part.trim() !== '');
+        const name = namespaceParts.pop() || '';
+        const namespace = namespaceParts.length > 0 ? namespaceParts : undefined;
+
+        // 解析宏调用参数（简化版，可后续完善）
+        const args: MacroInvocationArg[] = [];
+        const paramMatch = callToken.value.match(/\((.*)\)/);
+        const rawParams = paramMatch ? paramMatch[1].trim() : '';
+        // 有参数时解析参数（无参数则 args 为空数组）
+        if (rawParams) {
+            // 拆分参数（按逗号分割，兼容多空格/制表符）
+            const paramList = rawParams.split(/\s*,\s*/).filter(param => param !== ''); // 过滤空参数（如 a,,b → [a,b]）
+            // 计算参数的起始位置（基于宏调用 Token 的位置精准推导）
+            const callStartPos = callToken.position.start;
+            const paramStartOffset = callToken.value.indexOf('(') + 1; // 括号后第一个字符的偏移量
+            let currentParamStartPos = {
+                line: callStartPos.line,
+                column: callStartPos.column + paramStartOffset,
+                pos: callStartPos.pos + paramStartOffset
+            };
+
+            // 遍历解析每个参数
+            paramList.forEach((paramValue, index) => {
+                // 计算当前参数的结束位置（简单推导，精准版可结合 Token 流的字符偏移）
+                const currentParamEndPos = {
+                    line: currentParamStartPos.line,
+                    column: currentParamStartPos.column + paramValue.length,
+                    pos: currentParamStartPos.pos + paramValue.length
+                };
+
+                // 判定参数类型
+                let valueType: MacroInvocationArgType;
+                if (/^\$\(.*\)$/.test(paramValue)) {
+                    // 宏参数引用：如 $(a)
+                    valueType = 'MacroParamRef';
+                } else {
+                    valueType = 'Identifier';
+                }
+                // 构建参数节点
+                args.push({
+                    type: 'MacroInvocationArg',
+                    valueType: valueType,
+                    value: paramValue,
+                    position: {
+                        start: { ...currentParamStartPos },
+                        end: { ...currentParamEndPos }
+                    }
+                });
+                // 更新下一个参数的起始位置（加逗号+空格的偏移）
+                currentParamStartPos = {
+                    line: currentParamEndPos.line,
+                    column: currentParamEndPos.column + 2, // 逗号+空格（, ）
+                    pos: currentParamEndPos.pos + 2
+                };
+            });
+        }
+
+
+        // 构建宏调用节点
+        const macroCall: MacroInvocation = {
+            type: 'MacroInvocation',
+            fullName: fullName,
+            namespace: namespace,
+            name: name,
+            args: args,
+            position: callToken.position
+        };
+
+        this.stream.consume(); // 消费宏调用 Token
+        return macroCall;
+    }
+
+    /**
+ * 计算两个相邻 Token 之间需要补充的空格数（基于 pos 偏移量）
+ * @param prevToken 前一个 Token
+ * @param currToken 当前 Token
+ * @returns 空格数（>=0）
+ */
+    private calculateSpacesBetweenTokens(prevToken: Token, currToken: Token): number {
+        // prevToken.end.pos：前一个 Token 最后一个字符的偏移量
+        // currToken.start.pos：当前 Token 第一个字符的偏移量
+        // 中间空格数 = 当前 Token 起始位置 - 前一个 Token 结束位置 - 1
+        const spaceCount = currToken.position.start.pos - prevToken.position.end.pos;
+        // 防止负数（Token 重叠/异常时返回 0）
+        return Math.max(0, spaceCount);
+    }
+
+    /**
+     * 重构命令内容（基于 Token 位置还原原始空格）
+     * @param commandTokens 命令相关的 Token 数组
+     * @returns 带正确空格的命令字符串
+     */
+    private reconstructCommandContent(commandTokens: Token[]): string {
+        if (commandTokens.length === 0) {return '';}
+
+        // 初始化构建器，传入第一个 Token 的 value
+        const builder = new StringBuilder(commandTokens[0].value);
+
+        // 遍历后续 Token，链式追加空格 + value
+        for (let i = 1; i < commandTokens.length; i++) {
+            const prevToken = commandTokens[i - 1];
+            const currToken = commandTokens[i];
+            const spaceCount = this.calculateSpacesBetweenTokens(prevToken, currToken);
+
+            // 链式调用：追加空格 → 追加 Token value
+            builder.appendRepeat(' ', spaceCount).append(currToken.value);
+        }
+
+        // 生成最终字符串
+        return builder.toString();
+      }
+
 
 
 }
+

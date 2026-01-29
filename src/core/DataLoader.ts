@@ -3,9 +3,11 @@ import * as vscode from 'vscode';
 import { MinecraftUtils } from '../utils/MinecraftUtils';
 import { rootDir } from '../extension';
 import { CommandUtils } from '../utils/CommandUtils';
-import { MacroDefinition, MacroRegistry } from '../macro/MacroRegistry';
+import { MacroRegistry } from '../macro/MacroRegistry';
 import { MacroTokenizer } from '../macro/MacroTokenizer';
 import * as path from 'path';
+import { MacroASTBuilder } from '../macro/MacroAst';
+import { ASTVisualizer } from '../macro/ASTVisualizer';
 
 interface ScoreboardData {
     type: string;
@@ -32,6 +34,7 @@ interface ConfigData {
     IgnorePattern: {
         Function: string[];
         Advancement: string[];
+        Macro: string[];
     },
     Signature: boolean,
     JsonPreview: {
@@ -111,7 +114,7 @@ export class DataLoader {
         await Promise.all(results);
     }
     // 加载数据
-    // 修改loadData方法，支持切换加载模式（可选）
+    // loadData主方法
     public async loadData(useConcurrentControl: boolean = true, concurrency: number = 100): Promise<any> {
         this.scoreboardsData.clear();
         this.functionResNames = [];
@@ -131,8 +134,8 @@ export class DataLoader {
 
             if (result1 && result2 && result3) {
                 // 在底层状态栏显示
-                vscode.window.setStatusBarMessage(`加载函数 ${this.functionResNames.length} | 记分板 ${this.scoreboardsData.size} | 标签 ${this.tagsData.size} | 队伍 ${this.teamsData.size} | 进度 ${this.advancementResNames.length} | 假玩家 ${this.fakePlayerData.size} |  耗时>> ${result1}s <<`, 3000);
-                vscode.window.showInformationMessage(`McfunctionStudio 初始化完成, 耗时 ${result1} s`);
+                vscode.window.setStatusBarMessage(`加载函数 ${this.functionResNames.length} | 记分板 ${this.scoreboardsData.size} | 标签 ${this.tagsData.size} | 队伍 ${this.teamsData.size} | 进度 ${this.advancementResNames.length} | 假玩家 ${this.fakePlayerData.size} | 宏 ${MacroRegistry.getInstance().getAllFullId().length}  耗时>> ${result1}s <<`, 3000);
+                vscode.window.showInformationMessage(`McfunctionStudio 初始化完成, 耗时 ${(result1 + result3).toFixed(3)} s`);
             }
         } catch (error) {
             vscode.window.showErrorMessage(`加载数据失败: ${error}`);
@@ -150,7 +153,8 @@ export class DataLoader {
         return {
             IgnorePattern: {
                 Function: [],
-                Advancement: []
+                Advancement: [],
+                Macro: []
             },
             JsonPreview: {
                 LinePreview: true,
@@ -368,7 +372,6 @@ export class DataLoader {
             }
 
             console.log('配置文件加载完成');
-            vscode.window.showInformationMessage('Mcfunction Studio 配置文件已加载');
         } catch (error) {
             // 文件不存在或读取失败：创建默认配置
             if ((error as NodeJS.ErrnoException).code === 'FileNotFound') {
@@ -490,7 +493,7 @@ export class DataLoader {
 
         try {
 
-            const excludeFolders = this.instance.configData.IgnorePattern.Advancement;
+            const excludeFolders = this.instance.configData.IgnorePattern.Macro;
             const globPattern = new vscode.RelativePattern(macroUri, '**/*.mcmacro');
             const excludePattern = excludeFolders.length > 0
                 ? new vscode.RelativePattern(macroUri, `{${excludeFolders.join(',')}}`)
@@ -541,7 +544,7 @@ export class DataLoader {
 
                     this.docCache.set(resName, new Map());
                     try {
-                        await this.loadSingleFileByUri(path);
+                        await this.loadSingleFuncFileByUri(path);
                     } catch (err) {
                         vscode.window.showWarningMessage(`解析函数文件失败：${path.path}，原因：${(err as Error).message}`);
                     }
@@ -551,7 +554,7 @@ export class DataLoader {
             // 计算并输出运行时间
             const endTime = Date.now();
             const duration = (endTime - startTime) / 1000; // 转换为秒
-            console.log(`【函数加载性能测试】模式：${modeName}，文件数量：${functionPaths.length}，耗时：${duration.toFixed(2)}秒`);
+            console.log(`【函数加载性能测试】模式：${modeName}，文件数量：${functionPaths.length}，耗时：${duration.toFixed(3)}秒`);
 
             return duration;
         } catch (error) {
@@ -570,19 +573,21 @@ export class DataLoader {
         return true;
 
     }
-
-    public async loadMacroData(): Promise<boolean> {
+    /**
+     *  加载所有宏定义
+     * @returns Promise<boolean>
+     */
+    public async loadMacroData(): Promise<number> {
+        const startTime = Date.now();
         const macroRoot = vscode.Uri.joinPath(rootDir, 'mcmacro');
         const macroPaths = await DataLoader.getAllMacroPaths(macroRoot);
-        const macroRegistry = MacroRegistry.getInstance();
-        macroRegistry.clear();
-        macroRegistry.setConflictStrategy('strict');
-        for (const macroUri of macroPaths) {
-            await this.parseMacroFile(macroUri, macroRoot);
+        for (const macroPath of macroPaths) {
+            this.parseMacroFile(macroPath);
         }
-
-
-        return true;
+        const endTime = Date.now();
+        const duration = (endTime - startTime) / 1000;
+        console.log(`【宏加载性能测试】 文件数量:${macroPaths.length}, 耗时: ${duration.toFixed(3)} s`);
+        return duration;
     }
 
 
@@ -591,19 +596,26 @@ export class DataLoader {
      * @param macroUri 宏文件Uri
      * @param mcmacroRootUri mcmacro根目录Uri
      */
-    private async parseMacroFile(macroUri: vscode.Uri, mcmacroRootUri: vscode.Uri): Promise<void> {
+    private async parseMacroFile(macroUri: vscode.Uri): Promise<void> {
         try {
             // 1. 读取文件内容
             const fileContent = await vscode.workspace.fs.readFile(macroUri);
             const text = Buffer.from(fileContent).toString('utf8');
 
-            // 2. 词法分析 + AST解析（使用之前的Lexer和Parser）
+            // 2. 词法分析 + AST构建
             const lexer = new MacroTokenizer(text);
             const tokens = lexer.parse();
+            const builder = new MacroASTBuilder(tokens);
+            const ast = builder.build();
+            if (!ast || builder.hasErrors()) {
+                console.error('AST解析错误：', builder.getParseErrors());
+                vscode.window.showErrorMessage('AST解析错误，详情请查看日志');
+                return;
+            }
+            ast.body.filter(node => node.type === 'MacroDefinition').map(node => {
+                MacroRegistry.getInstance().registerMacro(node, macroUri);
+            });
 
-
-            // 3. 生成文件的命名空间（基于相对于mcmacro根目录的路径）
-            const namespace = this.getNamespaceFromPath(macroUri, mcmacroRootUri);
 
 
         } catch (error) {
@@ -613,27 +625,12 @@ export class DataLoader {
     }
 
     /**
-     * 基于文件路径生成命名空间
-     * @param fileUri 宏文件Uri
-     * @param rootUri mcmacro根目录Uri
-     * @returns string 命名空间（如 player::skill）
-     */
-    private getNamespaceFromPath(fileUri: vscode.Uri, rootUri: vscode.Uri): string {
-        // 获取文件相对于mcmacro根目录的路径（如 player/skill/c.mcmacro）
-        const relativePath = path.relative(rootUri.fsPath, fileUri.fsPath).replace(/\\/g, '/');
-        // 去掉文件名和后缀，保留目录部分
-        const dirPath = relativePath.substring(0, relativePath.lastIndexOf('/'));
-        // 根目录文件 → default，子目录 → 目录名用::分隔
-        return dirPath === '' ? 'default' : dirPath.replace(/\//g, '.');
-    }
-
-    /**
     * 加载单个函数数据
     * @param path 函数文件路径
     * @param startLine 起始行数（默认从0行开始）
     * @param mode 模式：0-新加载模式 1-刷新，模式
     */
-    public async loadSingleFileByUri(path: vscode.Uri, startLine: number = 0, endLine: number = -1): Promise<null> {
+    public async loadSingleFuncFileByUri(path: vscode.Uri, startLine: number = 0, endLine: number = -1): Promise<null> {
         // 1. 读取文件内容（VS Code 原生 API，兼容跨平台/远程工作区）
 
         const fileContent = await vscode.workspace.fs.readFile(path);
@@ -656,7 +653,7 @@ export class DataLoader {
     * @param startLine 起始行数（默认从0行开始）
     * @param mode 模式：0-新加载模式 1-刷新，模式
     */
-    public async loadSingleFileByDoc(doc: vscode.TextDocument, startLine: number = 0, endLine: number = -1): Promise<null> {
+    public async loadSingleFuncFileByDoc(doc: vscode.TextDocument, startLine: number = 0, endLine: number = -1): Promise<null> {
         // 1. 读取文件内容（VS Code 原生 API，兼容跨平台/远程工作区）
 
         // 2. 按行解析（避免跨行长命令误匹配）

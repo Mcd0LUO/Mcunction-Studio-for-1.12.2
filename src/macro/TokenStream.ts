@@ -17,7 +17,7 @@ export class TokenStream {
      * @param tokens 你的 Tokenizer 生成的 Token 数组
      */
     constructor(tokens: Token[]) {
-        this.tokens = [...tokens]; // 深拷贝避免外部修改
+        this.tokens = tokens; // 深拷贝避免外部修改
         this.length = this.tokens.length;
     }
 
