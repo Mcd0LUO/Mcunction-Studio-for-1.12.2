@@ -167,7 +167,7 @@ export class MacroApply {
         // 折叠开始注释（标记宏展开的起始位置）
         const foldStartLine = `${indent}${COMMENT_PREFIX}${MACRO_FOLD_MARKER} start: ${originalMacroCall}`;
         // 折叠结束注释（标记宏展开的结束位置）
-        const foldEndLine = `${indent}${COMMENT_PREFIX}${MACRO_FOLD_MARKER} end: ${originalMacroCall}`;
+        const foldEndLine = `${indent}${COMMENT_PREFIX}${MACRO_FOLD_MARKER} end`;
         // 为展开内容添加缩进（保持格式对齐）
         const indentedExpanded = this.indentExpandedContent(expandedContent, indent);
         // 拼接最终内容：开始注释 + 展开内容 + 结束注释
@@ -203,74 +203,136 @@ export class MacroApply {
     private expandMacro(macroText: string): string | null {
         // 1. 解析宏调用基础信息（命名空间、宏名、参数文本）
         const { namespace, macroName, paramText } = this.parseMacroCall(macroText);
-        if (!macroName) {throw new Error(`格式错误：${macroText}`);}
+        if (!macroName) { throw new Error(`格式错误：${macroText}`); }
 
         // 2. 查找匹配的宏定义（按命名空间+宏名）
         const targetMacro = this.findMatchedMacro(namespace, macroName, paramText);
-        if (!targetMacro) {throw new Error(`未找到匹配宏：${namespace ? `${namespace}.` : ''}${macroName}`);}
+        if (!targetMacro) { throw new Error(`未找到匹配宏：${namespace ? `${namespace}.` : ''}${macroName}`); }
+        // 示例：在expandMacro中调用findMatchedMacro后，填充默认值
+        const inputParams = this.parseInputParams(paramText);
+        const finalParams = [...inputParams];
+
+        // 填充默认值（仅补充缺失的可选参数）
+        for (let i = inputParams.length; i < targetMacro.params.length; i++) {
+            const param = targetMacro.params[i];
+            if (param.defaultValue) {
+                finalParams.push(param.defaultValue); // 填充默认值
+            } else {
+                // 理论上不会走到这里，因为findMatchedMacro已保证输入≥必填数
+                throw new Error(`参数 ${param.name} 为必填，未传入`);
+            }
+        }
 
         // 3. 构建参数映射表（宏参数名 → 输入参数值）
-        const paramMap = this.buildParamMap(targetMacro.params, this.parseInputParams(paramText));
+        const paramMap = this.buildParamMap(targetMacro.params, finalParams);
         // 4. 展开宏体所有语句
         return this.expandMacroBody(targetMacro, paramMap, namespace, macroName);
     }
 
+
     /**
-     * 解析宏调用文本，提取基础信息
-     * 核心逻辑：处理嵌套括号，精准拆分宏名和参数
-     * @param macroText 宏调用文本（如 $test.scale_num($(scoreboard), $(num))）
+     * 解析宏调用文本，提取基础信息（增强鲁棒性版）
+     * 核心逻辑：
+     * 1. 兼容无括号/不完整括号场景，优先提取有效信息
+     * 2. 处理嵌套括号，精准拆分宏名和参数
+     * 3. 即使输入不完整，也理性返回命名空间/宏名（而非空对象）
+     * @param macroText 宏调用文本（支持完整/不完整格式：$foo.bar、$foo.bar()、$foo.bar(abc)、$foo.bar(abc$(x))）
      * @returns 解析结果（命名空间、宏名、参数文本）
      */
-    private parseMacroCall(macroText: string): {
+    public parseMacroCall(macroText: string): {
         namespace: string;
         macroName: string;
         paramText: string;
     } {
-        // 清洗文本（去除首尾空格）
-        const cleanText = macroText.trim();
-        // 找到第一个左括号位置（分割宏名和参数）
-        const firstParenIdx = cleanText.indexOf('(');
-        // 找到匹配的右括号位置（处理嵌套括号）
-        const lastParenIdx = this.findMatchingClosingParen(cleanText, firstParenIdx);
-
-        // 格式合法性校验（无括号或括号不匹配）
-        if (firstParenIdx === -1 || lastParenIdx === -1) {
+        // 边界处理：空文本直接返回空结果
+        if (!macroText || typeof macroText !== 'string') {
             return { namespace: '', macroName: '', paramText: '' };
         }
 
-        // 提取宏名部分（$ 后到 ( 前的内容）
-        const macroNamePart = cleanText.slice(1, firstParenIdx).trim();
-        // 提取参数部分（( 和 ) 之间的内容）
-        const paramText = cleanText.slice(firstParenIdx + 1, lastParenIdx).trim();
-        // 拆分命名空间和宏名
+        // 清洗文本（去除首尾空格）
+        const cleanText = macroText.trim();
+        // 去除开头的 $ 符号（核心：先提取宏名部分，再处理括号）
+        const macroContent = cleanText.startsWith('$') ? cleanText.slice(1) : cleanText;
+
+        // 找到第一个左括号位置（分割宏名和参数）
+        const firstParenIdx = macroContent.indexOf('(');
+        let macroNamePart = macroContent;
+        let paramText = '';
+
+        // 场景1：存在左括号（完整/不完整括号都处理）
+        if (firstParenIdx !== -1) {
+            // 提取宏名部分（$ 后到 ( 前的内容）
+            macroNamePart = macroContent.slice(0, firstParenIdx).trim();
+
+            // 提取参数部分：
+            // - 有匹配的右括号：取 ( 和 ) 之间的内容
+            // - 无匹配的右括号：取 ( 到文本末尾的内容（兼容不完整输入）
+            const lastParenIdx = this.findMatchingClosingParen(macroContent, firstParenIdx);
+            const paramEndIdx = lastParenIdx !== -1 ? lastParenIdx : macroContent.length;
+            paramText = macroContent.slice(firstParenIdx + 1, paramEndIdx).trim();
+        }
+
+        // 场景2：无左括号（如 $foo.bar）→ 直接使用 macroContent 作为宏名部分，参数文本为空
+        // 拆分命名空间和宏名（核心逻辑保留，兼容无命名空间场景：如 $bar → namespace=''，macroName='bar'）
         const [namespace, macroName] = this.splitNamespaceAndMacroName(macroNamePart);
 
-        return { namespace, macroName, paramText };
+        // 最终返回：即使参数文本不完整，也返回有效命名空间/宏名
+        return {
+            namespace: namespace.trim(),
+            macroName: macroName.trim(),
+            paramText: paramText.trim()
+        };
     }
 
     /**
-     * 查找参数个数匹配的宏定义（支持参数重载）
+     * 查找参数个数匹配的宏定义（支持参数重载 + 参数默认值）
+     * 匹配规则：
+     * 1. 优先匹配参数数量完全一致的宏；
+     * 2. 若输入参数数量 ≥ 宏的必填参数数量 且 ≤ 宏的总参数数量（含默认值参数），也视为匹配；
+     * 3. 无默认值的参数为必填，有defaultValue的为可选。
      * @param namespace 宏命名空间（如 test）
      * @param macroName 宏名（如 scale_num）
      * @param paramText 参数文本（如 $(scoreboard), $(num)）
      * @returns 匹配的宏定义 | null
-     * @throws 参数个数不匹配时抛出错误
+     * @throws 参数个数不匹配时抛出错误（明确必填/可选数量）
      */
-    private findMatchedMacro(namespace: string, macroName: string, paramText: string) {
+    public findMatchedMacro(namespace: string, macroName: string, paramText: string) {
         // 从注册表获取指定命名空间+宏名的所有宏定义
         const macros = MacroRegistry.getInstance().getMacroByNameInNamespace(namespace, macroName);
-        if (macros.length === 0) {return null;}
+        if (macros.length === 0) { return null; }
 
-        // 解析输入参数个数
+        // 解析输入参数个数（清洗空参数、处理嵌套括号）
         const inputParamCount = this.parseInputParams(paramText).length;
-        // 查找参数个数匹配的宏定义
-        const targetMacro = macros.find(macro => macro.params.length === inputParamCount);
 
-        // 参数个数不匹配时抛出错误（提示期望/已定义的参数个数）
+        // 步骤1：优先查找参数数量完全一致的宏（最优先匹配）
+        let targetMacro = macros.find(macro => {
+            return macro.params.length === inputParamCount;
+        });
+
+        // 步骤2：若无完全匹配的，查找支持默认值的兼容宏
         if (!targetMacro) {
-            const definedCounts = macros.map(m => m.params.length).join('/');
-            throw new Error(`参数不匹配：期望${inputParamCount}个，已定义${definedCounts}个`);
+            targetMacro = macros.find(macro => {
+                // 计算该宏的必填参数数量（无默认值的参数）
+                const requiredParamCount = macro.params.filter(param => !param.defaultValue).length;
+                // 兼容条件：输入参数数 ≥ 必填数 且 ≤ 总参数数
+                return inputParamCount >= requiredParamCount && inputParamCount <= macro.params.length;
+            });
         }
+
+        // 步骤3：无匹配的宏，抛出友好错误（提示必填/可选数量）
+        if (!targetMacro) {
+            // 整理所有重载的参数信息（必填数/总数）
+            const overloadInfo = macros.map(macro => {
+                const required = macro.params.filter(p => !p.defaultValue).length;
+                const total = macro.params.length;
+                return required === total ? `${total}个（必填）` : `${required}~${total}个（必填~总）`;
+            }).join('/');
+
+            throw new Error(
+                `参数不匹配：输入了${inputParamCount}个参数，该宏的重载版本支持：${overloadInfo}，请检查参数数量`
+            );
+        }
+
         return targetMacro;
     }
 
@@ -309,7 +371,7 @@ export class MacroApply {
             }
 
             // 语句展开为空则抛出错误
-            if (!expandedStmt) {throw new Error(`${stmtDesc} 展开为空`);}
+            if (!expandedStmt) { throw new Error(`${stmtDesc} 展开为空`); }
             // 拼接展开后的语句（加换行）
             strBuilder.append(expandedStmt).append(LINE_BREAK);
         });
@@ -326,7 +388,7 @@ export class MacroApply {
      * @returns 替换后的命令字符串 | null
      */
     private expandCommandStatement(statement: { content: string; macroRefs: MacroParamRef[] }, paramMap: Map<string, string>): string | null {
-        if (!statement.content) {return null;}
+        if (!statement.content) { return null; }
         // 反向排序参数引用（按参数名长度降序）
         const sortedRefs = [...statement.macroRefs].sort((a, b) => b.paramName.length - a.paramName.length);
 
@@ -361,6 +423,13 @@ export class MacroApply {
      * @param showProgress 是否显示进度提示（默认：true）
      * @returns 操作是否成功（boolean）
      */
+    /**
+     * 回溯（折叠）宏展开内容：将带 #@macro 标记的展开内容恢复为原始宏调用
+     * 修复点：解决宏调用含空格/逗号时参数被截断的问题
+     * @param document 目标文档
+     * @param showProgress 是否显示进度提示（默认：true）
+     * @returns 操作是否成功（boolean）
+     */
     public async foldMacro(
         document: vscode.TextDocument,
         showProgress: boolean = true
@@ -377,15 +446,16 @@ export class MacroApply {
                     progress.report({ message: `回溯第 ${lineNum + 1}/${document.lineCount} 行` });
                 }
 
-                // 检测当前行是否是宏展开开始标记
                 const line = document.lineAt(lineNum);
+                // 🔥 修复正则：匹配完整的宏调用（支持括号内的空格/逗号）
+                // 匹配规则：#@macro start: 开头 + 任意字符 + 括号闭合的完整宏调用
                 const foldStartMatch = line.text.match(
-                    new RegExp(`^\\s*${COMMENT_PREFIX}${MACRO_FOLD_MARKER} start: (\\$[^\\s]+)`)
+                    new RegExp(`^\\s*${COMMENT_PREFIX}${MACRO_FOLD_MARKER} start: (\\$[^;]+?\\))`)
                 );
 
                 if (foldStartMatch) {
-                    // 提取原始宏调用文本
-                    const originalMacroCall = foldStartMatch[1];
+                    // 提取完整的原始宏调用文本（不再被空格截断）
+                    const originalMacroCall = foldStartMatch[1].trim();
                     // 查找对应的结束标记行
                     const endLineNum = this.findFoldEndLine(document, lineNum, originalMacroCall);
 
@@ -397,7 +467,7 @@ export class MacroApply {
                             lineNum, 0,
                             endLineNum, document.lineAt(endLineNum).text.length
                         );
-                        // 替换为原始宏调用（带缩进）
+                        // 替换为完整的原始宏调用（带缩进）
                         edit.replace(document.uri, foldRange, `${indent}${originalMacroCall}`);
 
                         successCount++;
@@ -438,10 +508,10 @@ export class MacroApply {
     }
 
     /**
-     * 辅助方法：查找宏展开结束标记行
+     * 辅助方法：查找宏展开结束标记行（兼容带空格/逗号的宏调用）
      * @param document 目标文档
      * @param startLineNum 开始标记行号
-     * @param originalMacroCall 原始宏调用文本
+     * @param originalMacroCall 完整的原始宏调用文本
      * @returns 结束标记行号 | -1（未找到）
      */
     private findFoldEndLine(
@@ -449,10 +519,9 @@ export class MacroApply {
         startLineNum: number,
         originalMacroCall: string
     ): number {
-        // 构建结束标记匹配正则
-        const endMarkerRegex = new RegExp(
-            `${COMMENT_PREFIX}${MACRO_FOLD_MARKER} end: ${this.escapeRegExp(originalMacroCall)}`
-        );
+        // 构建结束标记匹配正则（转义宏调用中的特殊字符）
+        const endMarkerPattern = `${COMMENT_PREFIX}${MACRO_FOLD_MARKER} end`;
+        const endMarkerRegex = new RegExp(endMarkerPattern);
 
         // 从开始标记下一行开始查找
         for (let i = startLineNum + 1; i < document.lineCount; i++) {
@@ -471,18 +540,17 @@ export class MacroApply {
     // ---------------- 工具方法 ----------------
 
     /**
-     * 解析输入参数（拆分括号外的逗号，清洗空值）
-     * 核心逻辑：仅拆分不在括号内的逗号，避免拆分 $(score,board) 这类参数
-     * @param paramText 参数文本（如 $(scoreboard), $(num)）
+     * 解析输入参数（拆分括号外的逗号，清洗空值，剥离外层引号）
+     * @param paramText 参数文本（如 $(scoreboard), "\"100\""）
      * @returns 清洗后的参数数组
      */
     private parseInputParams(paramText: string): string[] {
         return paramText
-            .split(/,(?![^()]*\))/) // 正则：匹配不在括号内的逗号
-            .map(p => p.trim()) // 清洗参数首尾空格
-            .filter(Boolean); // 过滤空参数（如 a,,b → [a,b]）
+            .split(/,(?![^()]*\))/)
+            .map(p => p.trim())
+            .filter(Boolean)
+            .map(p => this.parseStringLiteral(p));
     }
-
     /**
      * 构建参数映射表
      * @param paramDefs 宏定义的参数列表（如 [{name: 'scoreboard'}, {name: 'num'}]）
@@ -532,14 +600,14 @@ export class MacroApply {
      * @param openIndex 左括号位置
      * @returns 匹配的右括号位置 | -1（无匹配）
      */
-    private findMatchingClosingParen(text: string, openIndex: number): number {
-        if (openIndex === -1 || text[openIndex] !== '(') {return -1;}
+    public findMatchingClosingParen(text: string, openIndex: number): number {
+        if (openIndex === -1 || text[openIndex] !== '(') { return -1; }
         let count = 1; // 括号计数器（初始为1，对应左括号）
         for (let i = openIndex + 1; i < text.length; i++) {
-            if (text[i] === '(') {count++;} // 嵌套左括号，计数+1
+            if (text[i] === '(') { count++; } // 嵌套左括号，计数+1
             else if (text[i] === ')') {
                 count--; // 右括号，计数-1
-                if (count === 0) {return i;} // 计数为0，找到匹配的右括号
+                if (count === 0) { return i; } // 计数为0，找到匹配的右括号
             }
         }
         return -1; // 无匹配的右括号
@@ -553,7 +621,7 @@ export class MacroApply {
     private splitNamespaceAndMacroName(part: string): [string, string] {
         const dotIdx = part.lastIndexOf('.');
         // 无命名空间（如 scale_num）
-        if (dotIdx === -1) {return ['', part.trim()];}
+        if (dotIdx === -1) { return ['', part.trim()]; }
         // 有命名空间（如 test.scale_num → 命名空间test，宏名scale_num）
         const namespace = part.slice(0, dotIdx).trim();
         const macroName = part.slice(dotIdx + 1).trim();
@@ -569,4 +637,23 @@ export class MacroApply {
     private escapeRegExp(str: string): string {
         return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
+
+    /**
+     * 适配VS Code扩展的字符串字面量解析（用户自主编写/运行，极简优先）
+     * 核心：纯原生解析，无冗余校验，所有转义/引号由JS引擎处理
+     * 场景：用户自负责的宏参数解析，无需安全兜底
+     */
+    private parseStringLiteral(paramValue: string): string {
+        if (!paramValue) {return paramValue;}
+
+        try {
+            // 直接调用JS引擎原生解析字符串字面量，无任何额外逻辑
+            return new Function(`return ${paramValue};`)();
+        } catch (e) {
+            // 仅做解析失败降级，避免扩展崩溃（比如用户写了未闭合的引号）
+            console.warn(`宏参数字符串解析失败：${paramValue}，错误：${e}`);
+            return paramValue;
+        }
+    }
+
 }

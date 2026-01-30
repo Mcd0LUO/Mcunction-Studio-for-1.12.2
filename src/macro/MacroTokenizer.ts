@@ -15,6 +15,8 @@ export enum TokenType {
     BLOCK_COMMENT = "BLOCK_COMMENT",   // 块注释
     OPERATOR = "OPERATOR",             // 运算符
     WHITESPACE = "WHITESPACE",         // 空白符
+    STRING_LITERAL = "STRING_LITERAL", // 字符串
+    NUMBER_LITERAL = "NUMBER_LITERAL",  // 数字
 
     // 宏专用类型
     KEYWORD = "KEYWORD", // 关键字 define
@@ -67,8 +69,9 @@ export class MacroTokenizer {
     private readonly VAR_NAME_FIRST_CHAR = /^[\u4e00-\u9fa5a-zA-Z_]$/;
     // 变量名后续字符：字母/中文/数字/下划线
     private readonly VAR_NAME_REST_CHAR = /^[\u4e00-\u9fa5a-zA-Z0-9_]$/;
-    // 默认值首字符：数字/字母/中文/下划线（支持数字开头）
-    private readonly DEFAULT_VALUE_FIRST_CHAR = /^[\u4e00-\u9fa5a-zA-Z0-9_]$/;
+    /** 默认值首字符：支持引号("'/')、数字、变量名首字符（字母/中文/下划线） */
+    private readonly DEFAULT_VALUE_FIRST_CHAR = /^["'\d\u4e00-\u9fa5a-zA-Z_]$/;
+
     // 默认值后续字符：同变量名后续字符
     private readonly DEFAULT_VALUE_REST_CHAR = this.VAR_NAME_REST_CHAR;
     constructor(text: string) {
@@ -277,18 +280,62 @@ export class MacroTokenizer {
     }
 
     /**
- * 消费宏参数默认值：支持数字开头（如1、100、num1）
- * @returns 合法的默认值字符串
- */
+     * 消费宏参数默认值：支持
+     * 1. 引号包裹的字符串（"" / ''，含转义："abc\"def" → abc"def）
+     * 2. 数字/字母/中文/下划线开头的无引号值（123、num1、测试123）
+     * @returns 合法的默认值字符串（解析后的值，如 "" → 空字符串，"123" → 123，123 → 123）
+     */
     private consumeDefaultValue(): string {
         let defaultValue = '';
         const firstChar = this.stream.current();
-        // 首字符支持数字/字母/中文/下划线
+        // ========== 新增：处理引号包裹的字符串默认值 ==========
+        if (firstChar === '"' || firstChar === "'") {
+            const quoteChar = firstChar; // 记录引号类型（双/单）
+            this.stream.consume(); // 消费开头引号
+
+            // 循环消费引号内的内容（处理转义）
+            let inEscape = false;
+            while (!this.stream.isEOF()) {
+                const char = this.stream.current();
+
+                // 处理转义字符（如 \" / \'）
+                if (inEscape) {
+                    defaultValue += char;
+                    this.stream.consume();
+                    inEscape = false;
+                    continue;
+                }
+
+                // 遇到转义符 \，标记为转义状态
+                if (char === '\\') {
+                    inEscape = true;
+                    this.stream.consume();
+                    continue;
+                }
+
+                // 遇到闭合引号，结束消费
+                if (char === quoteChar) {
+                    this.stream.consume(); // 消费结尾引号
+                    break;
+                }
+
+                // 普通字符，直接消费
+                defaultValue += char;
+                this.stream.consume();
+            }
+
+            return defaultValue;
+        }
+
+        // ========== 原有逻辑：处理无引号的默认值（数字/字母/中文/下划线） ==========
+        // 首字符校验：支持数字/字母/中文/下划线
         if (!this.DEFAULT_VALUE_FIRST_CHAR.test(firstChar)) {
             throw new MacroParseError(`宏参数默认值非法首字符：${firstChar}（位置：${this.stream.getPosition().pos}）`);
         }
+
         // 消费首字符
         defaultValue += this.stream.consume();
+
         // 消费后续字符
         while (!this.stream.isEOF()) {
             const char = this.stream.current();
@@ -298,6 +345,7 @@ export class MacroTokenizer {
                 break;
             }
         }
+
         return defaultValue;
     }
 
@@ -321,9 +369,14 @@ export class MacroTokenizer {
             const defaultValueStartPos = this.stream.getPosition();
             const defaultValueChar = this.stream.current();
             // 3. 解析默认值（数字/标识符等，按IDENTIFIER处理）
-            if (this.VAR_NAME_FIRST_CHAR.test(defaultValueChar) || /\d/.test(defaultValueChar)) {
+            if (this.DEFAULT_VALUE_FIRST_CHAR.test(defaultValueChar) || /\d/.test(defaultValueChar)) {
                 const defaultValue = this.consumeDefaultValue(); // 复用consume，支持数字/字母/中文
-                this.addToken(TokenType.IDENTIFIER, defaultValue, defaultValueStartPos);
+                // 区分Token类型：引号解析后的字符串标记为STRING，其余为IDENTIFIER
+                if (["\"", "'"].includes(defaultValueChar)) {
+                    this.addToken(TokenType.STRING_LITERAL, defaultValue, defaultValueStartPos);
+                } else {
+                    this.addToken(TokenType.IDENTIFIER, defaultValue, defaultValueStartPos);
+                }
             } else {
                 throw new MacroParseError(`宏参数默认值非法字符：${defaultValueChar}（位置：${this.stream.getPosition().pos}）`);
             }

@@ -2,6 +2,15 @@
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
 
+# [1.3.0] - 2025-1-24
+### 重磅更新
+- 添加了自定义宏语言mcmacro, 语法详见技术文档 (支持宏展开|宏折叠)  | BETA TEST
+### 更新
+- 新增配置项: IgnorePattern.Macro | AutoRenameFunctionReference.AutoRenameFunctionReference 详细介绍请悬浮鼠标在配置中查看
+### 修复
+- 修复了重命名函数
+- 修复了复制进工作区的文件不会自动解析的bug
+
 # [1.2.1] - 2025-1-23
 ### 修复
 - 修复了detect子命令后命令参数补全失效的问题

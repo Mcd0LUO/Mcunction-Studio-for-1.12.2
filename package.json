@@ -56,9 +56,15 @@
     ],
     "commands": [
       {
-        "command": "mcf-studio.runFile", 
-        "title": "Run MCFunction File",
+        "command": "mcf-studio.unfoldMacro", 
+        "title": "展开函数宏",
         "category": "McFunction Studio", 
+        "icon": "$(play)"
+      },
+      {
+        "command": "mcf-studio.foldMacro",
+        "title": "折叠函数宏",
+        "category": "McFunction Studio",
         "icon": "$(play)"
       },
       {
@@ -87,7 +93,7 @@
         "command": "mcf-studio.reloadWorkspace",
         "key": "ctrl+r",
         "mac": "cmd+r",
-        "when": "editorTextFocus && editorLangId == mcfunction"
+        "when": "editorTextFocus && editorLangId == mcfunction || editorLangId == mcmacro"
       }
     ],
     "menus": {
@@ -110,7 +116,7 @@
       ],
       "editor/title/run": [
         {
-          "command": "mcf-studio.runFile",
+          "command": "mcf-studio.unfoldMacro",
           "when": "resourceExtname == .mcfunction",
           "group": "navigation"
         }

@@ -38,11 +38,20 @@ export class DynamicDocManager {
         // 重命名文件时：清理缓存和标签/计分板数据
         vscode.workspace.onDidRenameFiles(event => {
             event.files.forEach(file => {
+                // 修正
+                const old_res = MinecraftUtils.buildFunctionCall(file.oldUri);
+                const new_res = MinecraftUtils.buildFunctionCall(file.newUri);
+                const funcData = DataLoader.getInstance().getFunctionData().get(old_res ? old_res : '');
+                const edit = new vscode.WorkspaceEdit();
+                if (old_res && new_res && funcData) {
+                    const entries = Array.from(funcData.ref.entries()).map(([name, lines]) => this.updateFunctionReference(old_res, new_res, name, lines, edit));                    ;
+                }
                 // 删除文档缓存
                 DataLoader.getInstance().clearSingleFileAllCache(file.oldUri);
                 // 重新加载
                 DataLoader.getInstance().loadSingleFuncFileByUri(file.newUri);
                 DataLoader.getInstance().addFunctionRes(file.newUri);
+
             });
         });
 

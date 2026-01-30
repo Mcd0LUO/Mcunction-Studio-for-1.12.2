@@ -11,6 +11,7 @@ import { DynamicDocManager } from './core/DynamicDocManager';
 import { LinePreviewManager } from './core/LinePreviewManager';
 import { VsCommandProcessor } from './core/VsCommandProcessor';
 import { registerMcfunctionDebugConfigProvider } from './macro/MacroRegistry';
+import { registerMcMacroDefinitionProvider } from './macro/McMacroDefinitionProvider';
 
 
 export let rootDir: vscode.Uri;
@@ -69,6 +70,8 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 	// 注册运行/debug
 	registerMcfunctionDebugConfigProvider(context);
+	// 注册宏定义挑战
+	registerMcMacroDefinitionProvider(context);
 
 
 }

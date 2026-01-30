@@ -8,7 +8,7 @@ import { MacroApply } from './MacroaApply';
 export class MacroRegistry {
     private static instance: MacroRegistry;
     /** 核心：命名空间 → 该空间下的所有宏（无需fullId，直接按命名空间分组） */
-    private namespaceMacros: Map<string, MacroDefinition[]> = new Map();
+    private namespaceMacrosMap: Map<string, MacroDefinition[]> = new Map();
     /** 兜底：全局宏Map（通过fullId精准查单个，非必需） */
     private fullIdMap: Map<string, MacroDefinition> = new Map();
     private macroRootUri: vscode.Uri;
@@ -51,10 +51,10 @@ export class MacroRegistry {
         macro.uri = uri;
 
         // 5. 核心：按命名空间分组存储（查询的关键）
-        if (!this.namespaceMacros.has(namespace)) {
-            this.namespaceMacros.set(namespace, []); // 初始化该命名空间的宏数组
+        if (!this.namespaceMacrosMap.has(namespace)) {
+            this.namespaceMacrosMap.set(namespace, []); // 初始化该命名空间的宏数组
         }
-        this.namespaceMacros.get(namespace)!.push(macro);
+        this.namespaceMacrosMap.get(namespace)!.push(macro);
         this.fullIdMap.set(fullId, macro); // 全局去重用
     }
 
@@ -65,7 +65,7 @@ export class MacroRegistry {
      */
     public getMacrosByNamespace(namespace: string): MacroDefinition[] {
         // 直接返回该命名空间的宏数组，无需遍历、无需fullId
-        return this.namespaceMacros.get(namespace) ?? [];
+        return this.namespaceMacrosMap.get(namespace) ?? [];
     }
 
     /**
@@ -73,17 +73,28 @@ export class MacroRegistry {
      * @returns 所有已注册的命名空间数组
      */
     public getAllNamespaces(): string[] {
-        return Array.from(this.namespaceMacros.keys());
+        return Array.from(this.namespaceMacrosMap.keys());
     }
 
     /**
-     * 🔥 扩展方法：获取命名空间下指定名称的宏（无需fullId）
+     * 🔥 扩展方法：获取命名空间下指定名称的所有宏（无需fullId）
      * @param namespace 命名空间
      * @param macroName 宏名（如'取百分比'）
      * @returns 匹配的宏数组（支持重载：同名不同参数类型）
      */
     public getMacroByNameInNamespace(namespace: string, macroName: string): MacroDefinition[] {
         return this.getMacrosByNamespace(namespace).filter(macro => macro.name === macroName);
+    }
+
+    /**
+     * 🔥 扩展方法：获取命名空间下指定名称的宏（无需fullId）
+     * @param namespace 命名空间
+     * @param macroName 宏名（如'取百分比'）
+     * @param n 参数个数
+     * @returns 匹配的宏数组（支持重载：同名不同参数类型）
+     */
+    public getMacroByNameParamInNamespace(namespace: string, macroName: string, n: number): MacroDefinition | undefined {
+        return this.getMacrosByNamespace(namespace).find(macro => macro.name === macroName && macro.params.length === n);
     }
 
     public getAllFullId(): string[] {
@@ -94,19 +105,26 @@ export class MacroRegistry {
         return Array.from(this.fullIdMap.values());
     }
 
+    public clearAll() {
+        this.fullIdMap.clear();
+        this.namespaceMacrosMap.clear();
+    }
+
+    
+
 
     // ---------------- 辅助方法（无需关注） ----------------
     private removeMacro(fullId: string, namespace: string): void {
         const macro = this.fullIdMap.get(fullId);
         if (!macro) {return;}
         // 从命名空间数组中删除
-        this.namespaceMacros.set(
+        this.namespaceMacrosMap.set(
             namespace,
-            this.namespaceMacros.get(namespace)!.filter(m => m.uid !== fullId)
+            this.namespaceMacrosMap.get(namespace)!.filter(m => m.uid !== fullId)
         );
         // 空数组则删除命名空间
-        if (this.namespaceMacros.get(namespace)!.length === 0) {
-            this.namespaceMacros.delete(namespace);
+        if (this.namespaceMacrosMap.get(namespace)!.length === 0) {
+            this.namespaceMacrosMap.delete(namespace);
         }
         this.fullIdMap.delete(fullId);
     }
@@ -127,8 +145,8 @@ export class MacroRegistry {
  * 注册mcfunction的运行/调试配置模板
  */
 export function registerMcfunctionDebugConfigProvider(context: vscode.ExtensionContext) {
-    // 注册“运行 mcfunction 文件”命令（和package.json中的command ID对应）
-    const runCommand = vscode.commands.registerCommand('mcf-studio.runFile', () => {
+    // 注册“展开函数宏”命令
+    const unfoldMacro = vscode.commands.registerCommand('mcf-studio.unfoldMacro', () => {
         const editor = vscode.window.activeTextEditor;
         if (!editor || editor.document.languageId !== 'mcfunction') {
             vscode.window.showErrorMessage('请打开 .mcfunction 文件后再运行！');
@@ -148,7 +166,6 @@ export function registerMcfunctionDebugConfigProvider(context: vscode.ExtensionC
     });
 
     // 将命令加入插件生命周期，确保插件销毁时清理
-    context.subscriptions.push(runCommand);
-    context.subscriptions.push(foldMacro);
+    context.subscriptions.push(unfoldMacro, foldMacro);
 }
 

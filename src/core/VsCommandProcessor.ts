@@ -12,8 +12,15 @@ export class VsCommandProcessor {
             vscode.window.showErrorMessage('请先打开一个工作区文件夹');
             return;
         }
+        let targetDir: string;
+        // 判断传入的uri是文件还是文件夹
+        if (fs.statSync(uri.fsPath).isFile()) {
+            // 如果是文件，则获取其父目录
+            targetDir = path.dirname(uri.fsPath);
+        } else {
+            targetDir = uri.fsPath;
+        }
 
-        const targetDir: string = uri.fsPath;
 
         // 显示输入框，获取用户输入的文件名
         const fileName: string | undefined = await vscode.window.showInputBox({

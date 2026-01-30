@@ -7,7 +7,6 @@ import { MacroRegistry } from '../macro/MacroRegistry';
 import { MacroTokenizer } from '../macro/MacroTokenizer';
 import * as path from 'path';
 import { MacroASTBuilder } from '../macro/MacroAst';
-import { ASTVisualizer } from '../macro/ASTVisualizer';
 
 interface ScoreboardData {
     type: string;
@@ -43,6 +42,7 @@ interface ConfigData {
     },
     FileProcessing: {
         MaxConcurrentReads: number
+        AutoRenameFunctionReference: boolean
     }
     HoverProvider: {
     },
@@ -161,7 +161,8 @@ export class DataLoader {
                 HoverPreview: true
             },
             FileProcessing: {
-                MaxConcurrentReads: 100
+                MaxConcurrentReads: 100,
+                AutoRenameFunctionReference: true
             },
             HoverProvider: {
             },
@@ -578,6 +579,7 @@ export class DataLoader {
      * @returns Promise<boolean>
      */
     public async loadMacroData(): Promise<number> {
+        MacroRegistry.getInstance().clearAll();
         const startTime = Date.now();
         const macroRoot = vscode.Uri.joinPath(rootDir, 'mcmacro');
         const macroPaths = await DataLoader.getAllMacroPaths(macroRoot);

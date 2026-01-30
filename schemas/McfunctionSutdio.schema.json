@@ -23,11 +23,20 @@
                         "type": "string"
                     },
                     "default": []
+                },
+                "Macro": {
+                    "type": "array",
+                    "description": "需要忽略的宏定义文件模式列表",
+                    "items": {
+                        "type": "string"
+                    },
+                    "default": []
                 }
             },
             "required": [
                 "Function",
-                "Advancement"
+                "Advancement",
+                "Macro"
             ],
             "additionalProperties": false
         },
@@ -39,6 +48,11 @@
                     "type": "number",
                     "description": "最大并发读取文件数",
                     "default": 100
+                },
+                "AutoRenameFunctionReference": {
+                    "type": "boolean",
+                    "description": "自动重命名函数引用",
+                    "default": true
                 }
             }
         },
@@ -77,11 +91,6 @@
             "type": "object",
             "description": "悬停提示相关设置",
             "properties": {
-                "SelecterDiagnostics": {
-                    "type": "boolean",
-                    "description": "是否启用选择器诊断",
-                    "default": true
-                }
             }
 
         }

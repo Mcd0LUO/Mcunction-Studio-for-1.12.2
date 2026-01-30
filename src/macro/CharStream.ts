@@ -160,17 +160,12 @@ export class CharStream {
             this.line++;
             this.column = 1;
             this.isNewLine = true;
-        } else if (c === '\r') {
+        } else if (c === '\r' && this.peek() === '\n') {
             this.line++;
             this.column = 1;
             this.isNewLine = true;
-            // 处理 \r\n：下一个字符是\n则正常消费（走consume逻辑，避免历史记录混乱）
-            if (this.peek() === '\n') {
-                this.consume(); // 用正常的consume处理\n，保证历史记录正确
-            }
-        } else {
-            this.column++;
-            this.isNewLine = false;
+            this.pos++;
+
         }
         return c;
     }

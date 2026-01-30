@@ -327,6 +327,7 @@ export class MacroASTBuilder {
         }
         this.stream.consume(); // 消费 )
 
+
         // 5. 解析宏体（{ ... }）
         this.stream.skipWhitespaceAndComment();
         const leftBraceToken = this.stream.current();
@@ -417,13 +418,13 @@ export class MacroASTBuilder {
                 this.stream.consume(); // 消费 =
                 this.stream.skipWhitespaceAndComment();
                 const defaultValueToken = this.stream.current();
-                if (defaultValueToken && defaultValueToken.type === TokenType.IDENTIFIER) {
+                if (defaultValueToken && (defaultValueToken.type === TokenType.STRING_LITERAL || defaultValueToken.type === TokenType.NUMBER_LITERAL || defaultValueToken.type === TokenType.IDENTIFIER)) {
                     defaultValue = defaultValueToken.value;
                     this.stream.consume(); // 消费默认值
                 } else {
                     this.addParseError(
                         ErrorType.SyntaxError,
-                        `等号后期望默认值（IDENTIFIER），实际找到：${defaultValueToken?.type || 'EOF'}`,
+                        `等号后期望默认值（IDENTIFIER| STRING_LITERAL | NUMVER_LITERAL），实际找到：${defaultValueToken?.type || 'EOF'}`,
                         defaultValueToken?.position || eqToken.position,
                         defaultValueToken
                     );
@@ -487,6 +488,7 @@ export class MacroASTBuilder {
                 if (macroCallNode) {
                     statements.push(macroCallNode);
                 }
+                this.stream.consume();
                 continue;
             }
 
