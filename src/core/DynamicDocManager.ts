@@ -31,23 +31,35 @@ export class DynamicDocManager {
         vscode.workspace.onDidDeleteFiles(event => {
             // 删除文件时：清理缓存和标签/计分板数据
             event.files.forEach(file => {
+                console.log(file);
                 // 删除文档缓存
                 DataLoader.getInstance().clearSingleFileAllCache(file);
             });
         });
         // 重命名文件时：清理缓存和标签/计分板数据
-        vscode.workspace.onDidRenameFiles(event => {
-            event.files.forEach(file => {
+        vscode.workspace.onDidRenameFiles(async (event) => {
+            event.files.forEach(async file => {
                 // 修正
                 const old_res = MinecraftUtils.buildFunctionCall(file.oldUri);
                 const new_res = MinecraftUtils.buildFunctionCall(file.newUri);
                 const funcData = DataLoader.getInstance().getFunctionData().get(old_res ? old_res : '');
-                const edit = new vscode.WorkspaceEdit();
-                if (old_res && new_res && funcData) {
-                    const entries = Array.from(funcData.ref.entries()).map(([name, lines]) => this.updateFunctionReference(old_res, new_res, name, lines, edit));                    ;
-                }
                 // 删除文档缓存
                 DataLoader.getInstance().clearSingleFileAllCache(file.oldUri);
+                // const edit = new vscode.WorkspaceEdit();
+                // if (old_res && new_res && funcData) {
+                //     const entries = Array.from(funcData.ref.entries());
+                //     entries.forEach(async ([name, lines]) => {
+                //         // 处理每一项引用
+                //         await this.updateFunctionReference(old_res, new_res, name, lines, edit);
+                //     });
+                //     // 应用edit
+                //     const success = await vscode.workspace.applyEdit(edit);
+                //     if (!success) {
+                //         vscode.window.showErrorMessage('修改失败');
+
+                //     }
+                // }
+
                 // 重新加载
                 DataLoader.getInstance().loadSingleFuncFileByUri(file.newUri);
                 DataLoader.getInstance().addFunctionRes(file.newUri);
@@ -104,6 +116,7 @@ export class DynamicDocManager {
         edit: vscode.WorkspaceEdit
     ): Promise<vscode.Uri[]> {
         const modifiedUris: vscode.Uri[] = [];
+        console.log(lineNumbers);
         const funcUri = MinecraftUtils.buildFunctionUri(funcName);
 
         if (!funcUri || !oldFuncCall || !newFuncCall) {

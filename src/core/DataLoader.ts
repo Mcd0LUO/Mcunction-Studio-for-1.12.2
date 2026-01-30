@@ -320,6 +320,7 @@ export class DataLoader {
     public clearSingleFileAllCache(uri: vscode.Uri) {
         const resName = MinecraftUtils.buildFunctionCall(uri) ?? '';
         const docCacheEntry = this.docCache.get(resName);
+        this.functionResNames = this.functionResNames.filter(name => name !== resName);
         if (!docCacheEntry) {return;}
         for (const [lineNumber, lineMeta] of docCacheEntry) {
              lineMeta.forEach(meta => {
@@ -342,7 +343,6 @@ export class DataLoader {
             });
         }
         this.docCache.delete(resName);
-        this.functionResNames = this.functionResNames.filter(name => name !== resName);
     }
 
     public async loadExtensionConfig(): Promise<void> {
