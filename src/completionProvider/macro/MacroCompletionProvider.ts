@@ -7,7 +7,7 @@ import {
     TextDocument,
     Range
 } from "vscode";
-import { MacroRegistry } from "../../macro/MacroRegistry";
+import { MacroManager } from "../../macro/MacroManager";
 import { BaseCompletionProvider } from "../Base";
 import { MinecraftCompletionProvider } from "../Minecraft";
 import * as vscode from 'vscode';
@@ -153,7 +153,7 @@ export class MacroCompletionProvider {
      */
     private provideMacroNameCompletions(macroNamePrefix: string, namespacePrefix: string, document: vscode.TextDocument, position: vscode.Position): CompletionItem[] {
         const completions: CompletionItem[] = [];
-        const macroRegistry = MacroRegistry.getInstance();
+        const macroRegistry = MacroManager.getInstance();
 
         // 获取所有宏定义（过滤命名空间前缀）
         const allMacros = macroRegistry.getAllMacros().filter(macro => {
@@ -201,7 +201,7 @@ export class MacroCompletionProvider {
         position: Position
     ): CompletionItem[] {
         const completions: CompletionItem[] = [];
-        const macroRegistry = MacroRegistry.getInstance();
+        const macroRegistry = MacroManager.getInstance();
 
         // 拆分命名空间和宏名
         const [namespace, macroName] = this.splitNamespaceAndMacroName(macroFullName);

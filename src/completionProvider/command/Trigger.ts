@@ -13,7 +13,7 @@ export class TriggerCompletionProvider extends BaseCompletionProvider {
         switch (commands.length) {
             case 2:
                 // 第二个参数是trigger的计分板目标名称（必须是trigger类型的计分板）
-                return this.provideScoreboardCompletions();
+                return this.provideScoreboardCompletions(undefined, 'trigger');
             
             case 3:
                 // 第三个参数是操作类型：add 或 set

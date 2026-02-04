@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { CommandUtils } from '../utils/CommandUtils';
 import { DataLoader } from './DataLoader';
 import { MacroCompletionProvider } from '../completionProvider/macro/MacroCompletionProvider';
-import { MacroRegistry } from '../macro/MacroRegistry';
+import { MacroManager } from '../macro/MacroManager';
 import { MacroApply } from '../macro/MacroaApply';
 import { MacroDefinition } from '../macro/MacroAst';
 
@@ -63,7 +63,7 @@ export class McFunctionSignatureHelpProvider implements vscode.SignatureHelpProv
         }
 
         // 3. 获取该宏的所有重载版本（按参数数量区分）
-        const macroOverloads = MacroRegistry.getInstance().getMacroByNameInNamespace(namespace, macroName);
+        const macroOverloads = MacroManager.getInstance().getMacroByNameInNamespace(namespace, macroName);
         if (!macroOverloads || macroOverloads.length === 0) {
             return null;
         }
@@ -78,6 +78,7 @@ export class McFunctionSignatureHelpProvider implements vscode.SignatureHelpProv
         if (signatureItems.length === 0) {
             return null;
         }
+        // 获取文档注释
         signatureHelp.signatures = signatureItems;
 
         // 6. 精准计算激活的签名和参数索引
@@ -110,6 +111,7 @@ export class McFunctionSignatureHelpProvider implements vscode.SignatureHelpProv
             for (const param of macro.params) {
                 signature.parameters.push(new vscode.ParameterInformation(
                     `${param.name}: ${param.paramType || 'any'}`,
+                    `${MacroManager.getInstance().getMacroDocComment(macro.uid) || '无'}`
                 ));
             }
 

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { MacroRegistry } from './MacroRegistry';
+import { MacroManager } from './MacroManager';
 import { StringBuilder } from './StringBuilder';
 import { MacroInvocation, MacroParamRef } from './MacroAst';
 
@@ -298,7 +298,7 @@ export class MacroApply {
      */
     public findMatchedMacro(namespace: string, macroName: string, paramText: string) {
         // 从注册表获取指定命名空间+宏名的所有宏定义
-        const macros = MacroRegistry.getInstance().getMacroByNameInNamespace(namespace, macroName);
+        const macros = MacroManager.getInstance().getMacroByNameInNamespace(namespace, macroName);
         if (macros.length === 0) { return null; }
 
         // 解析输入参数个数（清洗空参数、处理嵌套括号）

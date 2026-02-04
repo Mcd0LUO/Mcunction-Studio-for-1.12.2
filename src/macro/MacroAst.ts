@@ -18,7 +18,7 @@ export interface ASTNode {
 
 export interface Program extends ASTNode {
     type: 'Program';
-    body: (MacroDefinition | LineComment | MacroInvocation | DOCComment | BlockComment)[]; // 所有顶级节点
+    body: (MacroDefinition | LineComment | MacroInvocation | DOCComment | BlockComment )[]; // 所有顶级节点
     // 可选：文件元信息（如文件名、路径）
     source?: string;
   }

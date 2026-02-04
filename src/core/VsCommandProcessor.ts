@@ -48,7 +48,7 @@ export class VsCommandProcessor {
         const filePath: string = path.join(targetDir, `${fileName}.mcfunction`);
         const fileUri: vscode.Uri = vscode.Uri.file(filePath);
         // 添加到函数池子
-        DataLoader.getInstance().addFunctionRes(fileUri);
+        DataLoader.getInstance().addFunctionResByUri(fileUri);
 
         try {
             // 写入空文件并打开

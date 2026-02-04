@@ -1,29 +1,31 @@
 import * as vscode from 'vscode';
-import { MacroDefinition } from './MacroAst';
+import { MacroDefinition, Program, DOCComment } from './MacroAst';
 import { rootDir } from '../extension';
 import * as path from 'path';
 import { MacroApply } from './MacroaApply';
 
 /** 宏注册表（单例）- 聚焦「按命名空间查全量宏」 */
-export class MacroRegistry {
-    private static instance: MacroRegistry;
+export class MacroManager {
+    private static instance: MacroManager;
     /** 核心：命名空间 → 该空间下的所有宏（无需fullId，直接按命名空间分组） */
     private namespaceMacrosMap: Map<string, MacroDefinition[]> = new Map();
     /** 兜底：全局宏Map（通过fullId精准查单个，非必需） */
     private fullIdMap: Map<string, MacroDefinition> = new Map();
     private macroRootUri: vscode.Uri;
     private conflictStrategy: 'strict' | 'override' | 'ignore' = 'strict';
+    private macroASTs: Map<string, Program> = new Map();
 
     private constructor() {
         this.macroRootUri = vscode.Uri.joinPath(rootDir, 'mcmacro');
     }
 
-    public static getInstance(): MacroRegistry {
-        if (!MacroRegistry.instance) {
-            MacroRegistry.instance = new MacroRegistry();
+    public static getInstance(): MacroManager {
+        if (!MacroManager.instance) {
+            MacroManager.instance = new MacroManager();
         }
-        return MacroRegistry.instance;
+        return MacroManager.instance;
     }
+
 
     /**
      * 注册宏（自动按命名空间分组，无需关心fullId）
@@ -58,6 +60,34 @@ export class MacroRegistry {
         this.fullIdMap.set(fullId, macro); // 全局去重用
     }
 
+    public addAST(uri: vscode.Uri, ast: Program): void {
+        this.macroASTs.set(path.relative(rootDir.fsPath, uri.fsPath), ast);
+    }
+
+    public getMacroDocComment(fullId: string): string | undefined {
+        const macro = this.fullIdMap.get(fullId);
+        if (!macro) {return;}
+        if (!macro.uri) {return;}
+        const ast = this.macroASTs.get(path.relative(rootDir.fsPath, macro.uri.fsPath));
+        if (!ast) {return;}
+        // 获取macro前的最后一个doccomment
+        const index = ast.body.indexOf(macro);
+        if (index === -1) {return;} // 如果没找到宏定义，返回undefined
+        
+        // 向前查找最近的DOCComment
+        for (let i = index - 1; i >= 0; i--) {
+            const node = ast.body[i];
+            if (node.type === 'DOCComment') {
+                return (node as DOCComment).value;
+            }
+            // 如果遇到其他类型的节点（如MacroDefinition、LineComment等），就停止查找
+            if (node.type !== 'LineComment' && node.type !== 'BlockComment') {
+                break;
+            }
+        }
+        return undefined;
+    }
+
     /**
      * 🔥 核心方法：无需fullId，仅用命名空间获取所有宏
      * @param namespace 命名空间（如'test'/'builtin'）
@@ -79,8 +109,8 @@ export class MacroRegistry {
     /**
      * 🔥 扩展方法：获取命名空间下指定名称的所有宏（无需fullId）
      * @param namespace 命名空间
-     * @param macroName 宏名（如'取百分比'）
-     * @returns 匹配的宏数组（支持重载：同名不同参数类型）
+     * @param macrName 宏名（如'取百分比'）
+     * @returns 匹配的宏o数组（支持重载：同名不同参数类型）
      */
     public getMacroByNameInNamespace(namespace: string, macroName: string): MacroDefinition[] {
         return this.getMacrosByNamespace(namespace).filter(macro => macro.name === macroName);

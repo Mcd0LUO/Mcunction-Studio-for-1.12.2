@@ -6,6 +6,9 @@
  * 3. 类型安全，适配 TS
  */
 export class StringBuilder {
+    length() {
+        return this.segments.length;
+    }
     private readonly segments: string[];
 
     constructor(initialContent: string = '') {

@@ -31,6 +31,8 @@
 - 在编辑区域右键可插入快速记分板debug，tellraw本函数用到的所有记分板
 
 宏定义：
+- 所有宏必须在 工作区根目录/mcmacro 文件夹下定义，也就是与functions | advancements | loot_tables 文件夹同级
+- 装载宏的文件必须以 .mcmacro 为后缀， 宏文件取名不影响命名空间， 一个宏文件可以定义多个宏， 宏可以以不同参数数量重载
 ```mcmacro
 //行注释
 /**

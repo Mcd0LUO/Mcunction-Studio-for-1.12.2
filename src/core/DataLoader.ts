@@ -3,10 +3,11 @@ import * as vscode from 'vscode';
 import { MinecraftUtils } from '../utils/MinecraftUtils';
 import { rootDir } from '../extension';
 import { CommandUtils } from '../utils/CommandUtils';
-import { MacroRegistry } from '../macro/MacroRegistry';
+import { MacroManager } from '../macro/MacroManager';
 import { MacroTokenizer } from '../macro/MacroTokenizer';
 import * as path from 'path';
 import { MacroASTBuilder } from '../macro/MacroAst';
+import { ASTVisualizer } from '../macro/ASTVisualizer';
 
 interface ScoreboardData {
     type: string;
@@ -134,7 +135,7 @@ export class DataLoader {
 
             if (result1 && result2 && result3) {
                 // 在底层状态栏显示
-                vscode.window.setStatusBarMessage(`加载函数 ${this.functionResNames.length} | 记分板 ${this.scoreboardsData.size} | 标签 ${this.tagsData.size} | 队伍 ${this.teamsData.size} | 进度 ${this.advancementResNames.length} | 假玩家 ${this.fakePlayerData.size} | 宏 ${MacroRegistry.getInstance().getAllFullId().length}  耗时>> ${result1}s <<`, 3000);
+                vscode.window.setStatusBarMessage(`加载函数 ${this.functionResNames.length} | 记分板 ${this.scoreboardsData.size} | 标签 ${this.tagsData.size} | 队伍 ${this.teamsData.size} | 进度 ${this.advancementResNames.length} | 假玩家 ${this.fakePlayerData.size} | 宏 ${MacroManager.getInstance().getAllFullId().length}  耗时>> ${result1}s <<`, 3000);
                 vscode.window.showInformationMessage(`McfunctionStudio 初始化完成, 耗时 ${(result1 + result3).toFixed(3)} s`);
             }
         } catch (error) {
@@ -235,10 +236,24 @@ export class DataLoader {
         linemeta.push({ type: DataType.Team, value: teamName });
         cache?.set(lineNumber, linemeta);
     }
-    public addFunctionRes(uri: vscode.Uri): void  {
+
+    public removeAdvancementRes(resName: string): void { 
+        const index = this.advancementResNames.indexOf(resName);
+        if (index > -1) {
+            this.advancementResNames.splice(index, 1);
+        }
+    }
+
+    public addFunctionResByUri(uri: vscode.Uri): void  {
         const resName = MinecraftUtils.buildFunctionCall(uri);
         if (resName) {
             this.functionResNames.push(resName);
+        }
+    }
+    public addAdvancementResByUri(uri: vscode.Uri): void { 
+        const resName = MinecraftUtils.buildAdvancementCall(uri);
+        if (resName) {
+            this.advancementResNames.push(resName);
         }
     }
     public removeFunctionRes(resName: string): void { 
@@ -320,7 +335,7 @@ export class DataLoader {
     public clearSingleFileAllCache(uri: vscode.Uri) {
         const resName = MinecraftUtils.buildFunctionCall(uri) ?? '';
         const docCacheEntry = this.docCache.get(resName);
-        this.functionResNames = this.functionResNames.filter(name => name !== resName);
+        this.removeFunctionRes(resName);
         if (!docCacheEntry) {return;}
         for (const [lineNumber, lineMeta] of docCacheEntry) {
              lineMeta.forEach(meta => {
@@ -579,7 +594,7 @@ export class DataLoader {
      * @returns Promise<boolean>
      */
     public async loadMacroData(): Promise<number> {
-        MacroRegistry.getInstance().clearAll();
+        MacroManager.getInstance().clearAll();
         const startTime = Date.now();
         const macroRoot = vscode.Uri.joinPath(rootDir, 'mcmacro');
         const macroPaths = await DataLoader.getAllMacroPaths(macroRoot);
@@ -614,8 +629,9 @@ export class DataLoader {
                 vscode.window.showErrorMessage('AST解析错误，详情请查看日志');
                 return;
             }
+            MacroManager.getInstance().addAST(macroUri, ast);
             ast.body.filter(node => node.type === 'MacroDefinition').map(node => {
-                MacroRegistry.getInstance().registerMacro(node, macroUri);
+                MacroManager.getInstance().registerMacro(node, macroUri);
             });
 
 

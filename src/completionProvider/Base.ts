@@ -5,10 +5,9 @@ import { DataLoader } from '../core/DataLoader';
 import { BlockNameMap, EntityNameList, ItemNameMap, SoundNames } from '../utils/EnumLib';
 import { MinecraftUtils } from '../utils/MinecraftUtils';
 import { NbtAst } from '../utils/nbt/NbtAst';
-import { NbtAstKeyValueNode, NbtAstLiteralNode } from '../utils/nbt/NbtAstNode';
+import { NbtAstLiteralNode } from '../utils/nbt/NbtAstNode';
 import { NbtTokenizer, NbtTokenType } from '../utils/nbt/NbtTokenizer';
 import { NBTUtils } from '../utils/nbt/NBTUtils';
-import { text } from 'stream/consumers';
 import { MacroCompletionProvider } from './macro/MacroCompletionProvider';
 
 export const COLORS = [
@@ -52,6 +51,10 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
     protected global_sufiix: string = '';
     // 命令字段名
     protected abstract commandKeyword: string;
+
+    private fast_command: vscode.CompletionItem[] = [
+        {label: 'tag', detail: 'scoreboard players tag', insertText: 'scoreboard players tag', kind: vscode.CompletionItemKind.Snippet}
+    ];
 
     public async provideCompletionItems(
         document: vscode.TextDocument,
@@ -150,7 +153,7 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
      */
     private provideRootCompletions(text: string): vscode.CompletionItem[] {
         const prefix = text.trim().toLowerCase();
-        return CommandRegistry.getRootCommands()
+        const result = CommandRegistry.getRootCommands()
             .filter(command => prefix === '' || command.toLowerCase().startsWith(prefix))
             .map(command => this.createCompletionItem(
                 command,
@@ -158,6 +161,8 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
                 command,
                 true // 自动触发下一级补全
             ));
+        result.push(...this.fast_command);
+        return result;
     }
 
 

@@ -10,7 +10,7 @@ import { registerHoverProvider } from './core/HoverProvider';
 import { DynamicDocManager } from './core/DynamicDocManager';
 import { LinePreviewManager } from './core/LinePreviewManager';
 import { VsCommandProcessor } from './core/VsCommandProcessor';
-import { registerMcfunctionDebugConfigProvider } from './macro/MacroRegistry';
+import { registerMcfunctionDebugConfigProvider } from './macro/MacroManager';
 import { registerMcMacroDefinitionProvider } from './macro/McMacroDefinitionProvider';
 
 

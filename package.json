@@ -2,7 +2,7 @@
   "name": "mcfunction-studio",
   "displayName": "Mcfunction Studio for 1.12",
   "description": "A simple mcfunction dev specialized helper for 1.12.2",
-  "version": "1.3.0",
+  "version": "1.3.3",
   "publisher": "Mcd0-LUO",
   "author": {
     "email": "1473522801@qq.com",
@@ -51,7 +51,7 @@
           "light": "icons/light.png",
           "dark": "icons/dark.png"
         },
-        "configuration": "./syntaxes/language-configuration.json"
+        "configuration": "./syntaxes/mcmacro-language-configuration.json"
       }
     ],
     "commands": [
