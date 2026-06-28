@@ -288,10 +288,10 @@ export class DataLoader {
     // ================================================================
 
     public async loadData(useConcurrentControl: boolean = true, concurrency: number = 100): Promise<void> {
-        // 清空内存
-        this.store = new IndexedStore();
-        this.functionResNames = [];
-        this.advancementResNames = [];
+        // 原地清空（保持实例引用不变，handler 闭包不受影响）
+        this.store.clear();
+        this.functionResNames.length = 0;
+        this.advancementResNames.length = 0;
 
         const promise1 = this.loadFunctionData(useConcurrentControl, concurrency);
         const promise2 = this.loadAdvancementData();
