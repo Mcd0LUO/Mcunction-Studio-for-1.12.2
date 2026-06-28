@@ -5,7 +5,6 @@ import { ItemNameMap } from "../../../utils/EnumLib";
 
 
 export class ClearCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword: string = 'clear';
 
     protected provideCommandCompletions(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext, commands: string[]): CompletionItem[] | Promise<CompletionItem[]> {
 

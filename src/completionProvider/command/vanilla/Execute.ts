@@ -4,7 +4,6 @@ import * as vscode from "vscode";
 
 
 export class ExecuteCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword: string = 'execute';
     protected provideCommandCompletions(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext, commands: string[]): CompletionItem[] | Promise<CompletionItem[]> {
         
         // console.log(commands);

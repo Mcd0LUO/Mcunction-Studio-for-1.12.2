@@ -5,7 +5,6 @@ import { BaseCompletionProvider } from '../../Base';
 
 
 export class BlockdataCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword: string = 'blockdata';
     protected provideCommandCompletions(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext, commands: string[]): CompletionItem[] | Promise<CompletionItem[]> {
 
     switch (commands.length) {

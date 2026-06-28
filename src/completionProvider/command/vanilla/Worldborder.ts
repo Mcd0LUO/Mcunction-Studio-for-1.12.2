@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 import { BaseCompletionProvider } from "../../Base";
 
 export class WorldborderCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword: string = 'worldborder';
 
 
     public provideCommandCompletions(

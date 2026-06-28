@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 import { BaseCompletionProvider } from "../../Base";
 
 export class TestforblocksCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword: string = "testforblocks";
     protected provideCommandCompletions(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext, commands: string[]): CompletionItem[] | Promise<CompletionItem[]> {
         if (commands.length <= 10) {
             return this.provideCoordinateCompletions();

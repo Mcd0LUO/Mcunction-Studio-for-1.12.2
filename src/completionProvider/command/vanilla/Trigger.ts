@@ -4,7 +4,6 @@ import { BaseCompletionProvider } from '../../Base';
 import { DataLoader } from "../../../core/DataLoader";
 
 export class TriggerCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword: string = 'trigger';
 
 
     public provideCommandCompletions(

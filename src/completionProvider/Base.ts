@@ -2,19 +2,8 @@ import * as vscode from 'vscode';
 import { CommandRegistry } from '../core/CommandRegistry';
 import { CommandUtils } from '../utils/CommandUtils';
 import { DataLoader } from '../core/DataLoader';
-import { BlockNameMap, EntityNameList, ItemNameMap, SoundNames } from '../utils/EnumLib';
+import { BlockNameMap, EntityNameList, ItemNameMap } from '../utils/EnumLib';
 import { MinecraftUtils } from '../utils/MinecraftUtils';
-import { NbtAst } from '../utils/nbt/NbtAst';
-import { NbtAstLiteralNode } from '../utils/nbt/NbtAstNode';
-import { NbtTokenizer, NbtTokenType } from '../utils/nbt/NbtTokenizer';
-import { NBTUtils } from '../utils/nbt/NBTUtils';
-
-export const COLORS = [
-    "red", "blue", "green", "yellow", "white", "black",
-    "gray", "dark_gray", "light_gray", "aqua", "dark_aqua",
-    "dark_blue", "dark_green", "dark_purple", "dark_red",
-    "gold", "pink", "purple"
-];
 
 /**
  * 选择器参数补全数据（如 score、tag、type 等）
@@ -48,8 +37,6 @@ const SELECTOR_ARGUMENTS = [
 
 export abstract class BaseCompletionProvider implements vscode.CompletionItemProvider {
     protected global_sufiix: string = '';
-    // 命令字段名
-    protected abstract commandKeyword: string;
 
     private fast_command: vscode.CompletionItem[] = [
         {label: 'tag', detail: 'scoreboard players tag', insertText: 'scoreboard players tag', kind: vscode.CompletionItemKind.Snippet}
@@ -224,10 +211,6 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
             range
         ));;
     }
-    protected provideItemNbtCompletions(): vscode.CompletionItem[] {
-        return [];
-    }
-
     protected provideEntityTypeCompletions(): vscode.CompletionItem[] {
         return EntityNameList.all.map(entity => this.createCompletionItem(
             entity.name,
@@ -238,17 +221,6 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
         ));
     }
 
-    protected provideItemCompletions(): vscode.CompletionItem[] {
-        const items = ItemNameMap.all;
-        return Object.keys(items).map(key => this.createCompletionItem(
-            key,
-            ItemNameMap.getDescription(key),
-            key,
-            false,
-            vscode.CompletionItemKind.Struct
-        ));
-    }
-
     protected provideBlockCompletions(): vscode.CompletionItem[] {
         return Object.keys(BlockNameMap.all).map(key => this.createCompletionItem(
             key,
@@ -256,16 +228,6 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
             key,
             false,
             vscode.CompletionItemKind.Struct
-        ));
-    }
-
-    protected provideSoundsCompletions(): vscode.CompletionItem[] {
-        return SoundNames.all.map(sound => this.createCompletionItem(
-            sound.name,
-            sound.desc,
-            sound.name,
-            false,
-            vscode.CompletionItemKind.Reference
         ));
     }
 
@@ -418,36 +380,6 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
 
         }
     }
-
-    protected provideEntityNbtCompletions(nbt: string): vscode.CompletionItem[] | Promise<vscode.CompletionItem[]> {
-        const ast = new NbtAst(nbt);
-        const tokens = ast.getTokens();
-        const lastKeyNode = ast.getLastKeyValue();
-        // ----------------Tags______________
-        if (!lastKeyNode) {
-            return [];
-        }
-        if (lastKeyNode.key === 'Tags') {
-            if (!lastKeyNode.value.children) { return []; }
-            const tagsArrNode = lastKeyNode.value.children;
-            const last_tag = tagsArrNode.at(-1) as NbtAstLiteralNode;
-            if (last_tag.value === '""') {
-                return this.provideTagCompletions();
-            }
-            else if (NbtTokenizer.isTokenInIdentifierRange(tokens, tokens.length - 1, lastKeyNode.start)) {
-                return this.provideTagCompletions(undefined, true);
-            }
-        }
-        //
-
-
-
-
-        return NBTUtils.provideEntityNBTCompletions(this.createCompletionItem);
-    }
-
-
-
 
     /**
      * 获取当前输入文本的范围

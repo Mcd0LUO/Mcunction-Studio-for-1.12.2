@@ -4,7 +4,6 @@ import { DataLoader } from "../../../core/DataLoader";
 import { BaseCompletionProvider } from "../../Base";
 
 export class AdvancementCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword: string = 'advancement';
     public provideCommandCompletions(
         document: vscode.TextDocument,
         position: vscode.Position,

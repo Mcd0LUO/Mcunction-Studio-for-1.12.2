@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 import { BaseCompletionProvider } from "../../Base";
 
 export class TitleCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword: string = "title";
     public provideCommandCompletions(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext, commands: string[]): vscode.CompletionItem[] {
         switch (commands.length) {
             case 2:

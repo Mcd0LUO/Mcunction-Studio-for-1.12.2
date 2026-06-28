@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import { BaseCompletionProvider } from '../../Base';
 
 export class VarCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword = 'var';
 
     public async provideCommandCompletions(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken, context: vscode.CompletionContext, commands: string[]): Promise<vscode.CompletionItem[]> {
 

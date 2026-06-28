@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import { BaseCompletionProvider } from '../../Base';
 
 export class NbtCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword = 'nbt';
 
     public async provideCommandCompletions(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken, context: vscode.CompletionContext, commands: string[]): Promise<vscode.CompletionItem[]> {
 

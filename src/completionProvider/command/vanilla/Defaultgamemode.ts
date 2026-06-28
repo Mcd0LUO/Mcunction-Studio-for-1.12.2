@@ -17,7 +17,6 @@ import { BaseCompletionProvider } from '../../Base';
  *   - spectator 或 sp 或 3：旁观者模式
  */
 export class DefaultgamemodeCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword: string = 'defaultgamemode';
 
     /**
      * 提供defaultgamemode命令的补全项

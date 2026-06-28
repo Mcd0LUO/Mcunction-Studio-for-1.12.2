@@ -18,7 +18,6 @@ import { BaseCompletionProvider } from "../../Base";
  * - duration: 持续时间（可选，默认为300秒）
  */
 export class WeatherCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword: string = 'weather';
 
 
     /**

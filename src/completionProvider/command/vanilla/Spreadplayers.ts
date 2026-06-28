@@ -17,7 +17,6 @@ import { BaseCompletionProvider } from '../../Base';
  * - targets: 目标实体（玩家或实体选择器）
  */
 export class SpreadplayersCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword: string = 'spreadplayers';
 
 
     /**

@@ -1,14 +1,16 @@
 import { TextDocument, Position, CancellationToken, CompletionContext, CompletionItem } from "vscode";
 import * as vscode from "vscode";
 import { BaseCompletionProvider } from '../../Base';
+import { SoundNames } from '../../../utils/EnumLib';
 
 
 
 export class PlaysoundCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword: string = 'playsound';
     protected provideCommandCompletions(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext, commands: string[]): CompletionItem[] | Promise<CompletionItem[]> {
         if (commands.length === 2 ) {
-            return this.provideSoundsCompletions();
+            return SoundNames.all.map(sound => this.createCompletionItem(
+                sound.name, sound.desc, sound.name, false, vscode.CompletionItemKind.Reference
+            ));
         }
 
         if (commands.length === 3) {

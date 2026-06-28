@@ -1,6 +1,7 @@
 import { TextDocument, Position, CancellationToken, CompletionContext, CompletionItem } from "vscode";
 import * as vscode from "vscode";
 import { BaseCompletionProvider } from '../../Base';
+import { ItemNameMap } from '../../../utils/EnumLib';
 
 /**
  * Replaceitem命令补全提供者
@@ -23,7 +24,6 @@ import { BaseCompletionProvider } from '../../Base';
  * - dataTag: 物品NBT标签（可选）
  */
 export class ReplaceitemCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword: string = "replaceitem";
 
     /**
      * 提供replaceitem命令的补全项
@@ -82,7 +82,7 @@ export class ReplaceitemCompletionProvider extends BaseCompletionProvider {
                 // 根据操作类型提供不同的补全
                 if (commands[1] === 'entity') {
                     // 第五个参数是物品ID
-                    return this.provideItemCompletions();
+                    return this.completeItems();
                 } else if (commands[1] === 'block') {
                     // 第五个参数是方块的z坐标
                     return this.provideCoordinateCompletions();
@@ -123,7 +123,7 @@ export class ReplaceitemCompletionProvider extends BaseCompletionProvider {
                     ];
                 } else if (commands[1] === 'block') {
                     // 第七个参数是物品ID
-                    return this.provideItemCompletions();
+                    return this.completeItems();
                 }
                 break;
                 
@@ -236,5 +236,11 @@ export class ReplaceitemCompletionProvider extends BaseCompletionProvider {
                 vscode.CompletionItemKind.Field
             )
         );
+    }
+
+    private completeItems(): vscode.CompletionItem[] {
+        return Object.keys(ItemNameMap.all).map(key => this.createCompletionItem(
+            key, ItemNameMap.getDescription(key), key, false, vscode.CompletionItemKind.Struct
+        ));
     }
 }

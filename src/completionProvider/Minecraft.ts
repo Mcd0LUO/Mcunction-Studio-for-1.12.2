@@ -2,7 +2,6 @@ import { TextDocument, Position, CompletionItem, CancellationToken, CompletionCo
 import { BaseCompletionProvider } from "./Base";
 
 export class MinecraftCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword: string = "null";
     public async provideCommandCompletions(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext, commands: string[]): Promise<CompletionItem[]> {
         return [];
     }

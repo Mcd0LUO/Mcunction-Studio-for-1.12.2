@@ -10,7 +10,6 @@ interface SelectorItem {
 }
 
 export class FunctionCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword = 'function';
 
     public async provideCommandCompletions(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken, context: vscode.CompletionContext, commands: string[]): Promise<vscode.CompletionItem[]> {
         if (commands.length === 2) {

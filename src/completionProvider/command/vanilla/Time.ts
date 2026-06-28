@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 import { BaseCompletionProvider } from "../../Base";
 
 export class TimeCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword: string = 'time';
     public provideCommandCompletions(
         document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext, commands: string[]
     ): vscode.CompletionItem[] {

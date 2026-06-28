@@ -2,7 +2,6 @@ import * as vscode from "vscode";
 import { BaseCompletionProvider } from "../../Base";
 
 export class CloneCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword: string = 'clone';
     protected provideCommandCompletions(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken, context: vscode.CompletionContext, commands: string[]): vscode.CompletionItem[] | Promise<vscode.CompletionItem[]> {
         if (commands.length <= 10) {
             return this.provideCoordinateCompletions();

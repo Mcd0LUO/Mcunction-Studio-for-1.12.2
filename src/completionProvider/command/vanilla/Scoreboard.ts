@@ -4,7 +4,6 @@ import * as vscode from "vscode";
 import { BlockNameMap, EntityNameList, ItemNameMap, MinecraftStats, MinecraftStatsDetail } from "../../../utils/EnumLib";
 
 export class ScoreboardCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword: string = "scoreboard";
     protected provideCommandCompletions(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext, commands: string[]): CompletionItem[] | Promise<CompletionItem[]> {
 
         if (commands.length === 2) {
@@ -498,7 +497,7 @@ export class ScoreboardCompletionProvider extends BaseCompletionProvider {
                 return this.provideTagCompletions(this.getWordRange(document, position, commands[5].length));
             }
             if (commands.length === 7) {
-                return this.provideItemNbtCompletions();
+                return []; // TODO: NBT dataTag 补全
             }
 
         }

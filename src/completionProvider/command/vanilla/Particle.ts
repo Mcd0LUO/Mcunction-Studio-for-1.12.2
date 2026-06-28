@@ -4,7 +4,6 @@ import { ParticleNames } from '../../../utils/EnumLib';
 import { BaseCompletionProvider } from "../../Base";
 
 export class ParticleCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword: string = 'particle';
     protected provideCommandCompletions(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext, commands: string[]): CompletionItem[] | Promise<CompletionItem[]> {
         let result: vscode.CompletionItem[] = [];
         switch (commands.length) {

@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 import { BaseCompletionProvider } from '../../Base';
 
 export class XpCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword: string = 'xp'; 
 
     /**
      * 提供xp命令的补全项

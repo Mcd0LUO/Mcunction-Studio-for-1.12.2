@@ -6,7 +6,6 @@ import { NBTUtils } from "../../../utils/nbt/NBTUtils";
 
 
 export class EntitydataCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword: string = 'entitydata';
     protected provideCommandCompletions(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext, commands: string[]): CompletionItem[] | Promise<CompletionItem[]> {
 
     switch (commands.length) {

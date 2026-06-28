@@ -2,7 +2,6 @@ import * as vscode from "vscode";
 import { BaseCompletionProvider } from "../../Base";
 
 export class DifficultyCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword: string = 'difficulty';
     protected provideCommandCompletions(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken, context: vscode.CompletionContext, commands: string[]): vscode.CompletionItem[] | Promise<vscode.CompletionItem[]> {
         return [
             this.createCompletionItem('peaceful', '和平','peaceful'),

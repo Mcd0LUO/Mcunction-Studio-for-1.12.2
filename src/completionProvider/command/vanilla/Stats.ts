@@ -21,7 +21,6 @@ const TYPE_OPTIONS = [
 ];
 
 export class StatsCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword: string = "stats";
     public provideCommandCompletions(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext, commands: string[]): vscode.CompletionItem[] {
         switch (commands.length) {
             case 2:

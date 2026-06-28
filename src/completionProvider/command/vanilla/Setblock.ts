@@ -20,7 +20,6 @@ import { BaseCompletionProvider } from '../../Base';
  * - dataTag: 方块的NBT标签（可选）
  */
 export class SetblockCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword: string = 'setblock';
 
 
     /**

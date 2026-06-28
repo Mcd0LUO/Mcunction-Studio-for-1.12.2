@@ -3,7 +3,6 @@ import { BaseCompletionProvider } from "../../Base";
 import { Enchantments } from "../../../utils/EnumLib";
 
 export class EnchantCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword: string = 'enchant';
     protected provideCommandCompletions(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken, context: vscode.CompletionContext, commands: string[]): vscode.CompletionItem[] | Promise<vscode.CompletionItem[]> {
         if (commands.length === 2) {
             return this.provideSelectorCompletions(commands[1]);

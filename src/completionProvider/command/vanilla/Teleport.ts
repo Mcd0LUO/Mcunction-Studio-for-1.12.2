@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 import { BaseCompletionProvider } from "../../Base";
 
 export class TeleportCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword: string = "teleport";
     protected provideCommandCompletions(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext, commands: string[]): CompletionItem[] | Promise<CompletionItem[]> {
         
         let items: vscode.CompletionItem[] = [];

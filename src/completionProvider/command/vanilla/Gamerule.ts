@@ -14,7 +14,6 @@ import { BaseCompletionProvider } from '../../Base';
  * - value: 规则值（可选，布尔值或整数）
  */
 export class GameruleCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword: string = 'gamerule';
 
     /**
      * Minecraft 1.12.2版本支持的游戏规则列表

@@ -3,7 +3,6 @@ import { BaseCompletionProvider } from '../../Base';
 import { CommandRegistry } from '../../../core/CommandRegistry';
 
 export class DispatchCompletionProvider extends BaseCompletionProvider {
-    protected commandKeyword = 'dispatch';
 
     public async provideCommandCompletions(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken, context: vscode.CompletionContext, commands: string[]): Promise<vscode.CompletionItem[]> {
 
