@@ -10,11 +10,11 @@ export class SummonCompletionProvider extends BaseCompletionProvider {
     protected provideCommandCompletions(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext, commands: string[], full_text: string): CompletionItem[] | Promise<CompletionItem[]> {
 
         if (commands.length === 2) {
-            return this.provideEntityTypeCompletions();
+            return this.ctx.entityTypes();
         }
 
         if (commands.length >= 3 && commands.length <= 5) {
-            return this.provideCoordinateCompletions();
+            return this.ctx.coordinates();
         }
 
         if (commands.length === 6) {
@@ -33,11 +33,11 @@ export class SummonCompletionProvider extends BaseCompletionProvider {
             const tagsArrNode = lastKeyNode.value.children;
             const last_tag = tagsArrNode.at(-1) as NbtAstLiteralNode;
             if (last_tag.value === '""') {
-                return this.provideTagCompletions();
+                return this.ctx.tags();
             } else if (NbtTokenizer.isTokenInIdentifierRange(tokens, tokens.length - 1, lastKeyNode.start)) {
-                return this.provideTagCompletions(undefined, true);
+                return this.ctx.tags(undefined, true);
             }
         }
-        return NBTUtils.provideEntityNBTCompletions(this.createCompletionItem);
+        return NBTUtils.provideEntityNBTCompletions(this.ctx.item.bind(this.ctx));
     }
 }

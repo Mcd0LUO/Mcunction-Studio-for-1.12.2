@@ -12,10 +12,10 @@ export class BlockdataCompletionProvider extends BaseCompletionProvider {
             case 3:
             case 4:
                 // 处理坐标参数的自动补全
-                return this.provideCoordinateCompletions();
+                return this.ctx.coordinates();
             case 5:
                 // 处理数据标签参数的自动补全
-            return [this.createCompletionItem("{}", "原始json文本","{${1:}}",false)];
+            return [this.ctx.item("{}", "原始json文本","{${1:}}",false)];
 }
 
 

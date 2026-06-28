@@ -12,7 +12,7 @@ export class DispatchCompletionProvider extends BaseCompletionProvider {
             const prefix = commands[1].toLowerCase();
             return CommandRegistry.getRootCommands()
                 .filter(cmd => prefix === '' || cmd.toLowerCase().startsWith(prefix))
-                .map(cmd => this.createCompletionItem(
+                .map(cmd => this.ctx.item(
                     cmd,
                     "通过 /dispatch 执行",
                     cmd,

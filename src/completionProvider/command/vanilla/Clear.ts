@@ -10,13 +10,13 @@ export class ClearCompletionProvider extends BaseCompletionProvider {
 
         
         if (commands.length === 2) {
-            return this.provideSelectorCompletions(commands[1]);
+            return this.ctx.selectors(commands[1]);
         }
         if (commands.length === 3) {
             const completionItems: vscode.CompletionItem[] = [];
             for (const [item, name] of Object.entries(ItemNameMap.all)) {
 
-                completionItems.push(this.createCompletionItem(item, name, item + ' ', true, vscode.CompletionItemKind.Class));
+                completionItems.push(this.ctx.item(item, name, item + ' ', true, vscode.CompletionItemKind.Class));
             }
             return completionItems;
 

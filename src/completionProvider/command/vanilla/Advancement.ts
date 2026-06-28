@@ -14,21 +14,21 @@ export class AdvancementCompletionProvider extends BaseCompletionProvider {
 
         if (commands.length === 2) {
             return [
-                this.createCompletionItem('grant', '授予', 'grant '),
-                this.createCompletionItem('revoke', '撤销', 'revoke '),
-                this.createCompletionItem('test', '检测', 'test '),
+                this.ctx.item('grant', '授予', 'grant '),
+                this.ctx.item('revoke', '撤销', 'revoke '),
+                this.ctx.item('test', '检测', 'test '),
             ];
         }
         if (commands.length === 3) {
-            return this.provideSelectorCompletions(commands[2]);
+            return this.ctx.selectors(commands[2]);
         }
         if (commands.length === 4) {
             if (["grant","revoke"].includes(commands[1])) {
                 return [
-                    this.createCompletionItem('only',"仅",'only ',true),
-                    this.createCompletionItem('from',"DFS递归移除本目录以及下游目录进度",'from ',true),
-                    this.createCompletionItem('through',"递归移除本目录所处所有上下游目录进度",'through ',true),
-                    this.createCompletionItem('everything',"移除所有进度",'everything ',true),
+                    this.ctx.item('only',"仅",'only ',true),
+                    this.ctx.item('from',"DFS递归移除本目录以及下游目录进度",'from ',true),
+                    this.ctx.item('through',"递归移除本目录所处所有上下游目录进度",'through ',true),
+                    this.ctx.item('everything',"移除所有进度",'everything ',true),
                 ];
             }
             if (commands[1] === "test") {
@@ -52,7 +52,7 @@ export class AdvancementCompletionProvider extends BaseCompletionProvider {
         const wordRange = document.getWordRangeAtPosition(pos);
         // console.log(this.functionPaths);
         return DataLoader.getInstance().getAdvancementResNames().map(path => {
-            const item = this.createCompletionItem(path, '进度路径', path , false, vscode.CompletionItemKind.Function);
+            const item = this.ctx.item(path, '进度路径', path , false, vscode.CompletionItemKind.Function);
             //修改覆盖
             if (wordRange) {
             item.range = wordRange;

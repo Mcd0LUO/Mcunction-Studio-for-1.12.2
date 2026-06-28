@@ -40,14 +40,14 @@ export class ReplaceitemCompletionProvider extends BaseCompletionProvider {
             case 2:
                 // 第二个参数是操作类型：entity 或 block
                 return [
-                    this.createCompletionItem(
+                    this.ctx.item(
                         'entity', 
                         '操作实体', 
                         'entity ', 
                         true, 
                         vscode.CompletionItemKind.Keyword
                     ),
-                    this.createCompletionItem(
+                    this.ctx.item(
                         'block', 
                         '操作方块', 
                         'block ', 
@@ -60,10 +60,10 @@ export class ReplaceitemCompletionProvider extends BaseCompletionProvider {
                 // 根据操作类型提供不同的补全
                 if (commands[1] === 'entity') {
                     // 第三个参数是目标实体（玩家或实体选择器）
-                    return this.provideSelectorCompletions(commands[2]);
+                    return this.ctx.selectors(commands[2]);
                 } else if (commands[1] === 'block') {
                     // 第三个参数是方块的x坐标
-                    return this.provideCoordinateCompletions();
+                    return this.ctx.coordinates();
                 }
                 break;
                 
@@ -74,7 +74,7 @@ export class ReplaceitemCompletionProvider extends BaseCompletionProvider {
                     return this.createEntitySlotCompletion();
                 } else if (commands[1] === 'block') {
                     // 第四个参数是方块的y坐标
-                    return this.provideCoordinateCompletions();
+                    return this.ctx.coordinates();
                 }
                 break;
                 
@@ -85,7 +85,7 @@ export class ReplaceitemCompletionProvider extends BaseCompletionProvider {
                     return this.completeItems();
                 } else if (commands[1] === 'block') {
                     // 第五个参数是方块的z坐标
-                    return this.provideCoordinateCompletions();
+                    return this.ctx.coordinates();
                 }
                 break;
                 
@@ -94,7 +94,7 @@ export class ReplaceitemCompletionProvider extends BaseCompletionProvider {
                 if (commands[1] === 'entity') {
                     // 第六个参数是物品数量（可选）
                     return [
-                        this.createCompletionItem(
+                        this.ctx.item(
                             '<count>', 
                             '物品数量', 
                             '', 
@@ -113,7 +113,7 @@ export class ReplaceitemCompletionProvider extends BaseCompletionProvider {
                 if (commands[1] === 'entity') {
                     // 第七个参数是物品数据值（可选）
                     return [
-                        this.createCompletionItem(
+                        this.ctx.item(
                             '<data>', 
                             '物品数据值', 
                             '', 
@@ -132,7 +132,7 @@ export class ReplaceitemCompletionProvider extends BaseCompletionProvider {
                 if (commands[1] === 'entity') {
                     // 第八个参数是物品NBT标签（可选）
                     return [
-                        this.createCompletionItem(
+                        this.ctx.item(
                             '<dataTag>', 
                             '物品NBT标签', 
                             '', 
@@ -143,7 +143,7 @@ export class ReplaceitemCompletionProvider extends BaseCompletionProvider {
                 } else if (commands[1] === 'block') {
                     // 第八个参数是物品数量（可选）
                     return [
-                        this.createCompletionItem(
+                        this.ctx.item(
                             '<count>', 
                             '物品数量', 
                             '', 
@@ -158,7 +158,7 @@ export class ReplaceitemCompletionProvider extends BaseCompletionProvider {
                 // block操作的第九个参数是物品数据值（可选）
                 if (commands[1] === 'block') {
                     return [
-                        this.createCompletionItem(
+                        this.ctx.item(
                             '<data>', 
                             '物品数据值', 
                             '', 
@@ -173,7 +173,7 @@ export class ReplaceitemCompletionProvider extends BaseCompletionProvider {
                 // block操作的第十个参数是物品NBT标签（可选）
                 if (commands[1] === 'block') {
                     return [
-                        this.createCompletionItem(
+                        this.ctx.item(
                             '<dataTag>', 
                             '物品NBT标签', 
                             '', 
@@ -207,7 +207,7 @@ export class ReplaceitemCompletionProvider extends BaseCompletionProvider {
         ];
         
         return slots.map(slot => 
-            this.createCompletionItem(
+            this.ctx.item(
                 slot.name, 
                 slot.desc, 
                 slot.name + ' ', 
@@ -228,7 +228,7 @@ export class ReplaceitemCompletionProvider extends BaseCompletionProvider {
         ];
         
         return slots.map(slot => 
-            this.createCompletionItem(
+            this.ctx.item(
                 slot.name, 
                 slot.desc, 
                 slot.name + ' ', 
@@ -239,7 +239,7 @@ export class ReplaceitemCompletionProvider extends BaseCompletionProvider {
     }
 
     private completeItems(): vscode.CompletionItem[] {
-        return Object.keys(ItemNameMap.all).map(key => this.createCompletionItem(
+        return Object.keys(ItemNameMap.all).map(key => this.ctx.item(
             key, ItemNameMap.getDescription(key), key, false, vscode.CompletionItemKind.Struct
         ));
     }

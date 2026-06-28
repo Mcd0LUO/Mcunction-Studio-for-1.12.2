@@ -25,7 +25,7 @@ export class StatsCompletionProvider extends BaseCompletionProvider {
         switch (commands.length) {
             case 2:
                 return STATAS_OPTIONS.map(option => {
-                    return this.createCompletionItem(
+                    return this.ctx.item(
                         option.name,
                         option.desc,
                         option.name ,
@@ -35,16 +35,16 @@ export class StatsCompletionProvider extends BaseCompletionProvider {
                 });
             case 3:
                 if (commands[1] === "entity") {
-                    return this.provideSelectorCompletions(commands[2]);
+                    return this.ctx.selectors(commands[2]);
                 }
                 if (commands[1] === "block") {
-                    return this.provideCoordinateCompletions();
+                    return this.ctx.coordinates();
                 }
                 return [];
             case 4:
                 if (commands[1] === "entity") {
                     return OPERATION_OPTIONS.map(option =>
-                        this.createCompletionItem(
+                        this.ctx.item(
                             option.name,
                             option.desc,
                             option.name ,
@@ -54,13 +54,13 @@ export class StatsCompletionProvider extends BaseCompletionProvider {
                     );
                 }
                 else if (commands[1] === "block") {
-                    return this.provideCoordinateCompletions();
+                    return this.ctx.coordinates();
                 }
                 return [];
             case 5:
                 if (commands[1] === "entity") {
                     return TYPE_OPTIONS.map(option =>
-                        this.createCompletionItem(
+                        this.ctx.item(
                             option.name,
                             option.desc,
                             option.name ,
@@ -70,16 +70,16 @@ export class StatsCompletionProvider extends BaseCompletionProvider {
                     );
                 }
                 else if (commands[1] === "block") {
-                    return this.provideCoordinateCompletions();
+                    return this.ctx.coordinates();
                 }
                 return [];
             case 6:
                 if (commands[1] === 'entity') {
-                    return this.provideSelectorCompletions(commands[5]);
+                    return this.ctx.selectors(commands[5]);
                 }
                 if (commands[1] === 'block') {
                     return OPERATION_OPTIONS.map(option =>
-                        this.createCompletionItem(
+                        this.ctx.item(
                             option.name,
                             option.desc,
                             option.name ,
@@ -93,11 +93,11 @@ export class StatsCompletionProvider extends BaseCompletionProvider {
                 if (commands[1] === 'entity') {
                     // 修复：传入所需参数
                     const inputLength = commands[6] ? commands[6].length : 0;
-                    return this.provideScoreboardCompletions(this.getWordRange(document, position, inputLength));
+                    return this.ctx.scoreboards(this.ctx.wordRange(document, position, inputLength));
                 }
                 if (commands[1] === "block") {
                     return TYPE_OPTIONS.map(type => {
-                        return this.createCompletionItem(
+                        return this.ctx.item(
                             type.name, 
                             "", 
                             type.name , 
@@ -109,13 +109,13 @@ export class StatsCompletionProvider extends BaseCompletionProvider {
                 return [];
             case 8:
                 if (commands[1] === "block") {
-                    return this.provideSelectorCompletions(commands[7]);
+                    return this.ctx.selectors(commands[7]);
                 }
                 // 注意：这里缺少break语句，控制流会继续到case 9。如果这是有意为之，请保留；否则应添加break。
             case 9:
                 if (commands[1] === "block") {
                     // 获取计分板数据，类型为Map<string, [string, string]>
-                    this.provideScoreboardCompletions(this.getWordRange(document, position, commands[8].length));
+                    this.ctx.scoreboards(this.ctx.wordRange(document, position, commands[8].length));
                 }
         }
         return [];

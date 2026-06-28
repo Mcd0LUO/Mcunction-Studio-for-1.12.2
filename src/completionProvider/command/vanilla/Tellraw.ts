@@ -10,7 +10,7 @@ import { JsonMsgParser } from "../../../utils/JsonMsgParser";
 export class TellrawCompletionProvider extends BaseCompletionProvider {
     protected provideCommandCompletions(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken, context: vscode.CompletionContext, commands: string[]): vscode.CompletionItem[] | Promise<vscode.CompletionItem[]> {
         if (commands.length === 2) {
-            return this.provideSelectorCompletions(commands[1]);
+            return this.ctx.selectors(commands[1]);
         }
         if (commands.length === 3) {
             return JsonMsgParser.instance.completion(commands[2], document.lineAt(position.line).text) ?? [];

@@ -7,10 +7,10 @@ export class SpawnpointCompletionProvider extends BaseCompletionProvider {
 
     protected provideCommandCompletions(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext, commands: string[]): CompletionItem[] | Promise<CompletionItem[]> {
         if (commands.length === 2) {
-            return this.provideSelectorCompletions(commands[1]);
+            return this.ctx.selectors(commands[1]);
         }
         if (commands.length >= 3 && commands.length <= 5) {
-            return this.provideCoordinateCompletions();
+            return this.ctx.coordinates();
         }
         return [];
         

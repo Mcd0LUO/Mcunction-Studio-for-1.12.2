@@ -33,16 +33,16 @@ export class SetblockCompletionProvider extends BaseCompletionProvider {
             case 3:
             case 4:
                 // 处理坐标参数的自动补全
-                return this.provideCoordinateCompletions();
+                return this.ctx.coordinates();
                 
             case 5:
                 // 处理方块ID参数的自动补全
-                return this.provideBlockCompletions();
+                return this.ctx.blocks();
                 
             case 6:
                 // 处理方块数据值参数的自动补全
                 return [
-                    this.createCompletionItem(
+                    this.ctx.item(
                         '<dataValue>', 
                         '方块数据值（0-15）', 
                         '', 
@@ -54,21 +54,21 @@ export class SetblockCompletionProvider extends BaseCompletionProvider {
             case 7:
                 // 处理原方块处理方式参数的自动补全
                 return [
-                    this.createCompletionItem(
+                    this.ctx.item(
                         'destroy', 
                         '破坏原方块（有掉落物和特效）', 
                         'destroy' , 
                         true, 
                         vscode.CompletionItemKind.Keyword
                     ),
-                    this.createCompletionItem(
+                    this.ctx.item(
                         'keep', 
                         '仅在原位置为空气时放置方块', 
                         'keep' , 
                         true, 
                         vscode.CompletionItemKind.Keyword
                     ),
-                    this.createCompletionItem(
+                    this.ctx.item(
                         'replace', 
                         '替换原方块（默认，无特效和掉落物）', 
                         'replace' , 

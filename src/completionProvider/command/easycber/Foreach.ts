@@ -11,14 +11,14 @@ export class ForeachCompletionProvider extends BaseCompletionProvider {
 
         if (commands.length === 2) {
             return [
-                this.createCompletionItem(
+                this.ctx.item(
                     "var",
                     "遍历命名空间变量中的列表",
                     "var",
                     true,
                     vscode.CompletionItemKind.Keyword
                 ),
-                this.createCompletionItem(
+                this.ctx.item(
                     "data",
                     "遍历实体/方块的 NBT 数据列表",
                     "data",
@@ -32,7 +32,7 @@ export class ForeachCompletionProvider extends BaseCompletionProvider {
         if (commands[1] === "var") {
             if (commands.length === 3) {
                 return [
-                    this.createCompletionItem(
+                    this.ctx.item(
                         "<命名空间>",
                         "变量命名空间",
                         "",
@@ -43,7 +43,7 @@ export class ForeachCompletionProvider extends BaseCompletionProvider {
             }
             if (commands.length === 4) {
                 return [
-                    this.createCompletionItem(
+                    this.ctx.item(
                         "<列表变量>",
                         "列表类型的变量名",
                         "",
@@ -59,14 +59,14 @@ export class ForeachCompletionProvider extends BaseCompletionProvider {
         if (commands[1] === "data") {
             if (commands.length === 3) {
                 return [
-                    this.createCompletionItem(
+                    this.ctx.item(
                         "entity",
                         "遍历实体数据列表",
                         "entity",
                         true,
                         vscode.CompletionItemKind.Keyword
                     ),
-                    this.createCompletionItem(
+                    this.ctx.item(
                         "block",
                         "遍历方块数据列表",
                         "block",
@@ -77,11 +77,11 @@ export class ForeachCompletionProvider extends BaseCompletionProvider {
             }
             if (commands[2] === "entity") {
                 if (commands.length === 4) {
-                    return this.provideSelectorCompletions(commands[3]);
+                    return this.ctx.selectors(commands[3]);
                 }
                 if (commands.length === 5) {
                     return [
-                        this.createCompletionItem(
+                        this.ctx.item(
                             "<NBT路径>",
                             "NBT 列表路径，如 Inventory, Motion",
                             "",
@@ -93,11 +93,11 @@ export class ForeachCompletionProvider extends BaseCompletionProvider {
             }
             if (commands[2] === "block") {
                 if (commands.length >= 4 && commands.length <= 6) {
-                    return this.provideCoordinateCompletions();
+                    return this.ctx.coordinates();
                 }
                 if (commands.length === 7) {
                     return [
-                        this.createCompletionItem(
+                        this.ctx.item(
                             "<NBT路径>",
                             "NBT 列表路径，如 Items",
                             "",
@@ -114,7 +114,7 @@ export class ForeachCompletionProvider extends BaseCompletionProvider {
         if (asIndex !== -1 && asIndex === commands.length - 2) {
             // "as" is the second-to-last, user needs to type ns
             return [
-                this.createCompletionItem(
+                this.ctx.item(
                     "<命名空间>",
                     "临时变量命名空间",
                     "",
@@ -126,7 +126,7 @@ export class ForeachCompletionProvider extends BaseCompletionProvider {
         if (asIndex !== -1 && asIndex === commands.length - 3 && commands[asIndex + 1] !== "run") {
             // user needs to type item_var name
             return [
-                this.createCompletionItem(
+                this.ctx.item(
                     "<变量名>",
                     "临时变量名（用于 %ns:var% 引用）",
                     "",
@@ -139,7 +139,7 @@ export class ForeachCompletionProvider extends BaseCompletionProvider {
         // "as" keyword
         if (asIndex === -1 && commands.length >= 4) {
             return [
-                this.createCompletionItem(
+                this.ctx.item(
                     "as",
                     "绑定临时变量",
                     "as",
@@ -152,7 +152,7 @@ export class ForeachCompletionProvider extends BaseCompletionProvider {
         // run keyword
         if (asIndex !== -1 && commands.indexOf("run") === -1 && commands.length >= asIndex + 3) {
             return [
-                this.createCompletionItem(
+                this.ctx.item(
                     "run",
                     "执行命令（可用 %ns:var% 引用遍历项）",
                     "run",
@@ -165,7 +165,7 @@ export class ForeachCompletionProvider extends BaseCompletionProvider {
         // After run: suggest commands
         if (commands.indexOf("run") !== -1 && commands.indexOf("run") === commands.length - 1) {
             return [
-                this.createCompletionItem(
+                this.ctx.item(
                     "<命令>",
                     "要执行的命令",
                     "",

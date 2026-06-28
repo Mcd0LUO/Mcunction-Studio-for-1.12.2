@@ -13,13 +13,13 @@ export class SuperexeCompletionProvider extends BaseCompletionProvider {
         // 根关键字：if / unless / facing / positioned / run
         // 这些在任意非末尾位置都可能出现（run 除外）
         const midKeywords = [
-            this.createCompletionItem("if", "条件判断（真）", "if", true, vscode.CompletionItemKind.Keyword),
-            this.createCompletionItem("unless", "条件判断（假）", "unless", true, vscode.CompletionItemKind.Keyword),
-            this.createCompletionItem("facing", "设置执行朝向", "facing", true, vscode.CompletionItemKind.Keyword),
-            this.createCompletionItem("positioned", "设置执行位置", "positioned", true, vscode.CompletionItemKind.Keyword),
+            this.ctx.item("if", "条件判断（真）", "if", true, vscode.CompletionItemKind.Keyword),
+            this.ctx.item("unless", "条件判断（假）", "unless", true, vscode.CompletionItemKind.Keyword),
+            this.ctx.item("facing", "设置执行朝向", "facing", true, vscode.CompletionItemKind.Keyword),
+            this.ctx.item("positioned", "设置执行位置", "positioned", true, vscode.CompletionItemKind.Keyword),
         ];
 
-        const runKeyword = this.createCompletionItem("run", "执行命令", "run", true, vscode.CompletionItemKind.Keyword);
+        const runKeyword = this.ctx.item("run", "执行命令", "run", true, vscode.CompletionItemKind.Keyword);
 
         // 检查是否已经出现了 run（run 后的内容不再处理补全）
         const runIndex = commands.indexOf("run");
@@ -31,7 +31,7 @@ export class SuperexeCompletionProvider extends BaseCompletionProvider {
         // 如果最后一个参数是 run，补全所有根命令
         if (lastArg === "run") {
             return [
-                this.createCompletionItem(
+                this.ctx.item(
                     "<命令>",
                     "要执行的命令",
                     "",
@@ -82,19 +82,19 @@ export class SuperexeCompletionProvider extends BaseCompletionProvider {
 
     private provideConditionCompletions(): vscode.CompletionItem[] {
         return [
-            this.createCompletionItem("entity", "实体存在性检查", "entity", true, vscode.CompletionItemKind.Keyword),
-            this.createCompletionItem("block", "方块检查", "block", true, vscode.CompletionItemKind.Keyword),
-            this.createCompletionItem("score", "记分板比较", "score", true, vscode.CompletionItemKind.Keyword),
-            this.createCompletionItem("var", "变量比较", "var", true, vscode.CompletionItemKind.Keyword),
-            this.createCompletionItem("data", "NBT 数据路径比较", "data", true, vscode.CompletionItemKind.Keyword),
+            this.ctx.item("entity", "实体存在性检查", "entity", true, vscode.CompletionItemKind.Keyword),
+            this.ctx.item("block", "方块检查", "block", true, vscode.CompletionItemKind.Keyword),
+            this.ctx.item("score", "记分板比较", "score", true, vscode.CompletionItemKind.Keyword),
+            this.ctx.item("var", "变量比较", "var", true, vscode.CompletionItemKind.Keyword),
+            this.ctx.item("data", "NBT 数据路径比较", "data", true, vscode.CompletionItemKind.Keyword),
         ];
     }
 
     private provideFacingCompletions(commands: string[], lastArg: string): vscode.CompletionItem[] {
         if (lastArg === "facing" || commands.length <= 2) {
             return [
-                this.createCompletionItem("entity", "朝向实体", "entity", true, vscode.CompletionItemKind.Keyword),
-                this.createCompletionItem("block", "朝向方块坐标", "block", true, vscode.CompletionItemKind.Keyword),
+                this.ctx.item("entity", "朝向实体", "entity", true, vscode.CompletionItemKind.Keyword),
+                this.ctx.item("block", "朝向方块坐标", "block", true, vscode.CompletionItemKind.Keyword),
             ];
         }
         return [];
@@ -103,13 +103,13 @@ export class SuperexeCompletionProvider extends BaseCompletionProvider {
     private providePositionedCompletions(commands: string[], lastArg: string): vscode.CompletionItem[] {
         // positioned <selector> 或 positioned <x> <y> <z>
         if (["positioned"].includes(commands[commands.length - 2]) || commands.length <= 2) {
-            const items = this.provideSelectorCompletions(lastArg);
-            items.push(...this.provideCoordinateCompletions());
+            const items = this.ctx.selectors(lastArg);
+            items.push(...this.ctx.coordinates());
             return items;
         }
         // After coordinate ~ ~, continue coordinate suggestions
         if (["~", "^"].includes(lastArg) || !isNaN(Number(lastArg))) {
-            return this.provideCoordinateCompletions();
+            return this.ctx.coordinates();
         }
         return [];
     }
@@ -120,12 +120,12 @@ export class SuperexeCompletionProvider extends BaseCompletionProvider {
         const entityIdx = commands.lastIndexOf("entity");
         if (entityIdx !== -1 && commands.length === entityIdx + 2) {
             // 只有 entity 和一个待补全的参数
-            return this.provideSelectorCompletions(lastArg);
+            return this.ctx.selectors(lastArg);
         }
         // if entity <selector> <op> ...
         const prevArg = commands[commands.length - 2];
         if (prevArg === "entity" && commands.length >= entityIdx + 3) {
-            return this.provideSelectorCompletions(lastArg);
+            return this.ctx.selectors(lastArg);
         }
         // After selector: op or facing/positioned/run
         const entityIdx2 = commands.lastIndexOf("entity");
@@ -142,7 +142,7 @@ export class SuperexeCompletionProvider extends BaseCompletionProvider {
         if (blockIdx !== -1) {
             const afterBlock = commands.length - blockIdx - 1;
             if (afterBlock >= 1 && afterBlock <= 3) {
-                return this.provideCoordinateCompletions();
+                return this.ctx.coordinates();
             }
             if (afterBlock === 4) {
                 return this.provideCompareCompletions();
@@ -157,27 +157,27 @@ export class SuperexeCompletionProvider extends BaseCompletionProvider {
         if (scoreIdx !== -1) {
             const afterScore = commands.length - scoreIdx - 1;
             if (afterScore === 1) {
-                return this.provideSelectorCompletions(lastArg);
+                return this.ctx.selectors(lastArg);
             }
             if (afterScore === 2) {
-                return this.provideScoreboardCompletions(this.getLastWordRange());
+                return this.ctx.scoreboards(this.getLastWordRange());
             }
             if (afterScore === 3) {
                 return [
-                    this.createCompletionItem(">", "大于", ">", true, vscode.CompletionItemKind.Operator),
-                    this.createCompletionItem("<", "小于", "<", true, vscode.CompletionItemKind.Operator),
-                    this.createCompletionItem(">=", "大于等于", ">=", true, vscode.CompletionItemKind.Operator),
-                    this.createCompletionItem("<=", "小于等于", "<=", true, vscode.CompletionItemKind.Operator),
-                    this.createCompletionItem("=", "等于", "=", true, vscode.CompletionItemKind.Operator),
-                    this.createCompletionItem("matches", "匹配范围 (1..100 / ..50 / 10..)", "matches", true, vscode.CompletionItemKind.Operator),
+                    this.ctx.item(">", "大于", ">", true, vscode.CompletionItemKind.Operator),
+                    this.ctx.item("<", "小于", "<", true, vscode.CompletionItemKind.Operator),
+                    this.ctx.item(">=", "大于等于", ">=", true, vscode.CompletionItemKind.Operator),
+                    this.ctx.item("<=", "小于等于", "<=", true, vscode.CompletionItemKind.Operator),
+                    this.ctx.item("=", "等于", "=", true, vscode.CompletionItemKind.Operator),
+                    this.ctx.item("matches", "匹配范围 (1..100 / ..50 / 10..)", "matches", true, vscode.CompletionItemKind.Operator),
                 ];
             }
             if (afterScore === 4 && commands[commands.length - 2] === "score") {
                 // second "score" keyword for comparison
-                return this.provideSelectorCompletions(lastArg);
+                return this.ctx.selectors(lastArg);
             }
             if (afterScore === 5) {
-                return this.provideScoreboardCompletions(this.getLastWordRange());
+                return this.ctx.scoreboards(this.getLastWordRange());
             }
         }
         return [];
@@ -191,7 +191,7 @@ export class SuperexeCompletionProvider extends BaseCompletionProvider {
             if (afterVar === 1 || afterVar === 5) {
                 // ns name
                 return [
-                    this.createCompletionItem(
+                    this.ctx.item(
                         "<命名空间>",
                         "变量命名空间",
                         "",
@@ -202,7 +202,7 @@ export class SuperexeCompletionProvider extends BaseCompletionProvider {
             }
             if (afterVar === 2 || afterVar === 6) {
                 return [
-                    this.createCompletionItem(
+                    this.ctx.item(
                         "<变量名>",
                         "变量名",
                         "",
@@ -227,8 +227,8 @@ export class SuperexeCompletionProvider extends BaseCompletionProvider {
             // First data block
             if (afterData === 1) {
                 return [
-                    this.createCompletionItem("entity", "实体数据", "entity", true, vscode.CompletionItemKind.Keyword),
-                    this.createCompletionItem("block", "方块数据", "block", true, vscode.CompletionItemKind.Keyword),
+                    this.ctx.item("entity", "实体数据", "entity", true, vscode.CompletionItemKind.Keyword),
+                    this.ctx.item("block", "方块数据", "block", true, vscode.CompletionItemKind.Keyword),
                 ];
             }
             // Could be entity or block sub-path
@@ -238,13 +238,13 @@ export class SuperexeCompletionProvider extends BaseCompletionProvider {
 
     private provideCompareCompletions(): vscode.CompletionItem[] {
         return [
-            this.createCompletionItem(">", "大于", ">", true, vscode.CompletionItemKind.Operator),
-            this.createCompletionItem("<", "小于", "<", true, vscode.CompletionItemKind.Operator),
-            this.createCompletionItem(">=", "大于等于", ">=", true, vscode.CompletionItemKind.Operator),
-            this.createCompletionItem("<=", "小于等于", "<=", true, vscode.CompletionItemKind.Operator),
-            this.createCompletionItem("=", "等于", "=", true, vscode.CompletionItemKind.Operator),
-            this.createCompletionItem("==", "等于", "==", true, vscode.CompletionItemKind.Operator),
-            this.createCompletionItem("matches", "匹配范围", "matches", true, vscode.CompletionItemKind.Operator),
+            this.ctx.item(">", "大于", ">", true, vscode.CompletionItemKind.Operator),
+            this.ctx.item("<", "小于", "<", true, vscode.CompletionItemKind.Operator),
+            this.ctx.item(">=", "大于等于", ">=", true, vscode.CompletionItemKind.Operator),
+            this.ctx.item("<=", "小于等于", "<=", true, vscode.CompletionItemKind.Operator),
+            this.ctx.item("=", "等于", "=", true, vscode.CompletionItemKind.Operator),
+            this.ctx.item("==", "等于", "==", true, vscode.CompletionItemKind.Operator),
+            this.ctx.item("matches", "匹配范围", "matches", true, vscode.CompletionItemKind.Operator),
         ];
     }
 

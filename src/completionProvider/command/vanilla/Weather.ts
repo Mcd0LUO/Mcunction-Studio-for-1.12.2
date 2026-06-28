@@ -30,21 +30,21 @@ export class WeatherCompletionProvider extends BaseCompletionProvider {
             case 2:
                 // 第二个参数是天气类型
                 return [
-                    this.createCompletionItem(
+                    this.ctx.item(
                         'clear', 
                         '晴天', 
                         'clear' , 
                         true, 
                         vscode.CompletionItemKind.Keyword
                     ),
-                    this.createCompletionItem(
+                    this.ctx.item(
                         'rain', 
                         '雨天', 
                         'rain' , 
                         true, 
                         vscode.CompletionItemKind.Keyword
                     ),
-                    this.createCompletionItem(
+                    this.ctx.item(
                         'thunder', 
                         '雷雨天', 
                         'thunder' , 
@@ -56,7 +56,7 @@ export class WeatherCompletionProvider extends BaseCompletionProvider {
             case 3:
                 // 第三个参数是持续时间（可选）
                 return [
-                    this.createCompletionItem(
+                    this.ctx.item(
                         '<duration>', 
                         '持续时间（秒）', 
                         '', 

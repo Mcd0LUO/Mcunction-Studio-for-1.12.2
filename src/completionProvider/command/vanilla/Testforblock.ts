@@ -5,14 +5,14 @@ import { BaseCompletionProvider } from "../../Base";
 export class TestforblockCompletionProvider extends BaseCompletionProvider {
     protected provideCommandCompletions(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext, commands: string[]): CompletionItem[] | Promise<CompletionItem[]> {
         if (commands.length <= 4) {
-            return this.provideCoordinateCompletions();
+            return this.ctx.coordinates();
         }
         if (commands.length === 5) {
-            return this.provideBlockCompletions();
+            return this.ctx.blocks();
         }
         if (commands.length === 6) {
             return [
-                this.createCompletionItem("<data>","数据值|-1|状态|*", ""),
+                this.ctx.item("<data>","数据值|-1|状态|*", ""),
             ];
         }
 

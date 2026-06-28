@@ -33,14 +33,14 @@ export class DefaultgamemodeCompletionProvider extends BaseCompletionProvider {
         if (commands.length === 2) {
             return [
                 // 生存模式选项
-                this.createCompletionItem(
+                this.ctx.item(
                     'survival', 
                     '生存模式', 
                     'survival' , 
                     false, 
                     vscode.CompletionItemKind.Enum
                 ),
-                this.createCompletionItem(
+                this.ctx.item(
                     '0', 
                     '生存模式（数字ID）', 
                     '0' , 
@@ -49,7 +49,7 @@ export class DefaultgamemodeCompletionProvider extends BaseCompletionProvider {
                 ),
                 
                 // 创造模式选项
-                this.createCompletionItem(
+                this.ctx.item(
                     'creative', 
                     '创造模式', 
                     'creative' , 
@@ -57,7 +57,7 @@ export class DefaultgamemodeCompletionProvider extends BaseCompletionProvider {
                     vscode.CompletionItemKind.Enum
                 ),
 
-                this.createCompletionItem(
+                this.ctx.item(
                     '1', 
                     '创造模式（数字ID）', 
                     '1' , 
@@ -66,7 +66,7 @@ export class DefaultgamemodeCompletionProvider extends BaseCompletionProvider {
                 ),
                 
                 // 冒险模式选项
-                this.createCompletionItem(
+                this.ctx.item(
                     'adventure', 
                     '冒险模式', 
                     'adventure' , 
@@ -74,7 +74,7 @@ export class DefaultgamemodeCompletionProvider extends BaseCompletionProvider {
                     vscode.CompletionItemKind.Enum
                 ),
 
-                this.createCompletionItem(
+                this.ctx.item(
                     '2', 
                     '冒险模式（数字ID）', 
                     '2' , 
@@ -83,7 +83,7 @@ export class DefaultgamemodeCompletionProvider extends BaseCompletionProvider {
                 ),
                 
                 // 旁观者模式选项
-                this.createCompletionItem(
+                this.ctx.item(
                     'spectator', 
                     '旁观者模式', 
                     'spectator' , 
@@ -91,7 +91,7 @@ export class DefaultgamemodeCompletionProvider extends BaseCompletionProvider {
                     vscode.CompletionItemKind.Enum
                 ),
 
-                this.createCompletionItem(
+                this.ctx.item(
                     '3', 
                     '旁观者模式（数字ID）', 
                     '3' , 

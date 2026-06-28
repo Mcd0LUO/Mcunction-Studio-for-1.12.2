@@ -71,28 +71,28 @@ export class GameruleCompletionProvider extends BaseCompletionProvider {
                     if (rule.type === 'boolean') {
                         // 布尔值类型规则，提供true/false补全
                         return [
-                            this.createCompletionItem(
+                            this.ctx.item(
                                 'true', 
                                 '开启', 
                                 'true' , 
                                 false, 
                                 vscode.CompletionItemKind.Value
                             ),
-                            this.createCompletionItem(
+                            this.ctx.item(
                                 'false', 
                                 '关闭', 
                                 'false' , 
                                 false, 
                                 vscode.CompletionItemKind.Value
                             ),
-                            this.createCompletionItem(
+                            this.ctx.item(
                                 '1', 
                                 '开启（数字形式）', 
                                 '1' , 
                                 false, 
                                 vscode.CompletionItemKind.Value
                             ),
-                            this.createCompletionItem(
+                            this.ctx.item(
                                 '0', 
                                 '关闭（数字形式）', 
                                 '0' , 
@@ -103,7 +103,7 @@ export class GameruleCompletionProvider extends BaseCompletionProvider {
                     } else if (rule.type === 'integer') {
                         // 整数类型规则，提供数值输入提示
                         return [
-                            this.createCompletionItem(
+                            this.ctx.item(
                                 '<value>', 
                                 '整数值', 
                                 '', 
@@ -114,13 +114,13 @@ export class GameruleCompletionProvider extends BaseCompletionProvider {
                     }
                     else if (rule.type === 'function') {
                         // 函数类型规则，提供函数补全
-                        return await this.provideFunctionCompletions();
+                        return await this.ctx.functions();
                     }
                 }
                 
                 // 如果找不到规则或规则类型未知，提供通用补全
                 return [
-                    this.createCompletionItem(
+                    this.ctx.item(
                         '<value>', 
                         '规则值（布尔值或整数）', 
                         '', 
@@ -140,7 +140,7 @@ export class GameruleCompletionProvider extends BaseCompletionProvider {
      */
     private createGameruleCompletions(): vscode.CompletionItem[] {
         return GameruleCompletionProvider.GAMERULES.map(rule =>
-            this.createCompletionItem(
+            this.ctx.item(
                 rule.name, 
                 `${rule.desc} (${rule.type})`, 
                 rule.name , 

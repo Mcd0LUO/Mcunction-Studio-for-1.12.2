@@ -14,14 +14,14 @@ export class XpCompletionProvider extends BaseCompletionProvider {
             case 2:
                 // 第二个参数是经验值数量，可以是数字或者带L后缀的等级
                 return [
-                    this.createCompletionItem(
+                    this.ctx.item(
                         '<amount>', 
                         '经验值数量（点数）', 
                         '', 
                         true, 
                         vscode.CompletionItemKind.Value
                     ),
-                    this.createCompletionItem(
+                    this.ctx.item(
                         '<amount>L', 
                         '经验值数量（等级）', 
                         '${1:}L', 
@@ -32,7 +32,7 @@ export class XpCompletionProvider extends BaseCompletionProvider {
             
             case 3:
                 // 第三个参数是目标玩家
-                return this.provideSelectorCompletions(commands[2]);
+                return this.ctx.selectors(commands[2]);
                 
             default:
                 return [];

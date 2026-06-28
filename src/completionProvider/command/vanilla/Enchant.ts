@@ -5,7 +5,7 @@ import { Enchantments } from "../../../utils/EnumLib";
 export class EnchantCompletionProvider extends BaseCompletionProvider {
     protected provideCommandCompletions(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken, context: vscode.CompletionContext, commands: string[]): vscode.CompletionItem[] | Promise<vscode.CompletionItem[]> {
         if (commands.length === 2) {
-            return this.provideSelectorCompletions(commands[1]);
+            return this.ctx.selectors(commands[1]);
         }
         
         if (commands.length === 3) {
@@ -23,7 +23,7 @@ export class EnchantCompletionProvider extends BaseCompletionProvider {
      */
     private createEnchantmentCompletions(): vscode.CompletionItem[] {
         return Enchantments.all.map(enchant =>
-            this.createCompletionItem(
+            this.ctx.item(
                 enchant.name,
                 enchant.desc,
                 enchant.name,

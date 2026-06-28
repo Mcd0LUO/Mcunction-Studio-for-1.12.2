@@ -10,10 +10,10 @@ export class EntitydataCompletionProvider extends BaseCompletionProvider {
 
     switch (commands.length) {
             case 2:
-                return this.provideSelectorCompletions(commands[1]);
+                return this.ctx.selectors(commands[1]);
             case 3:
                 if (commands[2].startsWith("{")) {
-                    return NBTUtils.provideEntityNBTCompletions(this.createCompletionItem);
+                    return NBTUtils.provideEntityNBTCompletions(this.ctx.item.bind(this.ctx));
                 }
 }
 

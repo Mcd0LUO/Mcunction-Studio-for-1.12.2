@@ -7,15 +7,15 @@ export class NbtCompletionProvider extends BaseCompletionProvider {
 
         if (commands.length === 2) {
             return [
-                this.createCompletionItem("get", "读取 NBT 数据", "get", true, vscode.CompletionItemKind.Keyword),
-                this.createCompletionItem("set", "写入 NBT 数据", "set", true, vscode.CompletionItemKind.Keyword),
+                this.ctx.item("get", "读取 NBT 数据", "get", true, vscode.CompletionItemKind.Keyword),
+                this.ctx.item("set", "写入 NBT 数据", "set", true, vscode.CompletionItemKind.Keyword),
             ];
         }
 
         if (commands.length === 3) {
             return [
-                this.createCompletionItem("entity", "实体 NBT", "entity", true, vscode.CompletionItemKind.Keyword),
-                this.createCompletionItem("block", "方块 NBT", "block", true, vscode.CompletionItemKind.Keyword),
+                this.ctx.item("entity", "实体 NBT", "entity", true, vscode.CompletionItemKind.Keyword),
+                this.ctx.item("block", "方块 NBT", "block", true, vscode.CompletionItemKind.Keyword),
             ];
         }
 
@@ -35,19 +35,19 @@ export class NbtCompletionProvider extends BaseCompletionProvider {
         // /nbt get entity <sel> [path]
         if (commands[2] === "entity") {
             if (commands.length === 4) {
-                return this.provideSelectorCompletions(commands[3]);
+                return this.ctx.selectors(commands[3]);
             }
             if (commands.length === 5) {
-                return [this.createCompletionItem("<NBT路径>", "可选：NBT 路径，如 CustomName", "", false, vscode.CompletionItemKind.Field)];
+                return [this.ctx.item("<NBT路径>", "可选：NBT 路径，如 CustomName", "", false, vscode.CompletionItemKind.Field)];
             }
         }
         // /nbt get block <x> <y> <z> [path]
         if (commands[2] === "block") {
             if (commands.length >= 4 && commands.length <= 6) {
-                return this.provideCoordinateCompletions();
+                return this.ctx.coordinates();
             }
             if (commands.length === 7) {
-                return [this.createCompletionItem("<NBT路径>", "可选：NBT 路径", "", false, vscode.CompletionItemKind.Field)];
+                return [this.ctx.item("<NBT路径>", "可选：NBT 路径", "", false, vscode.CompletionItemKind.Field)];
             }
         }
         return [];
@@ -67,21 +67,21 @@ export class NbtCompletionProvider extends BaseCompletionProvider {
     // /nbt set entity <sel> <path> value|from ...
     private handleSetEntity(document: vscode.TextDocument, position: vscode.Position, commands: string[]): vscode.CompletionItem[] {
         if (commands.length === 4) {
-            return this.provideSelectorCompletions(commands[3]);
+            return this.ctx.selectors(commands[3]);
         }
         if (commands.length === 5) {
-            return [this.createCompletionItem("<NBT路径>", "NBT 数据路径，如 CustomName", "", true, vscode.CompletionItemKind.Field)];
+            return [this.ctx.item("<NBT路径>", "NBT 数据路径，如 CustomName", "", true, vscode.CompletionItemKind.Field)];
         }
         if (commands.length === 6) {
             return [
-                this.createCompletionItem("value", "直接赋值", "value", true, vscode.CompletionItemKind.Keyword),
-                this.createCompletionItem("from", "从来源取值", "from", true, vscode.CompletionItemKind.Keyword),
+                this.ctx.item("value", "直接赋值", "value", true, vscode.CompletionItemKind.Keyword),
+                this.ctx.item("from", "从来源取值", "from", true, vscode.CompletionItemKind.Keyword),
             ];
         }
         // value <字面量>
         if (commands[5] === "value" && commands.length === 7) {
             return [
-                this.createCompletionItem('"<值>"', "字符串值（须引号包裹）", '"', true, vscode.CompletionItemKind.Value),
+                this.ctx.item('"<值>"', "字符串值（须引号包裹）", '"', true, vscode.CompletionItemKind.Value),
             ];
         }
         // from <源> ...
@@ -94,21 +94,21 @@ export class NbtCompletionProvider extends BaseCompletionProvider {
     // /nbt set block <x> <y> <z> <path> value|from ...
     private handleSetBlock(document: vscode.TextDocument, position: vscode.Position, commands: string[]): vscode.CompletionItem[] {
         if (commands.length >= 4 && commands.length <= 6) {
-            return this.provideCoordinateCompletions();
+            return this.ctx.coordinates();
         }
         if (commands.length === 7) {
-            return [this.createCompletionItem("<NBT路径>", "NBT 数据路径，如 Lock", "", true, vscode.CompletionItemKind.Field)];
+            return [this.ctx.item("<NBT路径>", "NBT 数据路径，如 Lock", "", true, vscode.CompletionItemKind.Field)];
         }
         if (commands.length === 8) {
             return [
-                this.createCompletionItem("value", "直接赋值", "value", true, vscode.CompletionItemKind.Keyword),
-                this.createCompletionItem("from", "从来源取值", "from", true, vscode.CompletionItemKind.Keyword),
+                this.ctx.item("value", "直接赋值", "value", true, vscode.CompletionItemKind.Keyword),
+                this.ctx.item("from", "从来源取值", "from", true, vscode.CompletionItemKind.Keyword),
             ];
         }
         // value <字面量>
         if (commands[7] === "value" && commands.length === 9) {
             return [
-                this.createCompletionItem('"<值>"', "字符串值（须引号包裹）", '"', true, vscode.CompletionItemKind.Value),
+                this.ctx.item('"<值>"', "字符串值（须引号包裹）", '"', true, vscode.CompletionItemKind.Value),
             ];
         }
         // from <源> ...
@@ -128,12 +128,12 @@ export class NbtCompletionProvider extends BaseCompletionProvider {
         // from 后第一个参数：源类型
         if (commands.length === afterFrom) {
             return [
-                this.createCompletionItem("var", "从变量取值", "var", true, vscode.CompletionItemKind.Keyword),
-                this.createCompletionItem("score", "从记分板取值", "score", true, vscode.CompletionItemKind.Keyword),
-                this.createCompletionItem("entity", "从实体 NBT 取值", "entity", true, vscode.CompletionItemKind.Keyword),
-                this.createCompletionItem("block", "从方块 NBT 取值", "block", true, vscode.CompletionItemKind.Keyword),
-                this.createCompletionItem("time", "获取时间值", "time", true, vscode.CompletionItemKind.Keyword),
-                this.createCompletionItem("value", "字面量值", "value", true, vscode.CompletionItemKind.Keyword),
+                this.ctx.item("var", "从变量取值", "var", true, vscode.CompletionItemKind.Keyword),
+                this.ctx.item("score", "从记分板取值", "score", true, vscode.CompletionItemKind.Keyword),
+                this.ctx.item("entity", "从实体 NBT 取值", "entity", true, vscode.CompletionItemKind.Keyword),
+                this.ctx.item("block", "从方块 NBT 取值", "block", true, vscode.CompletionItemKind.Keyword),
+                this.ctx.item("time", "获取时间值", "time", true, vscode.CompletionItemKind.Keyword),
+                this.ctx.item("value", "字面量值", "value", true, vscode.CompletionItemKind.Keyword),
             ];
         }
 
@@ -142,31 +142,31 @@ export class NbtCompletionProvider extends BaseCompletionProvider {
         // —— from var <ns> <name> ——
         if (sourceType === "var") {
             if (commands.length === afterFrom + 1) {
-                return [this.createCompletionItem("<命名空间>", "变量命名空间", "", true, vscode.CompletionItemKind.Variable)];
+                return [this.ctx.item("<命名空间>", "变量命名空间", "", true, vscode.CompletionItemKind.Variable)];
             }
             if (commands.length === afterFrom + 2) {
-                return [this.createCompletionItem("<变量名>", "变量名", "", false, vscode.CompletionItemKind.Variable)];
+                return [this.ctx.item("<变量名>", "变量名", "", false, vscode.CompletionItemKind.Variable)];
             }
         }
 
         // —— from score <sel> <obj> ——
         if (sourceType === "score") {
             if (commands.length === afterFrom + 1) {
-                return this.provideSelectorCompletions(commands[afterFrom + 1] || '');
+                return this.ctx.selectors(commands[afterFrom + 1] || '');
             }
             if (commands.length === afterFrom + 2) {
-                const range = this.getWordRange(document, position, (commands[afterFrom + 2] || '').length);
-                return this.provideScoreboardCompletions(range);
+                const range = this.ctx.wordRange(document, position, (commands[afterFrom + 2] || '').length);
+                return this.ctx.scoreboards(range);
             }
         }
 
         // —— from entity <sel> <path> ——
         if (sourceType === "entity") {
             if (commands.length === afterFrom + 1) {
-                return this.provideSelectorCompletions(commands[afterFrom + 1] || '');
+                return this.ctx.selectors(commands[afterFrom + 1] || '');
             }
             if (commands.length === afterFrom + 2) {
-                return [this.createCompletionItem("<NBT路径>", "实体 NBT 路径，如 Health", "", false, vscode.CompletionItemKind.Field)];
+                return [this.ctx.item("<NBT路径>", "实体 NBT 路径，如 Health", "", false, vscode.CompletionItemKind.Field)];
             }
         }
 
@@ -176,10 +176,10 @@ export class NbtCompletionProvider extends BaseCompletionProvider {
             if (afterBlock !== -1) {
                 const posInBlock = commands.length - afterBlock - 1;
                 if (posInBlock >= 1 && posInBlock <= 3) {
-                    return this.provideCoordinateCompletions();
+                    return this.ctx.coordinates();
                 }
                 if (posInBlock === 4) {
-                    return [this.createCompletionItem("<NBT路径>", "方块 NBT 路径，如 Items[0].id", "", false, vscode.CompletionItemKind.Field)];
+                    return [this.ctx.item("<NBT路径>", "方块 NBT 路径，如 Items[0].id", "", false, vscode.CompletionItemKind.Field)];
                 }
             }
         }
@@ -188,14 +188,14 @@ export class NbtCompletionProvider extends BaseCompletionProvider {
         if (sourceType === "time") {
             if (commands.length === afterFrom + 1) {
                 return [
-                    this.createCompletionItem("tick", "游戏刻", "tick", false, vscode.CompletionItemKind.Unit),
-                    this.createCompletionItem("ms", "毫秒", "ms", false, vscode.CompletionItemKind.Unit),
-                    this.createCompletionItem("s", "秒", "s", false, vscode.CompletionItemKind.Unit),
-                    this.createCompletionItem("m", "分钟", "m", false, vscode.CompletionItemKind.Unit),
-                    this.createCompletionItem("h", "小时", "h", false, vscode.CompletionItemKind.Unit),
-                    this.createCompletionItem("d", "天", "d", false, vscode.CompletionItemKind.Unit),
-                    this.createCompletionItem("mo", "月", "mo", false, vscode.CompletionItemKind.Unit),
-                    this.createCompletionItem("y", "年", "y", false, vscode.CompletionItemKind.Unit),
+                    this.ctx.item("tick", "游戏刻", "tick", false, vscode.CompletionItemKind.Unit),
+                    this.ctx.item("ms", "毫秒", "ms", false, vscode.CompletionItemKind.Unit),
+                    this.ctx.item("s", "秒", "s", false, vscode.CompletionItemKind.Unit),
+                    this.ctx.item("m", "分钟", "m", false, vscode.CompletionItemKind.Unit),
+                    this.ctx.item("h", "小时", "h", false, vscode.CompletionItemKind.Unit),
+                    this.ctx.item("d", "天", "d", false, vscode.CompletionItemKind.Unit),
+                    this.ctx.item("mo", "月", "mo", false, vscode.CompletionItemKind.Unit),
+                    this.ctx.item("y", "年", "y", false, vscode.CompletionItemKind.Unit),
                 ];
             }
         }
@@ -204,7 +204,7 @@ export class NbtCompletionProvider extends BaseCompletionProvider {
         if (sourceType === "value") {
             if (commands.length === afterFrom + 1) {
                 return [
-                    this.createCompletionItem('"<值>"', "字符串值（须引号包裹）", '"', false, vscode.CompletionItemKind.Value),
+                    this.ctx.item('"<值>"', "字符串值（须引号包裹）", '"', false, vscode.CompletionItemKind.Value),
                 ];
             }
         }

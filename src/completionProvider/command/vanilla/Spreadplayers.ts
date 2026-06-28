@@ -33,16 +33,16 @@ export class SpreadplayersCompletionProvider extends BaseCompletionProvider {
         switch (commands.length) {
             case 2:
                 // 第二个参数是中心点的x坐标
-                return this.provideCoordinateCompletions();
+                return this.ctx.coordinates();
             
             case 3:
                 // 第三个参数是中心点的z坐标
-                return this.provideCoordinateCompletions();
+                return this.ctx.coordinates();
                 
             case 4:
                 // 第四个参数是最小扩散距离
                 return [
-                    this.createCompletionItem(
+                    this.ctx.item(
                         '<spreadDistance>', 
                         '实体之间的最小距离', 
                         '', 
@@ -54,7 +54,7 @@ export class SpreadplayersCompletionProvider extends BaseCompletionProvider {
             case 5:
                 // 第五个参数是最大扩散范围
                 return [
-                    this.createCompletionItem(
+                    this.ctx.item(
                         '<maxRange>', 
                         '从中心点开始的最大范围', 
                         '', 
@@ -66,14 +66,14 @@ export class SpreadplayersCompletionProvider extends BaseCompletionProvider {
             case 6:
                 // 第六个参数是是否考虑队伍（true/false）
                 return [
-                    this.createCompletionItem(
+                    this.ctx.item(
                         'true', 
                         '考虑队伍（保持队伍在一起）', 
                         'true ', 
                         true, 
                         vscode.CompletionItemKind.Keyword
                     ),
-                    this.createCompletionItem(
+                    this.ctx.item(
                         'false', 
                         '不考虑队伍（单独移动每个实体）', 
                         'false ', 
@@ -84,7 +84,7 @@ export class SpreadplayersCompletionProvider extends BaseCompletionProvider {
                 
             case 7:
                 // 第七个参数是目标实体（玩家或实体选择器）
-                return this.provideSelectorCompletions(commands[6]);
+                return this.ctx.selectors(commands[6]);
         }
         
         return [];

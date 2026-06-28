@@ -7,14 +7,14 @@ export class TpCompletionProvider extends BaseCompletionProvider {
         
         let items: vscode.CompletionItem[] = [];
         if (commands.length === 2) {
-            items = this.provideSelectorCompletions(commands[1]);
+            items = this.ctx.selectors(commands[1]);
         }
         if (commands.length === 3) {
-            this.provideSelectorCompletions(commands[2]).forEach(element => {
+            this.ctx.selectors(commands[2]).forEach(element => {
                 items.push(element);
             });
-            items.push(this.createCompletionItem('<x> <y> <z>',"绝对坐标","${1:x} ${2:y} ${3:z}",false));
-            items.push(this.createCompletionItem('~<x> ~<y> ~<z>',"相对坐标","~${1:x} ~${2:y} ~${3:z}",false));
+            items.push(this.ctx.item('<x> <y> <z>',"绝对坐标","${1:x} ${2:y} ${3:z}",false));
+            items.push(this.ctx.item('~<x> ~<y> ~<z>',"相对坐标","~${1:x} ~${2:y} ~${3:z}",false));
 
         }
         

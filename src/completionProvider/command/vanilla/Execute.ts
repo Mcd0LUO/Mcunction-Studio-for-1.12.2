@@ -8,10 +8,10 @@ export class ExecuteCompletionProvider extends BaseCompletionProvider {
         
         // console.log(commands);
         if (commands.length === 2) {
-            return this.provideSelectorCompletions(commands[1]);
+            return this.ctx.selectors(commands[1]);
         }
         if ( 3<= commands.length && commands.length <= 5) {
-            return this.provideCoordinateCompletions();
+            return this.ctx.coordinates();
         }
 
         return [];

@@ -11,18 +11,18 @@ export class GiveCompletionProvider extends BaseCompletionProvider {
 
         if (commands.length === 2) {
             // console.log(commands);
-            return this.provideSelectorCompletions(commands[1]);
+            return this.ctx.selectors(commands[1]);
         }
         if (commands.length === 3) {
-            return Object.keys(ItemNameMap.all).map(key => this.createCompletionItem(
+            return Object.keys(ItemNameMap.all).map(key => this.ctx.item(
                 key, ItemNameMap.getDescription(key), key, false, vscode.CompletionItemKind.Struct
             ));
         }
         if (commands.length === 4) {
-            return [this.createCompletionItem("<数量>", "count" , "1", true, vscode.CompletionItemKind.Value)];
+            return [this.ctx.item("<数量>", "count" , "1", true, vscode.CompletionItemKind.Value)];
         }
         if (commands.length === 5) {
-            return [this.createCompletionItem("<数据值>", "data" , "0", true, vscode.CompletionItemKind.Value)];
+            return [this.ctx.item("<数据值>", "data" , "0", true, vscode.CompletionItemKind.Value)];
         }
 
         return [];
