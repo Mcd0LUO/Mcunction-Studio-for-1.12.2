@@ -89,26 +89,22 @@ export class DataLoader {
         items: T[],
         processor: (item: T) => Promise<void>
     ): Promise<void> {
-        const results: Promise<void>[] = [];
-        const executing: Promise<void>[] = [];
+        const executing = new Set<Promise<void>>();
 
         for (const item of items) {
-            // 创建处理当前项的Promise
             const p = Promise.resolve().then(() => processor(item));
-            results.push(p);
+            executing.add(p);
 
-            // 当并发数达到上限时，等待任一Promise完成再继续
-            if (concurrency <= items.length) {
-                const e: Promise<void> = p.then(() => { executing.splice(executing.indexOf(e), 1); }) as Promise<void>;
-                executing.push(e);
-                if (executing.length >= concurrency) {
-                    await Promise.race(executing);
-                }
+            // 完成后自动从 executing 集合中移除（Set.delete 是 O(1)，多次调用安全）
+            p.then(() => { executing.delete(p); });
+
+            if (executing.size >= concurrency) {
+                await Promise.race(executing);
             }
         }
 
-        // 等待所有处理完成
-        await Promise.all(results);
+        // 等待剩余全部完成
+        await Promise.all(executing);
     }
     // 加载数据
     // loadData主方法
@@ -213,8 +209,9 @@ export class DataLoader {
         const value = this.tagsData.get(tagName);
         if (value) {
             this.tagsData.set(tagName, value + 1);
+        } else {
+            this.tagsData.set(tagName, 1);
         }
-        this.tagsData.set(tagName, 1);
         const cache = this.docCache.get(MinecraftUtils.buildFunctionCall(uri) ?? '');
         const linemeta: { type: DataType, value: string }[] = cache?.get(lineNumber) ?? [];
         linemeta.push({ type: DataType.Tag, value: tagName });
@@ -343,12 +340,14 @@ export class DataLoader {
                     this.teamsData.delete(meta.value);
                 }
                 else if (meta.type === DataType.Tag) {
-                    // 删除缓存
-                    this.tagsData.delete(meta.value);
+                    // 递减引用计数，与 clearCache 保持一致
+                    const count = this.tagsData.get(meta.value);
+                    count && count > 1 ? this.tagsData.set(meta.value, count - 1) : this.tagsData.delete(meta.value);
                 }
                 else if (meta.type === DataType.FakePlayer) {
-                    // 删除缓存
-                    this.fakePlayerData.delete(meta.value);
+                    // 递减引用计数，与 clearCache 保持一致
+                    const count = this.fakePlayerData.get(meta.value);
+                    count && count > 1 ? this.fakePlayerData.set(meta.value, count - 1) : this.fakePlayerData.delete(meta.value);
                 }
             });
         }
@@ -545,7 +544,7 @@ export class DataLoader {
 
             // 记录开始时间
             const startTime = Date.now();
-            const modeName = useConcurrentControl ? `限制并发（${concurrency}）` : '全量并发';
+            const modeName = useConcurrentControl ? `限制并发（${concurrency}）` : '串行';
 
             if (useConcurrentControl) {
                 // 模式1：使用并发控制加载
@@ -560,6 +559,19 @@ export class DataLoader {
                         vscode.window.showWarningMessage(`解析函数文件失败：${path.path}，原因：${(err as Error).message}`);
                     }
                 });
+            } else {
+                // 模式2：串行逐个加载
+                for (const path of functionPaths) {
+                    const resName = MinecraftUtils.buildFunctionCall(path);
+                    if (!resName) continue;
+
+                    this.docCache.set(resName, new Map());
+                    try {
+                        await this.loadSingleFuncFileByUri(path);
+                    } catch (err) {
+                        vscode.window.showWarningMessage(`解析函数文件失败：${path.path}，原因：${(err as Error).message}`);
+                    }
+                }
             }
 
             // 计算并输出运行时间
@@ -643,8 +655,10 @@ export class DataLoader {
                     break;
                 case 'function':
                     this.extractFunctionData(uri, index, commands);
+                    break;
                 case "summon":
                     this.extractSummonData(uri, index, commands);
+                    break;
 
             }
         }
