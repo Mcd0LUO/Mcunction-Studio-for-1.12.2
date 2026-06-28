@@ -46,8 +46,25 @@ export class DataLoader {
     // ---- 配置 ----
     private configData: ConfigData = DataLoader.getDefaultConfig();
 
+    // ---- 命令解析注册表：command → handler ----
+    private commandHandlers: Map<string, (uri: vscode.Uri, line: number, commands: string[]) => void> = new Map();
+
     private constructor() {
+        this.registerHandlers();
         this.init();
+    }
+
+    /** 注册所有命令解析器（追加新命令只需加一行 set） */
+    private registerHandlers(): void {
+        // 原版
+        this.commandHandlers.set('scoreboard', this.extractScoreboardData.bind(this));
+        this.commandHandlers.set('function',   this.extractFunctionData.bind(this));
+        this.commandHandlers.set('summon',     this.extractSummonData.bind(this));
+        // EasyCber
+        this.commandHandlers.set('team',       this.extractEasyCberTeamData.bind(this));
+        this.commandHandlers.set('schedule',   this.extractScheduleData.bind(this));
+        this.commandHandlers.set('score',      this.extractEasyCberScoreData.bind(this));
+        this.commandHandlers.set('var',        this.extractEasyCberVarData.bind(this));
     }
 
     private async init(): Promise<void> {
@@ -392,20 +409,13 @@ export class DataLoader {
         if (!trimLine || trimLine.startsWith('#')) { return; }
 
         const commands = CommandUtils.extraceActiveCommand(trimLine);
-        switch (commands[0]) {
-            case 'scoreboard':
-                this.extractScoreboardData(uri, index, commands);
-                break;
-            case 'function':
-                this.extractFunctionData(uri, index, commands);
-                break;
-            case 'summon':
-                this.extractSummonData(uri, index, commands);
-                break;
+        const handler = this.commandHandlers.get(commands[0]);
+        if (handler) {
+            handler(uri, index, commands);
         }
     }
 
-    // ---- 解析器 ----
+    // ---- 原版命令解析器 ----
 
     private extractScoreboardData(uri: vscode.Uri, line: number, commands: string[]): void {
         if (commands.length <= 3) { return; }
@@ -448,6 +458,70 @@ export class DataLoader {
                 const tagList = tags.slice(0, endIdx).split(',').map((t: string) => t.replaceAll('"', ''));
                 tagList.forEach((tag: string) => this.store.addTag(resName, tag, line, uri));
             }
+        }
+    }
+
+    // ---- EasyCber 命令解析器 ----
+
+    /** /team add <name> → 队伍定义 */
+    private extractEasyCberTeamData(uri: vscode.Uri, line: number, commands: string[]): void {
+        if (commands.length < 3) { return; }
+        const resName = MinecraftUtils.buildFunctionCall(uri) ?? '';
+
+        if (commands[1] === 'add') {
+            this.store.addTeam(resName, commands[2], line, uri);
+        }
+        // join / clear / leave / list / option — 引用已有队伍，暂不产生新数据
+    }
+
+    /**
+     * /schedule function <func> <time> [append|replace]
+     * /schedule repeat   <func> <interval> [次数]
+     * /schedule random   <func> <min> <max>
+     * /schedule clear    [func]
+     */
+    private extractScheduleData(uri: vscode.Uri, line: number, commands: string[]): void {
+        if (commands.length < 3) { return; }
+        const resName = MinecraftUtils.buildFunctionCall(uri) ?? '';
+
+        // clear 可能没有 func 参数
+        if (commands[1] === 'clear') {
+            if (commands.length >= 3) {
+                this.store.addFunctionRef(resName, commands[2], line, uri);
+            }
+            return;
+        }
+
+        // function / repeat / random 都在 commands[2] 位置有函数名
+        if (['function', 'repeat', 'random'].includes(commands[1])) {
+            this.store.addFunctionRef(resName, commands[2], line, uri);
+        }
+    }
+
+    /**
+     * /score set <obj> <sel> from <源> ...
+     * 当源为 score 时，第二个记分板名被引用
+     */
+    /**
+     * /score set <obj> <sel> from <源> ...
+     * 当前：预留解析入口。记分板引用关系（如 from score <sel2> <obj2>）暂不产生 index 条目，
+     * 后续可在 IndexedStore 中加入 refCount 追踪后启用。
+     */
+    private extractEasyCberScoreData(_uri: vscode.Uri, _line: number, commands: string[]): void {
+        if (commands.length < 8) { return; }
+        if (commands[1] === 'set' && commands[5] === 'from' && commands[6] === 'score') {
+            // TODO: store.addScoreboardRef(commands[8]) — 追踪记分板引用
+        }
+    }
+
+    /**
+     * /var set <ns> <name> from <源> ...
+     * 当前：预留解析入口。from score/entity/block 的引用关系暂不产生 index 条目。
+     */
+    private extractEasyCberVarData(_uri: vscode.Uri, _line: number, commands: string[]): void {
+        if (commands.length < 8) { return; }
+        if (commands[1] === 'set' && commands[4] === 'from') {
+            // TODO: 根据 commands[5] (score|entity|block|time) 追踪对应引用
         }
     }
 
