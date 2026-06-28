@@ -21,12 +21,11 @@ interface ConfigData {
         HoverPreview: boolean
     },
     FileProcessing: {
-        MaxConcurrentReads: number
-        AutoRenameFunctionReference: boolean
-    }
-    HoverProvider: {
-    },
-    CommandSchemaCheck: boolean
+        MaxConcurrentReads: number;
+        AutoRenameFunctionReference: boolean;
+    };
+    HoverProvider: Record<string, unknown>;
+    CommandSchemaCheck: boolean;
 }
 
 // ============================================================
@@ -293,7 +292,7 @@ export class DataLoader {
     // 数据加载主流程
     // ================================================================
 
-    public async loadData(useConcurrentControl: boolean = true, concurrency: number = 100): Promise<number> {
+    public async loadData(useConcurrentControl: boolean = true, concurrency: number = 100): Promise<void> {
         // 清空内存
         this.store = new IndexedStore();
         this.functionResNames = [];
@@ -313,12 +312,10 @@ export class DataLoader {
         } catch (error) {
             vscode.window.showErrorMessage(`加载数据失败: ${error}`);
         }
-
-        return 0;
     }
 
     public async loadAdvancementData(): Promise<boolean | null> {
-        const advancementPaths = await DataLoader.getAllAdvancementsPaths(vscode.Uri.joinPath(rootDir, 'advancements'));
+        const advancementPaths = await DataLoader.getAllAdvancementsPaths();
         for (const path of advancementPaths) {
             const resName = MinecraftUtils.buildAdvancementCall(path);
             if (!resName) { continue; }
@@ -382,22 +379,21 @@ export class DataLoader {
     // 单文件解析
     // ================================================================
 
-    public async loadSingleFuncFileByUri(path: vscode.Uri): Promise<null> {
-        const fileContent = await vscode.workspace.fs.readFile(path);
-        const content = new TextDecoder('utf-8').decode(fileContent);
-        const lines = content.split(/\r?\n|\r/);
-        for (let i = 0; i < lines.length; i++) {
-            this.handleSingleLine(path, lines[i], i);
+    /** 逐行解析（Uri 和 Doc 共用） */
+    private parseLines(uri: vscode.Uri, lines: string[], startLine: number = 0): void {
+        for (let i = startLine; i < lines.length; i++) {
+            this.handleSingleLine(uri, lines[i], i);
         }
-        return null;
     }
 
-    public async loadSingleFuncFileByDoc(doc: vscode.TextDocument, startLine: number = 0): Promise<null> {
-        const lines = doc.getText().split(/\r?\n|\r/);
-        for (let i = startLine; i < lines.length; i++) {
-            this.handleSingleLine(doc.uri, lines[i], i);
-        }
-        return null;
+    public async loadSingleFuncFileByUri(path: vscode.Uri): Promise<void> {
+        const fileContent = await vscode.workspace.fs.readFile(path);
+        const content = new TextDecoder('utf-8').decode(fileContent);
+        this.parseLines(path, content.split(/\r?\n|\r/));
+    }
+
+    public async loadSingleFuncFileByDoc(doc: vscode.TextDocument, startLine: number = 0): Promise<void> {
+        this.parseLines(doc.uri, doc.getText().split(/\r?\n|\r/), startLine);
     }
 
     // ================================================================
@@ -529,74 +525,56 @@ export class DataLoader {
     // 静态文件扫描器
     // ================================================================
 
-    public static async getAllFunctionsPaths(functionsUri: vscode.Uri): Promise<vscode.Uri[]> {
+    /**
+     * 通用文件扫描器。
+     * @param dirName    相对于 rootDir 的子目录名（如 'functions'）
+     * @param glob       匹配模式（如 '**\/*.mcfunction'）
+     * @param ignoreKey  IgnorePattern 中的键
+     * @param label      日志中的中文标签
+     * @param silent     目录不存在时是否静默（宏目录可选，不报错）
+     */
+    private static async scanFiles(
+        dirName: string,
+        glob: string,
+        ignoreKey: keyof ConfigData['IgnorePattern'],
+        label: string,
+        silent: boolean = false
+    ): Promise<vscode.Uri[]> {
+        const uri = vscode.Uri.joinPath(rootDir, dirName);
         try {
-            await vscode.workspace.fs.stat(functionsUri);
+            await vscode.workspace.fs.stat(uri);
         } catch {
-            vscode.window.showErrorMessage(`函数目录不存在: ${rootDir.path}/functions`);
+            if (!silent) {
+                vscode.window.showErrorMessage(`${label}目录不存在: ${rootDir.path}/${dirName}`);
+            }
             return [];
         }
 
         try {
-            const excludeFolders = this.instance.configData.IgnorePattern.Function;
-            const includePattern = new vscode.RelativePattern(functionsUri, '**/*.mcfunction');
-            const excludePattern = excludeFolders.length > 0
-                ? new vscode.RelativePattern(functionsUri, `{${excludeFolders.join(',')}}`)
+            const excludeFolders = this.instance.configData.IgnorePattern[ignoreKey] as string[];
+            const include = new vscode.RelativePattern(uri, glob);
+            const exclude = excludeFolders.length > 0
+                ? new vscode.RelativePattern(uri, `{${excludeFolders.join(',')}}`)
                 : undefined;
 
-            const uris = await vscode.workspace.findFiles(includePattern, excludePattern);
-            console.log(`在 ${functionsUri.path} 下找到 ${uris.length} 个 函数文件`);
+            const uris = await vscode.workspace.findFiles(include, exclude);
+            console.log(`在 ${uri.path} 下找到 ${uris.length} 个 ${label}文件`);
             return uris;
         } catch (error) {
-            vscode.window.showErrorMessage(`查找函数文件失败: ${(error as Error).message}`);
+            vscode.window.showErrorMessage(`查找${label}文件失败: ${(error as Error).message}`);
             return [];
         }
     }
 
-    public static async getAllAdvancementsPaths(advancementsUri: vscode.Uri): Promise<vscode.Uri[]> {
-        try {
-            await vscode.workspace.fs.stat(advancementsUri);
-        } catch {
-            vscode.window.showErrorMessage(`进度目录不存在: ${rootDir.path}/advancements`);
-            return [];
-        }
-
-        try {
-            const excludeFolders = this.instance.configData.IgnorePattern.Advancement;
-            const globPattern = new vscode.RelativePattern(advancementsUri, '**/*.json');
-            const excludePattern = excludeFolders.length > 0
-                ? new vscode.RelativePattern(advancementsUri, `{${excludeFolders.join(',')}}`)
-                : undefined;
-
-            const uris = await vscode.workspace.findFiles(globPattern, excludePattern);
-            console.log(`在 ${advancementsUri.path} 下找到 ${uris.length} 个 进度文件`);
-            return uris;
-        } catch (error) {
-            vscode.window.showErrorMessage(`查找进度文件失败: ${(error as Error).message}`);
-            return [];
-        }
+    public static async getAllFunctionsPaths(_functionsUri?: vscode.Uri): Promise<vscode.Uri[]> {
+        return this.scanFiles('functions', '**/*.mcfunction', 'Function', '函数');
     }
 
-    public static async getAllMacroPaths(macroUri: vscode.Uri): Promise<vscode.Uri[]> {
-        try {
-            await vscode.workspace.fs.stat(macroUri);
-        } catch {
-            return [];
-        }
+    public static async getAllAdvancementsPaths(_advancementsUri?: vscode.Uri): Promise<vscode.Uri[]> {
+        return this.scanFiles('advancements', '**/*.json', 'Advancement', '进度');
+    }
 
-        try {
-            const excludeFolders = this.instance.configData.IgnorePattern.Macro;
-            const globPattern = new vscode.RelativePattern(macroUri, '**/*.mcmacro');
-            const excludePattern = excludeFolders.length > 0
-                ? new vscode.RelativePattern(macroUri, `{${excludeFolders.join(',')}}`)
-                : undefined;
-
-            const uris = await vscode.workspace.findFiles(globPattern, excludePattern);
-            console.log(`在 ${macroUri.path} 中找到 ${uris.length} 个宏文件`);
-            return uris;
-        } catch (error) {
-            vscode.window.showErrorMessage(`查找宏文件失败: ${(error as Error).message}`);
-            return [];
-        }
+    public static async getAllMacroPaths(_macroUri?: vscode.Uri): Promise<vscode.Uri[]> {
+        return this.scanFiles('macros', '**/*.mcmacro', 'Macro', '宏', /* silent */ true);
     }
 }
