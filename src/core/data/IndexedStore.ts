@@ -1,38 +1,5 @@
 import * as vscode from 'vscode';
-
-// ============================================================
-// 类型定义（从 DataLoader 迁移）
-// ============================================================
-
-export interface ScoreboardData {
-    type: string;
-    desc: string;
-    def: [vscode.Uri, number];
-}
-
-export interface FunctionData {
-    ref: Map<string, number[]>;          // resName → 行号列表
-}
-
-export interface TeamData {
-    color?: string;
-    rule?: string;
-    def: [vscode.Uri, number];
-}
-
-export enum DataType {
-    Scoreboard = 0,
-    Function = 1,
-    Tag = 2,
-    Team = 3,
-    FakePlayer = 4
-}
-
-/** docCache 中每行的索引条目 */
-interface IndexEntry {
-    type: DataType;
-    value: string;
-}
+import { ScoreboardData, FunctionData, TeamData, DataType, IndexEntry } from './types';
 
 // ============================================================
 // IndexedStore — 统一数据 + 反向索引管理

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { MinecraftUtils } from '../utils/MinecraftUtils';
 import { rootDir } from '../extension';
 import { CommandUtils } from '../utils/CommandUtils';
-import { IndexedStore, DataType, ScoreboardData, FunctionData, TeamData } from './IndexedStore';
+import { IndexedStore, DataType, ScoreboardData, FunctionData, TeamData } from './data';
 export { DataType };
 
 // ============================================================
