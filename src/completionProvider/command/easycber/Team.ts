@@ -21,7 +21,7 @@ export class TeamCompletionProvider extends BaseCompletionProvider {
         const subCmd = commands[1];
 
         // add <name> / remove <name> / join <name> / clear <name> / list [name]
-        if (["add", "remove", "join", "clear", "list", "option"].includes(subCmd) && commands.length === 3) {
+        if (["add", "remove", "join", "clear", "list"].includes(subCmd) && commands.length === 3) {
             return this.provideTeamCompletions(this.getWordRange(document, position, commands[2].length));
         }
 
@@ -54,14 +54,14 @@ export class TeamCompletionProvider extends BaseCompletionProvider {
 
     private handleOption(document: vscode.TextDocument, position: vscode.Position, commands: string[]): vscode.CompletionItem[] {
         // option <name> <key>
-        if (commands.length === 4) {
+        if (commands.length === 3) {
             return this.provideOptionKeys();
         }
 
-        const optKey = commands[3];
+        const optKey = commands[2];
 
         // option <name> <key> <value>
-        if (commands.length === 5) {
+        if (commands.length === 4) {
             return this.provideOptionValue(optKey);
         }
 

@@ -28,7 +28,7 @@ export class CommandRegistry {
     static async autoRegisterProviders(context: vscode.ExtensionContext) {
         const commandDir = join(context.extensionPath, 'out', 'completionProvider', 'command');
         // 相对于 command/ 的子目录列表（可扩展）
-        const subDirs: string[] = ['', 'easycber'];
+        const subDirs: string[] = ['vanilla', 'easycber'];
 
         for (const subDir of subDirs) {
             const providerDir = subDir ? join(commandDir, subDir) : commandDir;
