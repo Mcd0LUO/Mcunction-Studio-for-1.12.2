@@ -8,7 +8,6 @@ import { NbtAst } from '../utils/nbt/NbtAst';
 import { NbtAstLiteralNode } from '../utils/nbt/NbtAstNode';
 import { NbtTokenizer, NbtTokenType } from '../utils/nbt/NbtTokenizer';
 import { NBTUtils } from '../utils/nbt/NBTUtils';
-import { MacroCompletionProvider } from './macro/MacroCompletionProvider';
 
 export const COLORS = [
     "red", "blue", "green", "yellow", "white", "black",
@@ -70,9 +69,6 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
             return this.provideRootCompletions('');
         }
         if (trimmedText.startsWith("#")) {return [];}
-        if (trimmedText.startsWith('$')) {
-            return MacroCompletionProvider.getInstance().provideCompletionItems(document, position, token, context, lineText);
-        }
         // 解析片段
         const full_commands = CommandUtils.extractCommand(trimmedText);
         const { isExecute, isComplete, currentCommands, paramStage } = CommandUtils.findActiveCommand(full_commands);

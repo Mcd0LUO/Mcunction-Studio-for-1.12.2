@@ -70,8 +70,6 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 	// 注册运行/debug
 	registerMcfunctionDebugConfigProvider(context);
-	// 注册宏定义挑战
-	registerMcMacroDefinitionProvider(context);
 
 
 }

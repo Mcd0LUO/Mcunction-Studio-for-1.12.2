@@ -3,11 +3,7 @@ import * as vscode from 'vscode';
 import { MinecraftUtils } from '../utils/MinecraftUtils';
 import { rootDir } from '../extension';
 import { CommandUtils } from '../utils/CommandUtils';
-import { MacroManager } from '../macro/MacroManager';
-import { MacroTokenizer } from '../macro/MacroTokenizer';
 import * as path from 'path';
-import { MacroASTBuilder } from '../macro/MacroAst';
-import { ASTVisualizer } from '../macro/ASTVisualizer';
 
 interface ScoreboardData {
     type: string;
@@ -128,15 +124,14 @@ export class DataLoader {
         // 传入加载模式参数
         const promise1 = this.loadFunctionData(useConcurrentControl, concurrency);
         const promise2 = this.loadAdvancementData();
-        const promise3 = this.loadMacroData();
 
         try {
-            const [result1, result2, result3] = await Promise.all([promise1, promise2, promise3]);
+            const [result1, result2] = await Promise.all([promise1, promise2]);
 
-            if (result1 && result2 && result3) {
+            if (result1 && result2) {
                 // 在底层状态栏显示
-                vscode.window.setStatusBarMessage(`加载函数 ${this.functionResNames.length} | 记分板 ${this.scoreboardsData.size} | 标签 ${this.tagsData.size} | 队伍 ${this.teamsData.size} | 进度 ${this.advancementResNames.length} | 假玩家 ${this.fakePlayerData.size} | 宏 ${MacroManager.getInstance().getAllFullId().length}  耗时>> ${result1}s <<`, 3000);
-                vscode.window.showInformationMessage(`McfunctionStudio 初始化完成, 耗时 ${(result1 + result3).toFixed(3)} s`);
+                vscode.window.setStatusBarMessage(`加载函数 ${this.functionResNames.length} | 记分板 ${this.scoreboardsData.size} | 标签 ${this.tagsData.size} | 队伍 ${this.teamsData.size} | 进度 ${this.advancementResNames.length} | 假玩家 ${this.fakePlayerData.size} 耗时>> ${result1}s <<`, 3000);
+                vscode.window.showInformationMessage(`McfunctionStudio 初始化完成, 耗时 ${(result1).toFixed(3)} s`);
             }
         } catch (error) {
             vscode.window.showErrorMessage(`加载数据失败: ${error}`);
@@ -588,58 +583,6 @@ export class DataLoader {
         }
         return true;
 
-    }
-    /**
-     *  加载所有宏定义
-     * @returns Promise<boolean>
-     */
-    public async loadMacroData(): Promise<number> {
-        MacroManager.getInstance().clearAll();
-        const startTime = Date.now();
-        const macroRoot = vscode.Uri.joinPath(rootDir, 'mcmacro');
-        const macroPaths = await DataLoader.getAllMacroPaths(macroRoot);
-        for (const macroPath of macroPaths) {
-            this.parseMacroFile(macroPath);
-        }
-        const endTime = Date.now();
-        const duration = (endTime - startTime) / 1000;
-        console.log(`【宏加载性能测试】 文件数量:${macroPaths.length}, 耗时: ${duration.toFixed(3)} s`);
-        return duration;
-    }
-
-
-    /**
-     * 解析单个宏文件，提取宏定义并注册
-     * @param macroUri 宏文件Uri
-     * @param mcmacroRootUri mcmacro根目录Uri
-     */
-    private async parseMacroFile(macroUri: vscode.Uri): Promise<void> {
-        try {
-            // 1. 读取文件内容
-            const fileContent = await vscode.workspace.fs.readFile(macroUri);
-            const text = Buffer.from(fileContent).toString('utf8');
-
-            // 2. 词法分析 + AST构建
-            const lexer = new MacroTokenizer(text);
-            const tokens = lexer.parse();
-            const builder = new MacroASTBuilder(tokens);
-            const ast = builder.build();
-            if (!ast || builder.hasErrors()) {
-                console.error('AST解析错误：', builder.getParseErrors());
-                vscode.window.showErrorMessage('AST解析错误，详情请查看日志');
-                return;
-            }
-            MacroManager.getInstance().addAST(macroUri, ast);
-            ast.body.filter(node => node.type === 'MacroDefinition').map(node => {
-                MacroManager.getInstance().registerMacro(node, macroUri);
-            });
-
-
-
-        } catch (error) {
-            vscode.window.showErrorMessage(`解析宏文件失败 ${macroUri.fsPath}：${(error as Error).message}`);
-            console.error(error);
-        }
     }
 
     /**

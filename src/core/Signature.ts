@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { CommandUtils } from '../utils/CommandUtils';
 import { DataLoader } from './DataLoader';
-import { MacroCompletionProvider } from '../completionProvider/macro/MacroCompletionProvider';
 import { MacroManager } from '../macro/MacroManager';
 import { MacroApply } from '../macro/MacroaApply';
 import { MacroDefinition } from '../macro/MacroAst';

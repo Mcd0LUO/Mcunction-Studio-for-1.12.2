@@ -22,27 +22,33 @@ export class CommandRegistry {
     }
 
         /**
-     * 自动注册命令提供者（优化：异步加载）
+     * 自动注册命令提供者（优化：异步加载，支持子目录）
+     * subDirs 中 '' 表示 command/ 根目录，其余为子目录名
      */
     static async autoRegisterProviders(context: vscode.ExtensionContext) {
-        const providerDir = join(context.extensionPath, 'out', 'completionProvider', 'command');
-        try {
-            // 异步读取目录，避免阻塞
-            const files = await fs.readdir(providerDir);
-            for (const file of files) {
-                if (!file.endsWith('.js')) {continue;};
-                // 动态导入改为异步
-                const fileName = file.slice(0, -3);
-                // console.log(fileName);
-                const module = await import(`../completionProvider/command/${file}`);
-                const providerClass = module[`${fileName}CompletionProvider`];
-                if (providerClass) {
-                    CommandRegistry.register(fileName.toLowerCase(), new providerClass());
-                }
+        const commandDir = join(context.extensionPath, 'out', 'completionProvider', 'command');
+        // 相对于 command/ 的子目录列表（可扩展）
+        const subDirs: string[] = ['', 'easycber'];
 
+        for (const subDir of subDirs) {
+            const providerDir = subDir ? join(commandDir, subDir) : commandDir;
+            try {
+                const files = await fs.readdir(providerDir);
+                for (const file of files) {
+                    if (!file.endsWith('.js')) { continue; }
+                    const fileName = file.slice(0, -3);
+                    const importPath = subDir
+                        ? `../completionProvider/command/${subDir}/${file}`
+                        : `../completionProvider/command/${file}`;
+                    const module = await import(importPath);
+                    const providerClass = module[`${fileName}CompletionProvider`];
+                    if (providerClass) {
+                        CommandRegistry.register(fileName.toLowerCase(), new providerClass());
+                    }
+                }
+            } catch (error) {
+                console.error(`自动注册命令提供者时出错 (${subDir || 'command'})：`, error);
             }
-        } catch (error) {
-            console.error('自动注册命令提供者时出错：', error);
         }
     }
 }
