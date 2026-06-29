@@ -122,13 +122,6 @@
         }
       ]
     },
-    "configurationDefaults": {
-      "yaml.schemas": {
-        "vscode-extension://Mcd0-LUO.mcfunction-studio/schemas/mcf-command.schema.json": [
-          "**/data/commands/*.yml"
-        ]
-      }
-    },
     "jsonValidation": [
       {
         "fileMatch": "McfunctionStudio.json",
