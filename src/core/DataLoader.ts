@@ -393,27 +393,27 @@ export class DataLoader {
     // ================================================================
 
     /** 逐行解析（Uri 和 Doc 共用） */
-    private parseLines(uri: vscode.Uri, lines: string[], startLine: number = 0): void {
+    private parseLines(uri: vscode.Uri, lines: string[], startLine: number = 0, applyExtract: boolean = false): void {
         for (let i = startLine; i < lines.length; i++) {
-            this.handleSingleLine(uri, lines[i], i);
+            this.handleSingleLine(uri, lines[i], i, applyExtract);
         }
     }
 
     public async loadSingleFuncFileByUri(path: vscode.Uri): Promise<void> {
         const fileContent = await vscode.workspace.fs.readFile(path);
         const content = new TextDecoder('utf-8').decode(fileContent);
-        this.parseLines(path, content.split(/\r?\n|\r/));
+        this.parseLines(path, content.split(/\r?\n|\r/), 0, true);
     }
 
     public async loadSingleFuncFileByDoc(doc: vscode.TextDocument, startLine: number = 0): Promise<void> {
-        this.parseLines(doc.uri, doc.getText().split(/\r?\n|\r/), startLine);
+        this.parseLines(doc.uri, doc.getText().split(/\r?\n|\r/), startLine, false);
     }
 
     // ================================================================
     // 命令行解析
     // ================================================================
 
-    public handleSingleLine(uri: vscode.Uri, line: string, index: number): void {
+    public handleSingleLine(uri: vscode.Uri, line: string, index: number, applyExtract: boolean = false): void {
         const trimLine = line.trim();
         if (!trimLine || trimLine.startsWith('#')) { return; }
 
@@ -422,16 +422,12 @@ export class DataLoader {
         if (handler) {
             handler(uri, index, commands);
         }
-        // YAML 自定义数据提取
-        this.applyCustomExtract(commands);
-    }
-
-    /** 调用 YAML 加载器注册的自定义提取规则 */
-    private applyCustomExtract(commands: string[]): void {
-        try {
-            const { applyExtract } = require('../dsl/yaml/extractor') as typeof import('../dsl/yaml/extractor');
-            applyExtract(commands[0], commands);
-        } catch { /* extractor 模块未加载时静默跳过 */ }
+        if (applyExtract) {
+            try {
+                const { applyExtract: ae } = require('../dsl/yaml/extractor') as typeof import('../dsl/yaml/extractor');
+                ae(commands[0], commands);
+            } catch { /* extractor 未加载 */ }
+        }
     }
 
     // ================================================================
