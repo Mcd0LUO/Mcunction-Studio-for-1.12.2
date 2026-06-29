@@ -123,6 +123,9 @@ const builtins: Record<string, (items?: YamlSuggestItem[]) => SuggestionProvider
         return items;
     },
 
+    placeholder: () => (): vscode.CompletionItem[] => [],
+
+
 
     /** 空补全 */
     none: () => (): vscode.CompletionItem[] => [],
@@ -147,15 +150,13 @@ export function resolveSuggest(nameOrList?: string | YamlSuggestItem[]): Suggest
         const factory = builtins[nameOrList];
         if (factory) { return factory(); }
 
-        // 尝试从 YAML extractor 的自定义数据中查找
+        // 尝试从 YAML extractor 的自定义数据中查找（惰性查询，补全时才取值）
         try {
             const { getCustomData } = require('./extractor') as typeof import('./extractor');
-            const values = getCustomData(nameOrList);
-            if (values.length > 0) {
-                const list = values;
-                return (ctx: SuggestContext): vscode.CompletionItem[] =>
-                    list.map(v => ctx.item(v, '', v, false, vscode.CompletionItemKind.Field));
-            }
+            return (ctx: SuggestContext): vscode.CompletionItem[] =>
+                getCustomData(nameOrList).map(v =>
+                    ctx.item(v, '', v, false, vscode.CompletionItemKind.Field)
+                );
         } catch { /* extractor 未加载 */ }
 
         console.warn(`[YAML] 未知 suggest: "${nameOrList}"，已回退为 placeholder`);
