@@ -34,7 +34,19 @@ export class YamlCommandLoader {
         catch { return; }
 
         await YamlCommandLoader.reloadScan(engine, extraDir);
+
+        // 热重载：监听 YAML 文件变更
+        const pattern = new vscode.RelativePattern(extraDir, '**/*.yml');
+        YamlCommandLoader.watcher?.dispose();
+        YamlCommandLoader.watcher = vscode.workspace.createFileSystemWatcher(pattern);
+        const onReload = () => YamlCommandLoader.reloadScan(engine, extraDir);
+        YamlCommandLoader.watcher.onDidCreate(onReload);
+        YamlCommandLoader.watcher.onDidChange(onReload);
+        YamlCommandLoader.watcher.onDidDelete(onReload);
+        console.log('[YAML] 监听 .McfStudio/extra_command/**/*.yml 变更');
     }
+
+    private static watcher: vscode.FileSystemWatcher | null = null;
 
     /** 重新加载用户 YAML（供 reloadWorkspace 命令调用） */
     static async reloadUser(engine: CompletionEngine, rootDir: vscode.Uri): Promise<void> {
