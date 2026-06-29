@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=../../../schemas/mcf-command.schema.json
 # /mytp <target> <location>
 # 展示：内置 selectors + 自定义静态列表 + 数据提取
 command: mytp
