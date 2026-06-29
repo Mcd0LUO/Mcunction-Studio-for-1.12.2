@@ -113,12 +113,9 @@ export class CompletionEngine {
 
     /** 收集节点的补全建议 */
     private async suggestionsFor(node: CommandNode, commands: string[], lineText: string): Promise<vscode.CompletionItem[]> {
-        // 转发节点 → 返回所有根命令（排除自身，避免递归）
+        // 转发节点 → 返回所有根命令
         if (node.kind === 'forward') {
-            return this.getRootItems().filter(i => {
-                const label = typeof i.label === 'string' ? i.label : i.label.label;
-                return label !== commands[0];
-            });
+            return this.getRootItems();
         }
 
         const items: vscode.CompletionItem[] = [];
@@ -131,10 +128,10 @@ export class CompletionEngine {
             }
         }
 
-        // 2. 转发子节点
+        // 2. 转发子节点 → 直接返回所有根命令
         for (const child of node.children) {
             if (child.kind === 'forward') {
-                items.push(this.ctx.item('<命令>', '要执行的命令', '', true, vscode.CompletionItemKind.Snippet));
+                return this.getRootItems();
             }
         }
 
