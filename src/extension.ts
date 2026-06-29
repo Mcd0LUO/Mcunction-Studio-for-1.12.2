@@ -37,7 +37,7 @@ export function activate(context: vscode.ExtensionContext) {
 	// 初始化 DSL 引擎 + 注册 Demo 命令
 	const engine = new CompletionEngine(dataloader);
 	registerDemoCommands(engine);
-	YamlCommandLoader.load(engine, rootDir, context.extensionPath);
+	YamlCommandLoader.load(engine, rootDir);
 	// 注册Signature Help
 	registerSignatureHelp();
 	// 注册CodeLens 快速命令
