@@ -54,18 +54,6 @@
     ],
     "commands": [
       {
-        "command": "mcf-studio.unfoldMacro",
-        "title": "展开函数宏",
-        "category": "McFunction Studio",
-        "icon": "$(play)"
-      },
-      {
-        "command": "mcf-studio.foldMacro",
-        "title": "折叠函数宏",
-        "category": "McFunction Studio",
-        "icon": "$(play)"
-      },
-      {
         "command": "mcf-studio.createFunctionFile",
         "title": "新建mcfunction文件",
         "category": "Mcfunction Studio"
@@ -73,11 +61,6 @@
       {
         "command": "mcf-studio.reloadWorkspace",
         "title": "刷新函数|计分板|进度|标签池",
-        "category": "Mcfunction Studio"
-      },
-      {
-        "command": "mcf-studio.checkDocCache",
-        "title": "查看文档缓存",
         "category": "Mcfunction Studio"
       },
       {
@@ -94,9 +77,8 @@
     "keybindings": [
       {
         "command": "mcf-studio.reloadWorkspace",
-        "when": "editorTextFocus && editorLangId == mcfunction || editorLangId == yml",
-        "win": "Ctrl + D",
-        "mac": "Ctrl + D"
+        "key": "ctrl+shift+r",
+        "when": "editorTextFocus && (editorLangId == mcfunction || editorLangId == yaml)"
       }
     ],
     "menus": {
@@ -114,13 +96,6 @@
           "label": "插入快速记分板debug",
           "group": "z_McfunctionStudio",
           "when": "editorTextFocus && editorLangId == mcfunction"
-        }
-      ],
-      "editor/title/run": [
-        {
-          "command": "mcf-studio.unfoldMacro",
-          "when": "resourceExtname == .mcfunction",
-          "group": "navigation"
         }
       ]
     },
