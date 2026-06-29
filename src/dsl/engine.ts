@@ -41,9 +41,12 @@ export class CompletionEngine {
         let cursor = 1;
         const ancestors: CommandNode[] = [];
 
-        while (cursor < commands.length - 1) {
+        while (cursor < commands.length) {
             const next = this.matchChild(node, commands[cursor]);
             if (!next) { break; }
+
+            // literal/forward_root/jump 最后一个 token 可消费；argument 留给 VSCode 过滤
+            if (cursor === commands.length - 1 && next.kind === 'argument') { break; }
 
             // jump 节点：向上弹出 levels 层（从栈顶祖先开始）
             if (next.kind === 'jump') {
