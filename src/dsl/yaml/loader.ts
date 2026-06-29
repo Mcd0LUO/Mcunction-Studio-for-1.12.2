@@ -140,7 +140,7 @@ export class YamlCommandLoader {
     private static convertNode(
         node: YamlLiteral | YamlArgument | YamlForwardRoot | YamlJump | YamlForward
     ): import('../nodes').CommandNode {
-        if ('jump' in node) { return new JumpNode(); }
+        if ('jump' in node) { return new JumpNode((node as YamlJump).jump ?? 1); }
         if ('forward_root' in node) { return new ForwardRootNode(); }
         if ('forward' in node) { return new ForwardRootNode(); } // 兼容旧语法
         if ('literal' in node) {

@@ -46,7 +46,7 @@ export interface YamlForward {
 }
 
 export interface YamlJump {
-    jump: true;
+    jump: number;  // 向上跳几层（默认 1）
 }
 
 /** 自定义静态 suggest 列表项 */

@@ -45,9 +45,10 @@ export class CompletionEngine {
             const next = this.matchChild(node, commands[cursor]);
             if (!next) { break; }
 
-            // jump 节点：回弹到最近的多分支祖先
+            // jump 节点：向上弹出 levels 层
             if (next.kind === 'jump') {
-                node = this.jumpTarget(ancestors) ?? node;
+                const levels = (next as JumpNode).levels;
+                for (let l = 0; l < levels && ancestors.length > 0; l++) { node = ancestors.pop()!; }
                 cursor++;
                 continue;
             }
@@ -59,10 +60,11 @@ export class CompletionEngine {
 
         // jump 节点也可能作为子节点被消费后到达
         if (node.kind === 'jump') {
-            node = this.jumpTarget(ancestors) ?? node;
+            const levels = (node as JumpNode).levels;
+            for (let l = 0; l < levels && ancestors.length > 0; l++) { node = ancestors.pop()!; }
         }
 
-        const items = await this.suggestionsFor(node, commands, lineText);
+        const items = await this.suggestionsFor(node, commands, lineText, ancestors);
         if (CompletionEngine.debug) {
             console.log(`[DSL] ${commands.join(' ')} → ${items.length} 项`,
                 items.map(i => typeof i.label === 'string' ? i.label : i.label.label));
@@ -73,19 +75,6 @@ export class CompletionEngine {
     // ================================================================
     // 内部
     // ================================================================
-
-    /** 从祖先栈中向上查找分支最多的节点（superexe 等链式命令的跳转目标） */
-    private jumpTarget(ancestors: CommandNode[]): CommandNode | null {
-        let best: CommandNode | null = null;
-        let bestCount = 0;
-        for (let i = ancestors.length - 1; i >= 0; i--) {
-            const count = ancestors[i].children.filter(c =>
-                c.kind === 'literal' || c.kind === 'forward_root' || c.kind === 'jump'
-            ).length;
-            if (count > bestCount) { best = ancestors[i]; bestCount = count; }
-        }
-        return best;
-    }
 
     private matchChild(node: CommandNode, token: string): CommandNode | null {
         for (const child of node.children) {
@@ -100,22 +89,26 @@ export class CompletionEngine {
         return null;
     }
 
-    private async suggestionsFor(node: CommandNode, commands: string[], lineText: string): Promise<vscode.CompletionItem[]> {
+    private async suggestionsFor(node: CommandNode, commands: string[], lineText: string, ancestors: CommandNode[]): Promise<vscode.CompletionItem[]> {
         if (node.kind === 'forward_root') { return this.getRootItems(); }
 
-        // forward_root / jump 子节点 → 转发 / 跳转
+        // forward_root / jump 子节点
         for (const child of node.children) {
             if (child.kind === 'forward_root') { return this.getRootItems(); }
             if (child.kind === 'jump') {
-                // 收集所有字面量和forward_root兄弟节点
+                // 向上弹 levels 层，展示目标节点的兄弟
+                const j = child as JumpNode;
+                let target = node;
+                const stack = [...ancestors, node];
+                for (let l = 0; l < j.levels && stack.length > 0; l++) { target = stack.pop()!; }
                 const items: vscode.CompletionItem[] = [];
-                for (const sib of node.children) {
+                for (const sib of target.children) {
                     if (sib.kind === 'literal') {
                         const lit = sib as LiteralNode;
                         items.push(this.ctx.item(lit.literal, lit.description || '', lit.literal, true));
                     }
                     if (sib.kind === 'forward_root') {
-                        items.push(this.ctx.item('run', '执行命令', 'run', true));
+                        items.push(this.ctx.item('run', '执行命令', 'run', true, vscode.CompletionItemKind.Keyword));
                     }
                 }
                 if (items.length > 0) { return items; }

@@ -38,11 +38,10 @@ export function forward(): ForwardRootNode {
 
 /**
  * 创建跳转节点 — 用于可重复链式子命令。
- * 引擎会自动查找树上最近的「多分支祖先」展示其子节点，
- * 实现 if/unless/facing/positioned 的任意顺序循环。
+ * @param levels 向上跳几层（默认 1：回到直接父节点）
  */
-export function jump(): JumpNode {
-    return new JumpNode();
+export function jump(levels?: number): JumpNode {
+    return new JumpNode(levels ?? 1);
 }
 
 /** 构建命令定义并注册 */

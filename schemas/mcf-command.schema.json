@@ -126,9 +126,10 @@
       "required": ["jump"],
       "properties": {
         "jump": {
-          "type": "boolean",
-          "const": true,
-          "description": "跳转到上层多分支节点（superexe 的可重复链式子命令）"
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "description": "向上跳几层（默认 1：回到直接父节点）"
         }
       }
     },

@@ -85,11 +85,14 @@ export class ForwardRootNode extends CommandNode {
 
 /**
  * 跳转节点 — 用于 superexe 等可重复链式子命令。
- * 到达此节点时，引擎查找树上最近的「同级多分支祖先」，
- * 展示该祖先的全部子节点，实现 if/unless/facing/positioned 的任意顺序循环。
+ * 到达此节点时，引擎向上跳 `levels` 层后展示该层兄弟节点，
+ * 实现 if/unless/facing/positioned 的任意顺序循环。
+ * 默认跳 1 层（回到直接父节点）。
  */
 export class JumpNode extends CommandNode {
-    constructor() {
+    public readonly levels: number;
+    constructor(levels: number = 1) {
         super('jump');
+        this.levels = levels;
     }
 }
