@@ -12,9 +12,9 @@ import { YamlExtractRule } from './types';
 interface ParsedRule {
     command: string;
     type: string;
-    /** 每个 token 要么是字面量字符串，要么是 { capture: true } */
+    types?: string[];     // 按捕获位置指定 type
     tokens: (string | { capture: true })[];
-    source: string; // YAML 文件名（调试用）
+    source: string;
 }
 
 /** 存储自定义提取数据: type → values */
@@ -35,7 +35,7 @@ export function registerExtractRule(
         return;
     }
 
-    const parsed: ParsedRule = { command, type: rule.type, tokens, source };
+    const parsed: ParsedRule = { command, type: rule.type, types: rule.types, tokens, source };
 
     const existing = rulesByCommand.get(command);
     if (existing) {
@@ -82,13 +82,19 @@ export function applyExtract(cmdName: string, commands: string[]): void {
         }
 
         if (matched && captured.length > 0) {
-            let values = customData.get(rule.type);
-            if (!values) {
-                values = new Set();
-                customData.set(rule.type, values);
-            }
-            for (const v of captured) {
-                values.add(v);
+            if (rule.types && rule.types.length > 0) {
+                // 按位置分别存入对应 type
+                for (let i = 0; i < captured.length && i < rule.types.length; i++) {
+                    const t = rule.types[i];
+                    let values = customData.get(t);
+                    if (!values) { values = new Set(); customData.set(t, values); }
+                    values.add(captured[i]);
+                }
+            } else {
+                // 全部存入同一个 type
+                let values = customData.get(rule.type);
+                if (!values) { values = new Set(); customData.set(rule.type, values); }
+                for (const v of captured) { values.add(v); }
             }
         }
     }

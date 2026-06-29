@@ -5,7 +5,8 @@
 /** 数据提取规则 */
 export interface YamlExtractRule {
     pattern: string;      // 如 "set <name>" 或 "<location>"
-    type: string;         // 存储类型名（suggest 引用用）
+    type: string;         // 存储类型名（所有捕获值存入同一 type）
+    types?: string[];     // 按捕获位置分别指定 type（优先级高于 type）
     description?: string; // 可选描述
 }
 

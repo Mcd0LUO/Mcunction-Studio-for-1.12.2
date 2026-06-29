@@ -123,8 +123,6 @@ const builtins: Record<string, (items?: YamlSuggestItem[]) => SuggestionProvider
         return items;
     },
 
-    /** 无补全，仅占位提示 */
-    placeholder: () => (): vscode.CompletionItem[] => [],
 
     /** 空补全 */
     none: () => (): vscode.CompletionItem[] => [],

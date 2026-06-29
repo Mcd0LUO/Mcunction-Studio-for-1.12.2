@@ -171,17 +171,19 @@
       "properties": {
         "pattern": {
           "type": "string",
-          "description": "提取模式（如 'set <name>'）",
-          "examples": ["set <name>", "add <name> <value>", "<target>"]
+          "description": "提取模式（如 'set <*>'）"
         },
         "type": {
           "type": "string",
-          "description": "存储类型名，suggest 字段引用用",
-          "examples": ["warp", "currency"]
+          "description": "所有捕获值存入同一 type（有 types 时此项为兜底）"
+        },
+        "types": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "按捕获位置分别指定 type（如 pattern 'set <*> <*>' → types: [ns, var]）"
         },
         "description": {
-          "type": "string",
-          "description": "可选描述"
+          "type": "string"
         }
       }
     }
