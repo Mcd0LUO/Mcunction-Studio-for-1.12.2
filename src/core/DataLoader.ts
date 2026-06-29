@@ -400,6 +400,8 @@ export class DataLoader {
     }
 
     public async loadSingleFuncFileByUri(path: vscode.Uri): Promise<void> {
+        // 清除该文件旧提取值
+        try { (require('../dsl/yaml/extractor') as typeof import('../dsl/yaml/extractor')).clearFileExtract(path.toString()); } catch {}
         const fileContent = await vscode.workspace.fs.readFile(path);
         const content = new TextDecoder('utf-8').decode(fileContent);
         this.parseLines(path, content.split(/\r?\n|\r/));
@@ -424,8 +426,8 @@ export class DataLoader {
         }
         // YAML 自定义数据提取（与 scoreboard/team 提取走同一通道）
         try {
-            const { applyExtract } = require('../dsl/yaml/extractor') as typeof import('../dsl/yaml/extractor');
-            applyExtract(commands[0], commands);
+            const { applyExtractForFile } = require('../dsl/yaml/extractor') as typeof import('../dsl/yaml/extractor');
+            applyExtractForFile(commands[0], commands, uri.toString());
         } catch { /* extractor 未加载 */ }
     }
 

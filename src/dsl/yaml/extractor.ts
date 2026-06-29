@@ -17,8 +17,10 @@ interface ParsedRule {
     source: string;
 }
 
-/** 存储自定义提取数据: type → values */
+/** 存储自定义提取数据: type → values（全局汇总，快速查询） */
 const customData = new Map<string, Set<string>>();
+/** 文件级索引: fileUri → (type → values)，用于单文件清除 */
+const fileEntries = new Map<string, Map<string, Set<string>>>();
 
 /** 解析后的规则: command → rules[] */
 const rulesByCommand = new Map<string, ParsedRule[]>();
@@ -50,70 +52,78 @@ export function unregisterCommandRules(command: string): void {
     rulesByCommand.delete(command);
 }
 
-/** 对所有已注册规则逐条匹配，提取数据 */
-export function applyExtract(cmdName: string, commands: string[]): void {
-    const rules = rulesByCommand.get(cmdName);
-    if (!rules) { return; }
-
-    for (const rule of rules) {
-        // commands[0] 是命令名，commands[1+] 是参数
-        const args = commands.slice(1);
-
-        // 匹配字面量 + 提取捕获值
-        const captured: string[] = [];
-        let matched = true;
-
-        for (let i = 0; i < rule.tokens.length; i++) {
-            const token = rule.tokens[i];
-            if (typeof token === 'string') {
-                // 字面量：必须精确匹配
-                if (i >= args.length || args[i] !== token) {
-                    matched = false;
-                    break;
-                }
-            } else {
-                // 捕获组 <name>：取当前位置的值
-                if (i >= args.length || !args[i]) {
-                    matched = false;
-                    break;
-                }
-                captured.push(args[i]);
-            }
-        }
-
-        if (matched && captured.length > 0) {
-            if (rule.types && rule.types.length > 0) {
-                // 按位置分别存入对应 type
-                for (let i = 0; i < captured.length && i < rule.types.length; i++) {
-                    const t = rule.types[i];
-                    let values = customData.get(t);
-                    if (!values) { values = new Set(); customData.set(t, values); }
-                    values.add(captured[i]);
-                }
-            } else {
-                // 全部存入同一个 type
-                let values = customData.get(rule.type);
-                if (!values) { values = new Set(); customData.set(rule.type, values); }
-                for (const v of captured) { values.add(v); }
-            }
-        }
-    }
-}
-
 /** 获取某类型的所有已提取值 */
 export function getCustomData(type: string): string[] {
     const values = customData.get(type);
     return values ? [...values] : [];
 }
 
-/** 清除所有自定义提取数据（DataLoader reload 时调用） */
+/** 删除指定文件的所有提取值（增量重解析时调用） */
+export function clearFileExtract(fileUri: string): void {
+    const fileData = fileEntries.get(fileUri);
+    if (!fileData) { return; }
+    for (const [type, fileValues] of fileData) {
+        const global = customData.get(type);
+        if (global) { for (const v of fileValues) { global.delete(v); } }
+    }
+    fileEntries.delete(fileUri);
+}
+
+/** DataLoader loadData 前清空所有 */
 export function clearAllCustomData(): void {
     customData.clear();
+    fileEntries.clear();
 }
 
 /** 清除所有规则 */
 export function clearAllRules(): void {
     rulesByCommand.clear();
+}
+
+// ================================================================
+// 内部 — 写入同时更新 fileIndex
+// ================================================================
+
+function addToType(type: string, value: string, fileUri: string): void {
+    // 全局
+    let global = customData.get(type);
+    if (!global) { global = new Set(); customData.set(type, global); }
+    global.add(value);
+
+    // 文件索引
+    let ft = fileEntries.get(fileUri);
+    if (!ft) { ft = new Map(); fileEntries.set(fileUri, ft); }
+    let fvs = ft.get(type);
+    if (!fvs) { fvs = new Set(); ft.set(type, fvs); }
+    fvs.add(value);
+}
+
+/** 对单行命令逐条匹配规则，提取数据到全局 + 文件索引 */
+export function applyExtractForFile(cmdName: string, commands: string[], fileUri: string): void {
+    const rules = rulesByCommand.get(cmdName);
+    if (!rules) { return; }
+    for (const rule of rules) {
+        const args = commands.slice(1);
+        const captured: string[] = [];
+        let matched = true;
+        for (let i = 0; i < rule.tokens.length; i++) {
+            const token = rule.tokens[i];
+            if (typeof token === 'string') {
+                if (i >= args.length || args[i] !== token) { matched = false; break; }
+            } else {
+                if (i >= args.length || !args[i]) { matched = false; break; }
+                captured.push(args[i]);
+            }
+        }
+        if (!matched || captured.length === 0) { continue; }
+        if (rule.types && rule.types.length > 0) {
+            for (let i = 0; i < captured.length && i < rule.types.length; i++) {
+                addToType(rule.types[i], captured[i], fileUri);
+            }
+        } else {
+            for (const v of captured) { addToType(rule.type, v, fileUri); }
+        }
+    }
 }
 
 /**
