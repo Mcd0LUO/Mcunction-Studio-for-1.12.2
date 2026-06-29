@@ -6,8 +6,9 @@ import { CompletionEngine } from '../engine';
 import { RootNode, ForwardNode } from '../nodes';
 import { literal, argument } from '../builder';
 import * as yaml from 'js-yaml';
-import { YamlCommandDef, YamlLiteral, YamlArgument } from './types';
+import { YamlCommandDef, YamlLiteral, YamlArgument, YamlExtractRule } from './types';
 import { resolveSuggest } from './suggests';
+import { registerExtractRule, unregisterCommandRules } from './extractor';
 
 export class YamlCommandLoader {
     private static dirWatcher: vscode.FileSystemWatcher | null = null;
@@ -17,36 +18,60 @@ export class YamlCommandLoader {
     /**
      * 启动：扫描 rootDir/commands/*.yml，加载命令并监听文件变更热重载。
      */
-    static async load(engine: CompletionEngine, rootDir: vscode.Uri): Promise<void> {
+    static async load(engine: CompletionEngine, rootDir: vscode.Uri, extensionPath: string): Promise<void> {
+        // 1. 内置 YAML（扩展自带）
+        if (extensionPath) {
+            const builtinDir = vscode.Uri.joinPath(vscode.Uri.file(extensionPath), 'out', 'dsl', 'builtin');
+            await YamlCommandLoader.scanStatic(engine, builtinDir);
+        }
+
+        // 2. 用户 YAML（workspace data/commands/*.yml）
         if (!rootDir) { return; }
-
         const commandsDir = vscode.Uri.joinPath(rootDir, 'commands');
-
-        // 检查目录是否存在
         try { await vscode.workspace.fs.stat(commandsDir); }
-        catch { return; } // 目录不存在，静默跳过
+        catch { return; }
 
-        // 初始扫描
         await YamlCommandLoader.reloadAll(engine, commandsDir);
 
-        // 热重载：监听 YAML 文件的增/删/改
         YamlCommandLoader.dirWatcher?.dispose();
         const pattern = new vscode.RelativePattern(commandsDir, '**/*.yml');
         YamlCommandLoader.dirWatcher = vscode.workspace.createFileSystemWatcher(pattern);
-
         const onReload = () => YamlCommandLoader.reloadAll(engine, commandsDir);
         YamlCommandLoader.dirWatcher.onDidCreate(onReload);
         YamlCommandLoader.dirWatcher.onDidChange(onReload);
         YamlCommandLoader.dirWatcher.onDidDelete(onReload);
+        console.log('[YAML] 用户热重载已启用，监听 data/commands/*.yml');
+    }
 
-        console.log('[YAML] 热重载已启用，监听 data/commands/*.yml');
+    /** 一次性扫描内置目录（不监听热重载） */
+    private static async scanStatic(engine: CompletionEngine, dir: vscode.Uri): Promise<void> {
+        try { await vscode.workspace.fs.stat(dir); }
+        catch { return; }
+        try {
+            const files = await vscode.workspace.fs.readDirectory(dir);
+            let count = 0;
+            for (const [name, type] of files) {
+                if (type !== vscode.FileType.File || !name.endsWith('.yml')) { continue; }
+                try {
+                    const raw = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(dir, name));
+                    const text = new TextDecoder('utf-8').decode(raw);
+                    const def = yaml.load(text) as YamlCommandDef;
+                    const root = YamlCommandLoader.convert(def);
+                    engine.register(root);
+                    if (def.extract) { YamlCommandLoader.registerExtractRules(def.command, def.extract, name); }
+                    count++;
+                } catch { /* skip bad files */ }
+            }
+            if (count > 0) { console.log(`[YAML] 从内置目录加载了 ${count} 条命令`); }
+        } catch { /* 目录扫描失败 */ }
     }
 
     /** 清除旧 YAML 命令 → 重新扫描 → 注册新命令 */
     private static async reloadAll(engine: CompletionEngine, dir: vscode.Uri): Promise<void> {
-        // 1. 清除上次加载的 YAML 命令
+        // 1. 清除上次加载的 YAML 命令 + 提取规则
         for (const name of YamlCommandLoader.loadedCommands) {
             engine.unregister(name);
+            unregisterCommandRules(name);
         }
         YamlCommandLoader.loadedCommands.clear();
 
@@ -67,6 +92,10 @@ export class YamlCommandLoader {
                     const root = YamlCommandLoader.convert(def);
                     engine.register(root);
                     YamlCommandLoader.loadedCommands.add(root.commandName);
+                    // 注册数据提取规则
+                    if (def.extract) {
+                        YamlCommandLoader.registerExtractRules(def.command, def.extract, name);
+                    }
                     count++;
                 } catch (err) {
                     vscode.window.showWarningMessage(
@@ -110,5 +139,11 @@ export class YamlCommandLoader {
             return arg;
         }
         throw new Error(`未知节点类型: ${JSON.stringify(node)}`);
+    }
+
+    private static registerExtractRules(command: string, rules: YamlExtractRule[], source: string): void {
+        for (const rule of rules) {
+            registerExtractRule(command, rule, source);
+        }
     }
 }

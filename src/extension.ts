@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import { CommandRegistry } from './core/CommandRegistry';
 import { MinecraftCompletionProvider } from './completionProvider/Minecraft';
 import { DataLoader } from './core/DataLoader';
 import { MinecraftUtils } from './utils/MinecraftUtils';
@@ -34,11 +33,11 @@ export function activate(context: vscode.ExtensionContext) {
 	const dataloader =  DataLoader.getInstance();
 	dataloader.init();
 	// 注册命令
-	CommandRegistry.autoRegisterProviders(context);
+
 	// 初始化 DSL 引擎 + 注册 Demo 命令
 	const engine = new CompletionEngine(dataloader);
 	registerDemoCommands(engine);
-	YamlCommandLoader.load(engine, rootDir);
+	YamlCommandLoader.load(engine, rootDir, context.extensionPath);
 	// 注册Signature Help
 	registerSignatureHelp();
 	// 注册CodeLens 快速命令

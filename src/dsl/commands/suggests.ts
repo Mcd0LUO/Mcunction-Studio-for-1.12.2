@@ -4,6 +4,7 @@
  */
 import * as vscode from 'vscode';
 import { SuggestContext } from '../nodes';
+import { ParticleNames, SoundNames } from '../../utils/EnumLib';
 
 // ----------------------------------------------------------------
 // 通用
@@ -158,4 +159,48 @@ export function suggestBlocks() {
 
 export function suggestEntityTypes() {
     return (ctx: SuggestContext): vscode.CompletionItem[] => ctx.cc.entityTypes();
+}
+
+export function suggestAdvancements() {
+    return (ctx: SuggestContext): vscode.CompletionItem[] => ctx.cc.advancements();
+}
+
+export function suggestParticleNames() {
+    return (ctx: SuggestContext): vscode.CompletionItem[] =>
+        ParticleNames.all.map(p => ctx.item(p.name, p.desc, p.name, false, vscode.CompletionItemKind.Class));
+}
+
+export function suggestSoundNames() {
+    return (ctx: SuggestContext): vscode.CompletionItem[] =>
+        SoundNames.all.map(s => ctx.item(s.name, s.desc, s.name, false, vscode.CompletionItemKind.Reference));
+}
+
+export function suggestGameRules() {
+    const rules = [
+        { name: 'announceAdvancements', type: 'boolean' },
+        { name: 'commandBlockOutput', type: 'boolean' },
+        { name: 'disableElytraMovementCheck', type: 'boolean' },
+        { name: 'doDaylightCycle', type: 'boolean' },
+        { name: 'doEntityDrops', type: 'boolean' },
+        { name: 'doFireTick', type: 'boolean' },
+        { name: 'doMobLoot', type: 'boolean' },
+        { name: 'doMobSpawning', type: 'boolean' },
+        { name: 'doTileDrops', type: 'boolean' },
+        { name: 'doWeatherCycle', type: 'boolean' },
+        { name: 'gameLoopFunction', type: 'function' },
+        { name: 'keepInventory', type: 'boolean' },
+        { name: 'logAdminCommands', type: 'boolean' },
+        { name: 'maxCommandChainLength', type: 'integer' },
+        { name: 'maxEntityCramming', type: 'integer' },
+        { name: 'mobGriefing', type: 'boolean' },
+        { name: 'naturalRegeneration', type: 'boolean' },
+        { name: 'randomTickSpeed', type: 'integer' },
+        { name: 'reducedDebugInfo', type: 'boolean' },
+        { name: 'sendCommandFeedback', type: 'boolean' },
+        { name: 'showDeathMessages', type: 'boolean' },
+        { name: 'spawnRadius', type: 'integer' },
+        { name: 'spectatorsGenerateChunks', type: 'boolean' },
+    ];
+    return (ctx: SuggestContext): vscode.CompletionItem[] =>
+        rules.map(r => ctx.item(r.name, r.type, r.name, false, vscode.CompletionItemKind.Enum));
 }

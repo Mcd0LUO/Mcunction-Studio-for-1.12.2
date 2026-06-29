@@ -35,6 +35,36 @@ const builtins: Record<string, (items?: YamlSuggestItem[]) => SuggestionProvider
     entityTypes: () => (ctx: SuggestContext) =>
         ctx.cc.entityTypes(),
 
+    advancements: () => (ctx: SuggestContext) =>
+        ctx.cc.advancements(),
+
+    particleNames: () => {
+        const { ParticleNames }: { ParticleNames: { all: { name: string; desc: string }[] } } =
+            require('../../utils/EnumLib');
+        return (ctx: SuggestContext): vscode.CompletionItem[] =>
+            ParticleNames.all.map(p => ctx.item(p.name, p.desc, p.name, false, vscode.CompletionItemKind.Class));
+    },
+
+    soundNames: () => {
+        const { SoundNames }: { SoundNames: { all: { name: string; desc: string }[] } } =
+            require('../../utils/EnumLib');
+        return (ctx: SuggestContext): vscode.CompletionItem[] =>
+            SoundNames.all.map(s => ctx.item(s.name, s.desc, s.name, false, vscode.CompletionItemKind.Reference));
+    },
+
+    gameRules: () => {
+        const rules = [
+            'announceAdvancements', 'commandBlockOutput', 'disableElytraMovementCheck',
+            'doDaylightCycle', 'doEntityDrops', 'doFireTick', 'doMobLoot', 'doMobSpawning',
+            'doTileDrops', 'doWeatherCycle', 'gameLoopFunction', 'keepInventory',
+            'logAdminCommands', 'maxCommandChainLength', 'maxEntityCramming', 'mobGriefing',
+            'naturalRegeneration', 'randomTickSpeed', 'reducedDebugInfo', 'sendCommandFeedback',
+            'showDeathMessages', 'spawnRadius', 'spectatorsGenerateChunks',
+        ];
+        return (ctx: SuggestContext): vscode.CompletionItem[] =>
+            rules.map(r => ctx.item(r, '', r, false, vscode.CompletionItemKind.Enum));
+    },
+
     effects: () => (_ctx: SuggestContext) => {
         const list = [
             'absorption', 'blindness', 'fire_resistance', 'glowing', 'haste',
@@ -114,14 +144,24 @@ const builtins: Record<string, (items?: YamlSuggestItem[]) => SuggestionProvider
 export function resolveSuggest(nameOrList?: string | YamlSuggestItem[]): SuggestionProvider | null {
     if (!nameOrList) { return null; }
 
-    // 字符串 → 查内置表
+    // 字符串 → 查内置表 → 查自定义提取数据 → null
     if (typeof nameOrList === 'string') {
         const factory = builtins[nameOrList];
-        if (!factory) {
-            console.warn(`[YAML] 未知 suggest: "${nameOrList}"，已回退为 placeholder`);
-            return null;
-        }
-        return factory();
+        if (factory) { return factory(); }
+
+        // 尝试从 YAML extractor 的自定义数据中查找
+        try {
+            const { getCustomData } = require('./extractor') as typeof import('./extractor');
+            const values = getCustomData(nameOrList);
+            if (values.length > 0) {
+                const list = values;
+                return (ctx: SuggestContext): vscode.CompletionItem[] =>
+                    list.map(v => ctx.item(v, '', v, false, vscode.CompletionItemKind.Field));
+            }
+        } catch { /* extractor 未加载 */ }
+
+        console.warn(`[YAML] 未知 suggest: "${nameOrList}"，已回退为 placeholder`);
+        return null;
     }
 
     // 数组 → 动态创建静态列表 suggest

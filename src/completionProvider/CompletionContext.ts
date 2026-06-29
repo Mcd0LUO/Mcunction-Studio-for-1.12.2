@@ -138,6 +138,12 @@ export class CompletionContext {
         return arr;
     }
 
+    advancements(): vscode.CompletionItem[] {
+        return this.loader.getAdvancementResNames().map(name =>
+            this.item(name, '', name, false, vscode.CompletionItemKind.Reference)
+        );
+    }
+
     teams(range?: vscode.Range): vscode.CompletionItem[] {
         return Array.from(this.loader.getTeamsData().keys()).map(name =>
             this.item(name, '', name, false, vscode.CompletionItemKind.Field, range)

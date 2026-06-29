@@ -2,10 +2,18 @@
  * YAML 命令定义的类型
  */
 
+/** 数据提取规则 */
+export interface YamlExtractRule {
+    pattern: string;      // 如 "set <name>" 或 "<location>"
+    type: string;         // 存储类型名（suggest 引用用）
+    description?: string; // 可选描述
+}
+
 /** YAML 解析后的原始节点 */
 export interface YamlCommandDef {
     command: string;
     description?: string;
+    extract?: YamlExtractRule[];
     children?: YamlNode[];
 }
 

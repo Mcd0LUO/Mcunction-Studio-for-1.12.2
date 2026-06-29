@@ -298,6 +298,7 @@ export class DataLoader {
         this.store.clear();
         this.functionResNames.length = 0;
         this.advancementResNames.length = 0;
+        try { (require('../dsl/yaml/extractor') as typeof import('../dsl/yaml/extractor')).clearAllCustomData(); } catch {}
 
         const promise1 = this.loadFunctionData(useConcurrentControl, concurrency);
         const promise2 = this.loadAdvancementData();
@@ -421,6 +422,16 @@ export class DataLoader {
         if (handler) {
             handler(uri, index, commands);
         }
+        // YAML 自定义数据提取
+        this.applyCustomExtract(commands);
+    }
+
+    /** 调用 YAML 加载器注册的自定义提取规则 */
+    private applyCustomExtract(commands: string[]): void {
+        try {
+            const { applyExtract } = require('../dsl/yaml/extractor') as typeof import('../dsl/yaml/extractor');
+            applyExtract(commands[0], commands);
+        } catch { /* extractor 模块未加载时静默跳过 */ }
     }
 
     // ================================================================

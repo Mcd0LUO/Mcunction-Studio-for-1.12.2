@@ -1,10 +1,10 @@
 /** /particle <name> <x> <y> <z> [xd] [yd] [zd] [speed] [count] [mode] [target] [params] */
 import { command, argument, literal, optional } from '../../builder';
-import { suggestCoordinates, suggestSelectors } from '../suggests';
+import { suggestCoordinates, suggestSelectors, suggestParticleNames } from '../suggests';
 
 export const particleCmd = command('particle')
     .then(
-        argument('<name>')
+        argument('<name>', suggestParticleNames())
             .then(argument('<x>', suggestCoordinates())
                 .then(argument('<y>', suggestCoordinates())
                     .then(argument('<z>', suggestCoordinates())

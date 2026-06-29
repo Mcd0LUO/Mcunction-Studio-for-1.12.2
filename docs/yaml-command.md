@@ -178,6 +178,57 @@ children:
               - forward: true
 ```
 
+## 数据提取 `extract`
+
+YAML 不仅能定义补全，还能定义**如何从函数文件中提取数据**——就像内置的 `scoreboard teams add <name>` 自动提取队伍名一样。
+
+### 示例
+
+```yaml
+command: warp
+# 从函数文件中提取 /warp set <name> → 存入 type "warp"
+extract:
+  - pattern: "set <name>"
+    type: warp
+children:
+  - literal:
+      name: tp
+      children:
+        - argument:
+            name: <location>
+            suggest: warp   # ← 引用提取的数据
+```
+
+效果：
+1. 函数文件中有 `/warp set lobby` → 自动提取 `lobby` 存入 `warp` 类型
+2. 输入 `/warp tp ` → 弹出 `lobby`（所有已提取的 warp 名）
+
+### 语法
+
+```yaml
+extract:
+  - pattern: "<匹配模式>"    # 空格分隔，字面量精确匹配，<name> 捕获值
+    type: <存储类型名>       # suggest 引用用
+```
+
+### 模式示例
+
+| pattern | 匹配 | 捕获 |
+|---------|------|------|
+| `"set <name>"` | `/warp set lobby` | `lobby` → type "warp" |
+| `"add <name> <value>"` | `/currency add gold 10` | `gold` → type "currency" |
+| `"<target>"` | `/mycmd @a` | `@a` → type "mycmd_target" |
+
+### 配合 suggest 使用
+
+被提取的类型名可以直接用作 suggest：
+
+```yaml
+suggest: warp  # ← 自动查找 type="warp" 的提取数据
+```
+
+如果内置 suggest 中找不到对应名称，引擎自动回退到提取数据中查找。
+
 ## 覆盖内置命令
 
 同名 YAML 文件会**覆盖**内置 TypeScript 命令的补全定义。例如修改 `/tp` 的补全行为：

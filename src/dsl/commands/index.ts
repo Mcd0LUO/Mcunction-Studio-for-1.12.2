@@ -47,18 +47,7 @@ import { gameruleCmd } from './vanilla/gamerule';
 import { advancementCmd } from './vanilla/advancement';
 import { worldborderCmd } from './vanilla/worldborder';
 
-// easycber
-import { dispatchCmd } from './easycber/dispatch';
-import { easycberCmd } from './easycber/easycber';
-import { scheduleCmd } from './easycber/schedule';
-import { teamCmd } from './easycber/team';
-import { areaCmd } from './easycber/area';
-import { randomCmd } from './easycber/random';
-import { scoreCmd } from './easycber/score';
-import { varCmd } from './easycber/var';
-import { foreachCmd } from './easycber/foreach';
-import { nbtCmd } from './easycber/nbt';
-import { superexeCmd } from './easycber/superexe';
+// EasyCber 已迁移为 YAML（src/dsl/builtin/*.yml），不再硬编码
 
 const ALL: RootNode[] = [
     effectCmd, functionCmd, scoreboardCmd,
@@ -70,8 +59,6 @@ const ALL: RootNode[] = [
     detectCmd, blockdataCmd, spreadplayersCmd,
     stopsoundCmd, playsoundCmd, particleCmd, summonCmd, tellrawCmd, entitydataCmd,
     replaceitemCmd, statsCmd, gameruleCmd, advancementCmd, worldborderCmd,
-    dispatchCmd, easycberCmd, scheduleCmd, teamCmd, areaCmd,
-    randomCmd, scoreCmd, varCmd, foreachCmd, nbtCmd, superexeCmd,
 ];
 
 export { ALL as commands };

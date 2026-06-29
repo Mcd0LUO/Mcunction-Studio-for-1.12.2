@@ -1,0 +1,6 @@
+# /dispatch <command>
+command: dispatch
+children:
+  - argument:
+      name: <command>
+      suggest: none
