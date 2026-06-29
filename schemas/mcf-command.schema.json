@@ -1,0 +1,162 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://mcd0luo.github.io/mcf-command.schema.json",
+  "title": "MCFunction Studio 命令定义",
+  "description": "用于定义 Minecraft 命令补全的 YAML 文件格式",
+  "type": "object",
+  "required": ["command"],
+  "properties": {
+    "command": {
+      "type": "string",
+      "description": "命令名（不含 / 前缀）",
+      "examples": ["mytp", "warp"]
+    },
+    "description": {
+      "type": "string",
+      "description": "命令描述"
+    },
+    "extract": {
+      "type": "array",
+      "description": "从函数文件中提取数据的规则",
+      "items": { "$ref": "#/definitions/ExtractRule" }
+    },
+    "children": {
+      "type": "array",
+      "description": "命令的子节点",
+      "items": { "$ref": "#/definitions/Node" }
+    }
+  },
+
+  "definitions": {
+    "Node": {
+      "oneOf": [
+        { "$ref": "#/definitions/Literal" },
+        { "$ref": "#/definitions/Argument" },
+        { "$ref": "#/definitions/Forward" }
+      ]
+    },
+
+    "Literal": {
+      "type": "object",
+      "required": ["literal"],
+      "properties": {
+        "literal": {
+          "type": "object",
+          "required": ["name"],
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "字面量关键字",
+              "examples": ["add", "remove", "set", "objectives", "players"]
+            },
+            "description": {
+              "type": "string",
+              "description": "可选描述"
+            },
+            "children": {
+              "type": "array",
+              "description": "子节点",
+              "items": { "$ref": "#/definitions/Node" }
+            }
+          }
+        }
+      }
+    },
+
+    "Argument": {
+      "type": "object",
+      "required": ["argument"],
+      "properties": {
+        "argument": {
+          "type": "object",
+          "required": ["name"],
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "参数名（展示用，如 <target>, [name]）",
+              "examples": ["<target>", "<name>", "[duration]"]
+            },
+            "suggest": {
+              "$ref": "#/definitions/Suggest",
+              "description": "补全建议来源"
+            },
+            "optional": {
+              "type": "boolean",
+              "default": false,
+              "description": "是否可选参数"
+            },
+            "children": {
+              "type": "array",
+              "description": "后续子节点",
+              "items": { "$ref": "#/definitions/Node" }
+            }
+          }
+        }
+      }
+    },
+
+    "Forward": {
+      "type": "object",
+      "required": ["forward"],
+      "properties": {
+        "forward": {
+          "type": "boolean",
+          "const": true,
+          "description": "转发到根命令列表（execute run 场景）"
+        }
+      }
+    },
+
+    "Suggest": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "内置 suggest 名称",
+          "enum": [
+            "selectors", "scoreboards", "teams", "tags", "functions",
+            "coordinates", "selectorsOrCoords",
+            "items", "blocks", "entityTypes",
+            "effects", "weatherTypes", "gameModes", "difficulties",
+            "criteria", "operations", "teamOptions",
+            "particleNames", "soundNames", "gameRules",
+            "advancements",
+            "placeholder", "none"
+          ]
+        },
+        {
+          "type": "array",
+          "description": "自定义静态补全列表",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string", "description": "补全项文本" },
+              "description": { "type": "string", "description": "补全项描述" }
+            }
+          }
+        }
+      ]
+    },
+
+    "ExtractRule": {
+      "type": "object",
+      "required": ["pattern", "type"],
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "description": "提取模式（如 'set <name>'）",
+          "examples": ["set <name>", "add <name> <value>", "<target>"]
+        },
+        "type": {
+          "type": "string",
+          "description": "存储类型名，suggest 字段引用用",
+          "examples": ["warp", "currency"]
+        },
+        "description": {
+          "type": "string",
+          "description": "可选描述"
+        }
+      }
+    }
+  }
+}

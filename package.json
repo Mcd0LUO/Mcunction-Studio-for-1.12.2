@@ -127,7 +127,10 @@
         "fileMatch": "McfunctionStudio.json",
         "url": "./schemas/McfunctionSutdio.schema.json"
       }
-    ]
+    ],
+    "yaml.schemas": {
+      "./schemas/mcf-command.schema.json": ["**/data/commands/*.yml", "**/out/dsl/global/*.yml"]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
