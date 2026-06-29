@@ -131,7 +131,7 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
+    "compile": "tsc -p ./ && node -e \"const d='out/dsl/global';require('fs').mkdirSync(d,{recursive:true});require('fs').cpSync('src/dsl/global',d,{recursive:true})\"",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
