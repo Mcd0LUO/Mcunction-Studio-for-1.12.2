@@ -1,0 +1,30 @@
+# /easycber setting <key> [value...]
+command: easycber
+children:
+  - literal:
+      name: setting
+      children:
+        - literal:
+            name: command_feedback
+            children:
+              - literal:
+                  name: "true"
+              - literal:
+                  name: "false"
+        - literal:
+            name: on_load
+            children:
+              - literal:
+                  name: add
+                  children:
+                    - argument:
+                        name: <function>
+                        suggest: functions
+              - literal:
+                  name: remove
+                  children:
+                    - argument:
+                        name: <function>
+                        suggest: functions
+              - literal:
+                  name: list

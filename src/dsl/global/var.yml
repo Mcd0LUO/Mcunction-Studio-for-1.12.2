@@ -1,0 +1,129 @@
+# /var set|operation|get|del|delall|save|load ...
+command: var
+children:
+  - literal:
+      name: set
+      children:
+        - argument:
+            name: <ns>
+            children:
+              - argument:
+                  name: <var>
+                  children:
+                    - literal:
+                        name: value
+                        children:
+                          - argument:
+                              name: <value>
+                              children:
+                                - literal:
+                                    name: int
+                                - literal:
+                                    name: float
+                                - literal:
+                                    name: string
+                                - literal:
+                                    name: bool
+                                - literal:
+                                    name: list
+                                - literal:
+                                    name: map
+                    - literal:
+                        name: from
+                        children:
+                          - literal:
+                              name: var
+                              children:
+                                - argument:
+                                    name: <ns>
+                                    children:
+                                      - argument:
+                                          name: <var>
+                          - literal:
+                              name: score
+                              children:
+                                - argument:
+                                    name: <sel>
+                                    suggest: selectors
+                                    children:
+                                      - argument:
+                                          name: <obj>
+                                          suggest: scoreboards
+                          - literal:
+                              name: entity
+                              children:
+                                - argument:
+                                    name: <sel>
+                                    suggest: selectors
+                                    children:
+                                      - argument:
+                                          name: <path>
+                          - literal:
+                              name: block
+                              children:
+                                - argument:
+                                    name: <x>
+                                    suggest: coordinates
+                                    children:
+                                      - argument:
+                                          name: <y>
+                                          suggest: coordinates
+                                          children:
+                                            - argument:
+                                                name: <z>
+                                                suggest: coordinates
+                                                children:
+                                                  - argument:
+                                                      name: <path>
+                          - literal:
+                              name: time
+                              children:
+                                - argument:
+                                    name: <unit>
+  - literal:
+      name: operation
+      children:
+        - argument:
+            name: <ns>
+            children:
+              - argument:
+                  name: <var>
+                  children:
+                    - literal:
+                        name: math
+                        children:
+                          - argument:
+                              name: <op>
+                    - literal:
+                        name: string
+                        children:
+                          - argument:
+                              name: <op>
+                    - literal:
+                        name: list
+                        children:
+                          - argument:
+                              name: <op>
+  - literal:
+      name: get
+      children:
+        - argument:
+            name: <ns>
+            children:
+              - argument:
+                  name: <var>
+                  optional: true
+  - literal:
+      name: del
+      children:
+        - argument:
+            name: <ns>
+            children:
+              - argument:
+                  name: <var>
+  - literal:
+      name: delall
+  - literal:
+      name: save
+  - literal:
+      name: load
