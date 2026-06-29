@@ -202,7 +202,7 @@ children:
                   name: <sel>
                   suggest: selectors
                   children:
-                    - { jump: 2 }       # ← 跳 2 层回 superexe 层
+                    - { jump: 3 }       # ← 跳 3 层回 superexe 层
         - literal:
             name: block
             children:
@@ -218,7 +218,7 @@ children:
                               name: <z>
                               suggest: coordinates
                               children:
-                                - { jump: 4 }   # ← 跳 4 层回 superexe 层
+                                - { jump: 5 }   # ← 跳 5 层回 superexe 层
   - literal:
       name: positioned
       children:
@@ -226,24 +226,26 @@ children:
             name: <pos>
             suggest: selectors
             children:
-              - { jump: 1 }
+              - { jump: 2 }
   - literal:
       name: run
       children:
         - { forward_root: true }
 ```
 
-**jump 层数怎么数**：叶子节点到目标节点经过了几层就写几。
+**jump 层数怎么数**：从放 jump 的节点开始，往上数到目标节点。只数祖先，自己不算。
 
 ```
-superexe           ← 目标层
-├── if             ← 1 层
-│   └── entity    ← 2 层
-│       └── sel   ← 3 层 (sel 是 entity 的 child，jump: 2 回到 superexe)
-│   └── block     ← 2 层
-│       └── ...z  ← 5 层 (jump: 4 回到 superexe)
-├── positioned     ← 1 层
-│   └── pos       ← 2 层 (jump: 1 回到 positioned，或 jump: 2 回到 superexe)
+superexe           ← 目标 (距离 3)
+├── if             ← 距离 2
+│   ├── entity    ← 距离 1
+│   │   └── sel   ← 这里放 jump: 3
+│   └── block     ← 距离 2
+│       ├── x     ← 距离 3
+│       │   └── y ← 距离 4
+│       │       └── z ← 这里放 jump: 5
+├── positioned     ← 距离 1
+│   └── pos       ← 这里放 jump: 2
 └── run
 ```
 
