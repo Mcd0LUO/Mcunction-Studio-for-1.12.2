@@ -1,13 +1,13 @@
 # YAML 命令定义
 
-在数据包的 `data/commands/` 目录下放置 `.yml` 文件即可为自定义命令添加补全支持。**无需编译，文件增删改即时热重载。**
+在数据包的 `.McfStudio/extra_command/` 目录下放置 `.yml` 文件即可为自定义命令添加补全支持。**支持子文件夹递归，修改后即时热重载。**
 
 ## 快速开始
 
 创建一个 `/mytp <target> <location>` 命令的补全：
 
+`.McfStudio/extra_command/mytp.yml`：
 ```yaml
-# data/commands/mytp.yml
 command: mytp
 description: 自定义传送命令
 children:
@@ -53,12 +53,23 @@ literal:
   children: [...]         # 后续节点
 ```
 
-### 转发节点 `forward`
+### 转发节点 `forward_root`
 
-转发到根命令列表，用于 `execute ... run` 等场景。
+转发到根命令列表，用于 `execute`/`foreach`/`superexe` 的 `run` 子句。
 
 ```yaml
-forward: true
+{ forward_root: true }
+```
+
+旧写法 `{ forward: true }` 仍兼容，但建议用 `forward_root`。
+
+### 跳转节点 `jump`
+
+向上跳 N 层后展示兄弟节点，用于 `superexe` 等可重复链式子命令。
+
+```yaml
+{ jump: 3 }    # 向上跳 3 层
+{ jump: true } # 默认跳 1 层（回到直接父节点）
 ```
 
 ## suggest 函数
@@ -74,6 +85,7 @@ forward: true
 | `teams` | 项目中已定义的队伍名称 | 队伍参数 |
 | `tags` | 项目中已定义的标签名称 | 标签参数 |
 | `functions` | 项目中所有函数名 | 函数参数 |
+| `advancements` | 项目中所有进度名 | 进度参数 |
 | `coordinates` | `~ ~ ~` 相对/绝对坐标 | 坐标参数 |
 | `selectorsOrCoords` | selectors + 坐标占位符 | `/tp` 目标 |
 | `items` | Minecraft 物品 ID 列表 | 物品参数 |
@@ -86,29 +98,25 @@ forward: true
 | `criteria` | `dummy`/`trigger`/`deathCount`/... | 记分板准则 |
 | `operations` | `+=`/`-=`/`*=`/`/=`/`%=`/`>`/`<`/`><`/`=` | 运算操作符 |
 | `teamOptions` | `color`/`friendlyFire`/`collisionRule`/... | 队伍选项 |
+| `particleNames` | Minecraft 粒子效果 ID | `/particle` |
+| `soundNames` | Minecraft 音效 ID | `/playsound` `/stopsound` |
+| `gameRules` | 23 个 gamerule 名称 | `/gamerule` |
 | `placeholder` | 仅展示参数名，不插入内容 | 自由输入的位置 |
 | `none` | 空补全 | 不需要提示的位置 |
 
 ### 自定义静态列表
 
-`suggest` 字段写成数组，直接内联补全项：
-
 ```yaml
-# 简单值列表
 suggest:
   - name: lobby
+    description: 大厅
   - name: arena
-  - name: shop
-
-# 带描述的列表
-suggest:
-  - name: lobby
-    description: 玩家大厅
-  - name: arena
-    description: PvP 竞技场
-  - name: shop
-    description: 商店区域
+    description: 竞技场
 ```
+
+### 自定义动态列表（extract）
+
+`suggest` 也可以引用 `extract` 的类型名，引擎自动回退查找。见下方「数据提取」章节。
 
 ## 完整示例
 
@@ -157,16 +165,15 @@ children:
               - name: shop
   - literal:
       name: list
-      description: 列出所有传送点
+      description: 列出传送点
 ```
 
 ### 带转发的命令
 
-`/runas <target> run <命令>`
+`/runas <target> run <任意命令>`
 
 ```yaml
 command: runas
-description: 以指定实体身份执行命令
 children:
   - argument:
       name: <target>
@@ -175,20 +182,79 @@ children:
         - literal:
             name: run
             children:
-              - forward: true
+              - { forward_root: true }
+```
+
+### 可重复链式子命令
+
+`/superexe [if|unless|positioned|facing] [...] run <任意命令>`
+
+```yaml
+command: superexe
+children:
+  - literal:
+      name: if
+      children:
+        - literal:
+            name: entity
+            children:
+              - argument:
+                  name: <sel>
+                  suggest: selectors
+                  children:
+                    - { jump: 2 }       # ← 跳 2 层回 superexe 层
+        - literal:
+            name: block
+            children:
+              - argument:
+                  name: <x>
+                  suggest: coordinates
+                  children:
+                    - argument:
+                        name: <y>
+                        suggest: coordinates
+                        children:
+                          - argument:
+                              name: <z>
+                              suggest: coordinates
+                              children:
+                                - { jump: 4 }   # ← 跳 4 层回 superexe 层
+  - literal:
+      name: positioned
+      children:
+        - argument:
+            name: <pos>
+            suggest: selectors
+            children:
+              - { jump: 1 }
+  - literal:
+      name: run
+      children:
+        - { forward_root: true }
+```
+
+**jump 层数怎么数**：叶子节点到目标节点经过了几层就写几。
+
+```
+superexe           ← 目标层
+├── if             ← 1 层
+│   └── entity    ← 2 层
+│       └── sel   ← 3 层 (sel 是 entity 的 child，jump: 2 回到 superexe)
+│   └── block     ← 2 层
+│       └── ...z  ← 5 层 (jump: 4 回到 superexe)
+├── positioned     ← 1 层
+│   └── pos       ← 2 层 (jump: 1 回到 positioned，或 jump: 2 回到 superexe)
+└── run
 ```
 
 ## 数据提取 `extract`
 
 YAML 不仅能定义补全，还能定义**如何从函数文件中提取数据**——就像内置的 `scoreboard teams add <name>` 自动提取队伍名一样。
 
-### 示例
-
 ```yaml
 command: warp
-# 从函数文件中提取 /warp set <name> → 存入 type "warp"
 extract:
-  - pattern: "set <name>"
+  - pattern: "set <name>"    # /warp set xxx → 提取 xxx
     type: warp
 children:
   - literal:
@@ -196,72 +262,33 @@ children:
       children:
         - argument:
             name: <location>
-            suggest: warp   # ← 引用提取的数据
+            suggest: warp   # ← 引用 type 名
 ```
 
 效果：
-1. 函数文件中有 `/warp set lobby` → 自动提取 `lobby` 存入 `warp` 类型
-2. 输入 `/warp tp ` → 弹出 `lobby`（所有已提取的 warp 名）
+1. 函数文件中有 `/warp set lobby` → 自动提取 `lobby`，跨文件汇总
+2. 输入 `/warp tp ` → 弹出所有已提取的 warp 名
 
-### 语法
+`extract` 语法：
 
 ```yaml
 extract:
-  - pattern: "<匹配模式>"    # 空格分隔，字面量精确匹配，<name> 捕获值
-    type: <存储类型名>       # suggest 引用用
+  - pattern: "<模式>"    # 空格分隔，字面量精确匹配，<name> 捕获值
+    type: <类型名>        # suggest 引用用
 ```
 
-### 模式示例
+## 文件结构
 
-| pattern | 匹配 | 捕获 |
-|---------|------|------|
-| `"set <name>"` | `/warp set lobby` | `lobby` → type "warp" |
-| `"add <name> <value>"` | `/currency add gold 10` | `gold` → type "currency" |
-| `"<target>"` | `/mycmd @a` | `@a` → type "mycmd_target" |
-
-### 配合 suggest 使用
-
-被提取的类型名可以直接用作 suggest：
-
-```yaml
-suggest: warp  # ← 自动查找 type="warp" 的提取数据
+```
+项目/.McfStudio/extra_command/
+├── mytp.yml              # 所有 .yml 文件均会被递归扫描
+├── utils/
+│   └── economy.yml       # 支持子文件夹
+└── admin/
+    └── warp.yml
 ```
 
-如果内置 suggest 中找不到对应名称，引擎自动回退到提取数据中查找。
-
-## 覆盖内置命令
-
-同名 YAML 文件会**覆盖**内置 TypeScript 命令的补全定义。例如修改 `/tp` 的补全行为：
-
-```yaml
-# data/commands/tp.yml   ← 与内置同名
-command: tp
-children:
-  - argument:
-      name: <target>
-      suggest: selectors
-      children:
-        - argument:
-            name: <destination>
-            suggest: functions   # 改成补全函数名
-```
-
-## 文件监听
-
-- 创建新 `.yml` → 即时注册
-- 修改 `.yml` → 即时更新
-- 删除 `.yml` → 即时移除
-- YAML 语法错误 → 弹窗提示文件名 + 错误原因，不崩溃
-
-## 语法校验
-
-```yaml
-# ✅ 正确
-argument:
-  name: <target>
-  suggest: selectors
-
-# ❌ 错误：拼写错误
-argumant:          # → 弹窗 "未知节点类型 argumant"
-  name: <target>
-```
+- 创建/修改/删除 `.yml` → 即时生效
+- YAML 语法错误 → 弹窗提示，不崩溃
+- 同名命令覆盖内置 TypeScript 定义
+- 热重载快捷键：`Ctrl+Shift+R` 或命令面板 "刷新函数|记分板|进度|标签池"
