@@ -44,16 +44,12 @@ export function unregisterCommandRules(command: string): void {
 // 提取
 // ================================================================
 
-export function applyExtractForFile(cmdName: string, commands: string[], fileUri: string): void {
+export function applyExtractForFile(cmdName: string, commands: string[], fileUri: string, line: number = 0): void {
     const rules = rulesByCommand.get(cmdName);
     if (!rules) { return; }
 
     const index = getIndex();
     if (!index) { return; }
-
-    // 当前从 handleSingleLine 逐行调，行号未知 → 用 0
-    // LineIndex 的 clearLine 机制保证同一行重复写会覆盖
-    const line = 0;
 
     for (const rule of rules) {
         const args = commands.slice(1);
