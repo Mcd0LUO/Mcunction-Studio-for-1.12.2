@@ -39,16 +39,18 @@ export class CompletionEngine {
 
         let node: CommandNode = root;
         let cursor = 1;
-        const ancestors: CommandNode[] = [root];
+        const ancestors: CommandNode[] = [];
 
         while (cursor < commands.length - 1) {
             const next = this.matchChild(node, commands[cursor]);
             if (!next) { break; }
 
-            // jump 节点：向上弹出 levels 层
+            // jump 节点：向上弹出 levels 层（从栈顶祖先开始）
             if (next.kind === 'jump') {
                 const levels = (next as JumpNode).levels;
-                for (let l = 0; l < levels && ancestors.length > 0; l++) { node = ancestors.pop()!; }
+                let target = node;
+                for (let l = 0; l < levels && ancestors.length > 0; l++) { target = ancestors.pop()!; }
+                node = target;
                 cursor++;
                 continue;
             }
@@ -61,7 +63,9 @@ export class CompletionEngine {
         // jump 节点也可能作为子节点被消费后到达
         if (node.kind === 'jump') {
             const levels = (node as JumpNode).levels;
-            for (let l = 0; l < levels && ancestors.length > 0; l++) { node = ancestors.pop()!; }
+            let target = node;
+            for (let l = 0; l < levels && ancestors.length > 0; l++) { target = ancestors.pop()!; }
+            node = target;
         }
 
         const items = await this.suggestionsFor(node, commands, lineText, ancestors);
@@ -96,11 +100,11 @@ export class CompletionEngine {
         for (const child of node.children) {
             if (child.kind === 'forward_root') { return this.getRootItems(); }
             if (child.kind === 'jump') {
-                // 向上弹 levels 层，展示目标节点的兄弟
+                // 向上弹 levels 层（从当前节点的父级开始），展示目标节点的兄弟
                 const j = child as JumpNode;
                 let target = node;
-                const stack = [...ancestors, node];
-                for (let l = 0; l < j.levels && stack.length > 0; l++) { target = stack.pop()!; }
+                const chain = [...ancestors];
+                for (let l = 0; l < j.levels && chain.length > 0; l++) { target = chain.pop()!; }
                 const items: vscode.CompletionItem[] = [];
                 for (const sib of target.children) {
                     if (sib.kind === 'literal') {
