@@ -400,26 +400,15 @@ export class DataLoader {
     }
 
     public async loadSingleFuncFileByUri(path: vscode.Uri): Promise<void> {
-        const fileUri = path.toString();
         // 清除该文件旧提取值
-        try { (require('../dsl/yaml/extractor') as typeof import('../dsl/yaml/extractor')).clearFileExtract(fileUri); } catch {}
+        try { (require('../dsl/yaml/extractor') as typeof import('../dsl/yaml/extractor')).clearFileExtract(path.toString()); } catch {}
         const fileContent = await vscode.workspace.fs.readFile(path);
         const content = new TextDecoder('utf-8').decode(fileContent);
-        const lines = content.split(/\r?\n|\r/);
-        this.parseLines(path, lines);
-        // 提取 YAML 自定义数据（仅全量加载时）
-        try {
-            const { applyExtractForFile } = require('../dsl/yaml/extractor') as typeof import('../dsl/yaml/extractor');
-            for (const line of lines) {
-                const trimLine = line.trim();
-                if (!trimLine || trimLine.startsWith('#')) { continue; }
-                const commands = CommandUtils.extraceActiveCommand(trimLine);
-                applyExtractForFile(commands[0], commands, fileUri);
-            }
-        } catch { /* extractor 未加载 */ }
+        this.parseLines(path, content.split(/\r?\n|\r/));
     }
 
     public async loadSingleFuncFileByDoc(doc: vscode.TextDocument, startLine: number = 0): Promise<void> {
+        try { (require('../dsl/yaml/extractor') as typeof import('../dsl/yaml/extractor')).clearFileExtract(doc.uri.toString()); } catch {}
         this.parseLines(doc.uri, doc.getText().split(/\r?\n|\r/), startLine);
     }
 
@@ -436,6 +425,11 @@ export class DataLoader {
         if (handler) {
             handler(uri, index, commands);
         }
+        // YAML 自定义数据提取（与 scoreboard/team 提取走同一通道）
+        try {
+            const { applyExtractForFile } = require('../dsl/yaml/extractor') as typeof import('../dsl/yaml/extractor');
+            applyExtractForFile(commands[0], commands, uri.toString());
+        } catch { /* extractor 未加载 */ }
     }
 
     // ================================================================
