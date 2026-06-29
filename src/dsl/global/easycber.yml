@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=../../../schemas/mcf-command.schema.json
 # /easycber setting <key> [value...]
 command: easycber
 children:

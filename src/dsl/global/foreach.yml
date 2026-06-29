@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=../../../schemas/mcf-command.schema.json
 # /foreach var|data ... as <ns> <var> run <command>
 command: foreach
 children:
