@@ -1,6 +1,10 @@
 # Change Log
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
+
+# [1.4.0] - 2026-6-29
+- 底层重构命令调用方式，改为链式节点树，优化性能
+- 新增自定义yaml 命令配置，可自定义补全
  
 # [1.3.3] - 2026-2-4
 ### 修复

@@ -12,6 +12,7 @@ import { VsCommandProcessor } from './core/VsCommandProcessor';
 import { CompletionEngine } from './dsl/engine';
 import { registerDemoCommands } from './dsl/demo';
 import { YamlCommandLoader } from './dsl/yaml/loader';
+import { YamlCompletionProvider } from './dsl/yaml/completion';
 
 
 export let rootDir: vscode.Uri;
@@ -38,6 +39,13 @@ export function activate(context: vscode.ExtensionContext) {
 	const engine = new CompletionEngine(dataloader);
 	registerDemoCommands(engine);
 	YamlCommandLoader.load(engine, rootDir, context.extensionPath);
+	// 注册 YAML 命令文件补全
+	context.subscriptions.push(
+		vscode.languages.registerCompletionItemProvider(
+			{ scheme: 'file', pattern: '**/data/commands/*.yml' },
+			new YamlCompletionProvider()
+		)
+	);
 	// 注册Signature Help
 	registerSignatureHelp();
 	// 注册CodeLens 快速命令
