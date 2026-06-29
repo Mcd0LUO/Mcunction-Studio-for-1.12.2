@@ -111,8 +111,8 @@
       "oneOf": [
         {
           "type": "string",
-          "description": "内置 suggest 名称",
-          "enum": [
+          "description": "内置 suggest 或 extract type 名",
+          "examples": [
             "selectors", "scoreboards", "teams", "tags", "functions",
             "coordinates", "selectorsOrCoords",
             "items", "blocks", "entityTypes",
