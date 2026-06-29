@@ -131,7 +131,7 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./ && cp src/dsl/builtin/*.yml out/dsl/builtin/ 2>/dev/null; true",
+    "compile": "tsc -p ./ && node -e \"require('fs').cpSync('src/dsl/builtin','out/dsl/builtin',{recursive:true})\"",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
