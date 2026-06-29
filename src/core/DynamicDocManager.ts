@@ -57,20 +57,6 @@ export class DynamicDocManager {
                     const funcData = DataLoader.getInstance().getFunctionData().get(old_res ? old_res : '');
                     // 删除文档缓存
                     DataLoader.getInstance().clearSingleFileAllCache(file.oldUri);
-                    // const edit = new vscode.WorkspaceEdit();
-                    // if (old_res && new_res && funcData) {
-                    //     const entries = Array.from(funcData.ref.entries());
-                    //     entries.forEach(async ([name, lines]) => {
-                    //         // 处理每一项引用
-                    //         await this.updateFunctionReference(old_res, new_res, name, lines, edit);
-                    //     });
-                    //     // 应用edit
-                    //     const success = await vscode.workspace.applyEdit(edit);
-                    //     if (!success) {
-                    //         vscode.window.showErrorMessage('修改失败');
-
-                    //     }
-                    // }
 
                     // 重新加载
                     DataLoader.getInstance().loadSingleFuncFileByUri(file.newUri);
@@ -121,50 +107,4 @@ export class DynamicDocManager {
         }
 
     }
-    /**
-     * 修改函数引用
-     * @param oldFuncCall 旧函数调用
-     * @param newFuncCall 新函数调用
-     * @param funcName 指定修改的函数
-     * @param lineNumbers 指定函数行号
-     * @param edit 编辑对象
-     * @returns 修改的文档uri
-     */
-    private async updateFunctionReference(
-        oldFuncCall: string,
-        newFuncCall: string,
-        funcName: string,
-        lineNumbers: number[],
-        edit: vscode.WorkspaceEdit
-    ): Promise<vscode.Uri[]> {
-        const modifiedUris: vscode.Uri[] = [];
-        console.log(lineNumbers);
-        const funcUri = MinecraftUtils.buildFunctionUri(funcName);
-
-        if (!funcUri || !oldFuncCall || !newFuncCall) {
-            return modifiedUris;
-        }
-
-        try {
-            const doc = await vscode.workspace.openTextDocument(funcUri);
-
-            // 收集当前文件的所有编辑操作
-            lineNumbers.forEach(lineNum => {
-                if (lineNum < 0 || lineNum >= doc.lineCount) {
-                    return; // 跳过无效行号
-                }
-                const line = doc.lineAt(lineNum);
-                const newContent = line.text.replace(oldFuncCall, newFuncCall);
-                edit.replace(funcUri, line.range, newContent);
-            });
-
-            modifiedUris.push(funcUri);
-        } catch (error) {
-            vscode.window.showErrorMessage(`处理函数 ${funcName} 失败: ${(error as Error).message}`);
-        }
-
-        return modifiedUris;
-    }
-
 }
-

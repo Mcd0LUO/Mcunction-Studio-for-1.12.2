@@ -52,7 +52,8 @@ export class DataLoader {
 
     private constructor() {
         this.registerHandlers();
-        this.init();
+        // 注意：init() 不在构造函数中调用，因为此时 rootDir 可能尚未设置。
+        // 由 extension.ts 的 activate() 在 rootDir 就绪后显式调用。
     }
 
     /** 委托给各 CommandExtractor 注册（原版 + EasyCber 各自独立） */
@@ -61,7 +62,12 @@ export class DataLoader {
         registerEasyCber(this.store, this.commandHandlers);
     }
 
-    private async init(): Promise<void> {
+    /** 由 extension.ts 在 rootDir 设置后调用 */
+    public async init(): Promise<void> {
+        if (!rootDir) {
+            console.error('[McfunctionStudio] rootDir 未设置，无法加载数据');
+            return;
+        }
         await this.loadExtensionConfig();
         this.loadData(true, this.configData.FileProcessing.MaxConcurrentReads);
     }
@@ -299,24 +305,34 @@ export class DataLoader {
         try {
             const [result1, result2] = await Promise.all([promise1, promise2]);
 
-            if (result1 && result2) {
-                const statusMsg = `加载函数 ${this.functionResNames.length} | 记分板 ${this.store.getScoreboards().size} | 标签 ${this.store.getTags().size} | 队伍 ${this.store.getTeams().size} | 进度 ${this.advancementResNames.length} | 假玩家 ${this.store.getFakePlayers().size} 耗时>> ${result1}s <<`;
-                vscode.window.setStatusBarMessage(statusMsg, 3000);
-                vscode.window.showInformationMessage(`McfunctionStudio 初始化完成, 耗时 ${result1.toFixed(3)} s`);
+            if (!result1 || !result2) {
+                console.warn('[McfunctionStudio] 数据加载未完成', { functionResult: result1, advancementResult: result2 });
+                return;
             }
+
+            const statusMsg = `加载函数 ${this.functionResNames.length} | 记分板 ${this.store.getScoreboards().size} | 标签 ${this.store.getTags().size} | 队伍 ${this.store.getTeams().size} | 进度 ${this.advancementResNames.length} | 假玩家 ${this.store.getFakePlayers().size} 耗时>> ${result1}s <<`;
+            vscode.window.setStatusBarMessage(statusMsg, 3000);
+            vscode.window.showInformationMessage(`McfunctionStudio 初始化完成, 耗时 ${result1.toFixed(3)} s`);
         } catch (error) {
+            console.error('[McfunctionStudio] 加载数据失败', error);
             vscode.window.showErrorMessage(`加载数据失败: ${error}`);
         }
     }
 
     public async loadAdvancementData(): Promise<boolean | null> {
-        const advancementPaths = await DataLoader.getAllAdvancementsPaths();
-        for (const path of advancementPaths) {
-            const resName = MinecraftUtils.buildAdvancementCall(path);
-            if (!resName) { continue; }
-            this.advancementResNames.push(resName);
+        try {
+            const advancementPaths = await DataLoader.getAllAdvancementsPaths();
+            for (const path of advancementPaths) {
+                const resName = MinecraftUtils.buildAdvancementCall(path);
+                if (!resName) { continue; }
+                this.advancementResNames.push(resName);
+            }
+            return true;
+        } catch (error) {
+            console.error('[McfunctionStudio] 加载进度数据失败', error);
+            vscode.window.showErrorMessage(`加载进度数据失败：${(error as Error).message}`);
+            return null;
         }
-        return true;
     }
 
     public async loadFunctionData(
@@ -365,6 +381,7 @@ export class DataLoader {
             console.log(`【函数加载性能测试】模式：${modeName}，文件数量：${functionPaths.length}，耗时：${duration.toFixed(3)}秒`);
             return duration;
         } catch (error) {
+            console.error('[McfunctionStudio] 加载函数数据失败', error);
             vscode.window.showErrorMessage(`加载函数数据失败：${(error as Error).message}`);
             return null;
         }
@@ -425,6 +442,7 @@ export class DataLoader {
         label: string,
         silent: boolean = false
     ): Promise<vscode.Uri[]> {
+        if (!rootDir) { return []; }
         const uri = vscode.Uri.joinPath(rootDir, dirName);
         try {
             await vscode.workspace.fs.stat(uri);
@@ -459,7 +477,4 @@ export class DataLoader {
         return this.scanFiles('advancements', '**/*.json', 'Advancement', '进度');
     }
 
-    public static async getAllMacroPaths(_macroUri?: vscode.Uri): Promise<vscode.Uri[]> {
-        return this.scanFiles('macros', '**/*.mcmacro', 'Macro', '宏', /* silent */ true);
-    }
 }

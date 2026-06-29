@@ -122,7 +122,7 @@ export class CompletionContext {
     // 数据访问 — 动态（来自 DataLoader）
     // ================================================================
 
-    async functions(range?: vscode.Range): Promise<vscode.CompletionItem[]> {
+    functions(range?: vscode.Range): vscode.CompletionItem[] {
         const arr = this.loader.getFunctionResNames().map(name =>
             this.item(name, '', name, true, vscode.CompletionItemKind.Function, range)
         );

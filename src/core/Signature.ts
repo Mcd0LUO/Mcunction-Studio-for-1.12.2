@@ -1,9 +1,7 @@
 import * as vscode from 'vscode';
 import { CommandUtils } from '../utils/CommandUtils';
 import { DataLoader } from './DataLoader';
-import { MacroManager } from '../macro/MacroManager';
-import { MacroApply } from '../macro/MacroaApply';
-import { MacroDefinition } from '../macro/MacroAst';
+
 
 /**
  * 命令签名帮助提供器（示例：scoreboard/function命令参数提示）
@@ -18,9 +16,6 @@ export class McFunctionSignatureHelpProvider implements vscode.SignatureHelpProv
     ): vscode.ProviderResult<vscode.SignatureHelp> {
         if (!DataLoader.getInstance().getConfig().Signature) { return null; }
         const lineText = document.lineAt(position.line).text.trimStart();
-        if (lineText.startsWith('$')) {
-            return this.provideMacroSignatureHelp(lineText);
-        }
         const commands = CommandUtils.extraceActiveCommand(lineText);
         switch (commands[0]) {
             case 'scoreboard':
@@ -38,89 +33,6 @@ export class McFunctionSignatureHelpProvider implements vscode.SignatureHelpProv
         }
 
     }
-    /**
-     * 提供宏签名帮助（支持参数数量不同的宏重载）
-     * 核心逻辑：
-     * 1. 解析宏调用文本，获取命名空间/宏名/参数文本
-     * 2. 获取该宏的所有重载版本（按参数数量区分）
-     * 3. 为每个重载版本创建独立的签名信息
-     * 4. 根据输入参数数量，自动激活匹配的重载签名和当前参数索引
-     * @param text 宏调用文本（如 $foo.bar(a,b)、$foo.bar(、$foo.bar）
-     * @returns 签名帮助对象 | null
-     */
-    provideMacroSignatureHelp(text: string): vscode.ProviderResult<vscode.SignatureHelp> {
-        // 1. 边界处理：空文本直接返回null
-        if (!text || typeof text !== 'string') {
-            return null;
-        }
-
-        // 2. 解析宏调用文本（使用增强鲁棒性的parseMacroCall）
-        const { namespace, macroName, paramText } = MacroApply.getInstance().parseMacroCall(text);
-        // 无有效宏名/命名空间，返回null
-        if (!macroName) {
-            return null;
-        }
-
-        // 3. 获取该宏的所有重载版本（按参数数量区分）
-        const macroOverloads = MacroManager.getInstance().getMacroByNameInNamespace(namespace, macroName);
-        if (!macroOverloads || macroOverloads.length === 0) {
-            return null;
-        }
-
-        // 4. 构建签名帮助核心对象
-        const signatureHelp = new vscode.SignatureHelp();
-        signatureHelp.activeSignature = 0; // 默认激活第一个签名
-        signatureHelp.activeParameter = 0; // 默认激活第一个参数
-
-        // 5. 为每个重载版本创建独立的签名信息
-        const signatureItems = this.buildSignatureItems(macroOverloads);
-        if (signatureItems.length === 0) {
-            return null;
-        }
-        // 获取文档注释
-        signatureHelp.signatures = signatureItems;
-
-        // 6. 精准计算激活的签名和参数索引
-        const { activeSignature, activeParameter } = this.calculateActiveItems(paramText, signatureItems);
-        signatureHelp.activeSignature = activeSignature;
-        signatureHelp.activeParameter = activeParameter;
-
-        return signatureHelp;
-    }
-
-    /**
-     * 为每个宏重载版本构建独立的签名信息
-     * @param macroOverloads 宏重载列表（不同参数数量）
-     * @returns 签名信息数组
-     */
-    private buildSignatureItems(macroOverloads: any[]): vscode.SignatureInformation[] {
-        const signatureItems: vscode.SignatureInformation[] = [];
-
-        for (const macro of macroOverloads) {
-            // 构建签名标题（如 "set_num(scoreboard: string, num: number)"）
-            const paramLabels = macro.params.map((p: { name: any; paramType: any; })  => `${p.name}: ${p.paramType || 'any'}`).join(', ');
-            const signatureLabel = `${macro.name}(${paramLabels})`;
-
-            // 创建签名信息（支持添加文档说明）
-            const signature = new vscode.SignatureInformation(
-                signatureLabel,
-            );
-
-            // 为每个参数添加详细信息
-            for (const param of macro.params) {
-                signature.parameters.push(new vscode.ParameterInformation(
-                    `${param.name}: ${param.paramType || 'any'}`,
-                    `${MacroManager.getInstance().getMacroDocComment(macro.uid) || '无'}`
-                ));
-            }
-
-            signatureItems.push(signature);
-        }
-
-        // 按参数数量排序（便于匹配）
-        return signatureItems.sort((a, b) => a.parameters.length - b.parameters.length);
-    }
-
     /**
      * 计算激活的签名（匹配参数数量）和激活的参数索引
      * @param paramText 解析后的参数文本（如 "a,b"、""、"a,"）

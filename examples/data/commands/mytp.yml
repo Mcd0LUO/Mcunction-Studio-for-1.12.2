@@ -1,0 +1,20 @@
+# /mytp <target> <location>
+# 示例：外部拓展命令，使用内置 suggest + 自定义静态列表
+command: mytp
+description: 自定义传送命令
+children:
+  - argument:
+      name: <target>
+      suggest: selectors
+      children:
+        - argument:
+            name: <location>
+            suggest:
+              - name: lobby
+                description: 大厅
+              - name: arena
+                description: 竞技场
+              - name: shop
+                description: 商店
+              - name: spawn
+                description: 出生点

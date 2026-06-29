@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import { JsonMessageUtils, ColorCode, StyleCode, FormatCode, LINE_BREAK, OBFUSCATED_SYMBOL } from '../utils/JsonMessageUtils';
 import { DataLoader } from '../core/DataLoader';
 import { CommandUtils } from '../utils/CommandUtils';
-import { StringBuilder } from '../macro/StringBuilder';
 
 /**
  * 防抖延迟时间（毫秒）
@@ -146,7 +145,7 @@ export class LinePreviewManager implements vscode.Disposable {
             };
 
             const text = component.text;
-            const currentText = new StringBuilder(); // 当前片段文本
+            let currentText = ''; // 当前片段文本
             let currentFragmentStyle: StyleState = { ...componentBaseStyle }; // 当前片段样式（默认继承组件基础样式）
             let applyObfuscation = false; // §k仅影响下一个字符
             let isFirstInner = true;
@@ -157,7 +156,7 @@ export class LinePreviewManager implements vscode.Disposable {
 
                 // 处理换行符（可视化↵）
                 if (char === LINE_BREAK.charAt(0)) {
-                    currentText.append('↵');
+                    currentText += '↵';
                     i++;
                     continue;
                 }
@@ -165,14 +164,14 @@ export class LinePreviewManager implements vscode.Disposable {
                 // 处理格式代码（§开头）
                 if (char === '§' && i + 1 < text.length) {
                     // 有累积文本时，先存入上一个片段
-                    if (currentText.length() > 0) {
+                    if (currentText.length > 0) {
                         fragments.push({
                             ...currentFragmentStyle,
-                            text: currentText.toString(),
+                            text: currentText,
                             isInner: !isFirstInner,
                             line: 0
                         });
-                        currentText.clear();
+                        currentText = '';
                         isFirstInner = false;
                     }
 
@@ -221,17 +220,17 @@ export class LinePreviewManager implements vscode.Disposable {
                         ? OBFUSCATED_SYMBOL
                         : (char === ' ' ? '\u00A0' : char); // 空格替换为非换行空格
 
-                    currentText.append(charToAdd);
+                    currentText += charToAdd;
                     applyObfuscation = false; // §k仅生效一次
                     i++;
                 }
             }
 
             // 加入最后一个文本片段
-            if (currentText.length() > 0) {
+            if (currentText.length > 0) {
                 fragments.push({
                     ...currentFragmentStyle,
-                    text: currentText.toString(),
+                    text: currentText,
                     isInner: !isFirstInner,
                     line: 0
                 });

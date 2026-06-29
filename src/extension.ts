@@ -10,8 +10,9 @@ import { registerHoverProvider } from './core/HoverProvider';
 import { DynamicDocManager } from './core/DynamicDocManager';
 import { LinePreviewManager } from './core/LinePreviewManager';
 import { VsCommandProcessor } from './core/VsCommandProcessor';
-import { registerMcfunctionDebugConfigProvider } from './macro/MacroManager';
-import { registerMcMacroDefinitionProvider } from './macro/McMacroDefinitionProvider';
+import { CompletionEngine } from './dsl/engine';
+import { registerDemoCommands } from './dsl/demo';
+import { YamlCommandLoader } from './dsl/yaml/loader';
 
 
 export let rootDir: vscode.Uri;
@@ -19,6 +20,8 @@ export let rootDir: vscode.Uri;
 export function activate(context: vscode.ExtensionContext) {
 	// 获取data目录
 	rootDir = MinecraftUtils.getRootDir();
+	console.log('[McfunctionStudio] rootDir 已设置', rootDir.fsPath);
+
 	// 注册代码补全提供者
 	const code_provider = vscode.languages.registerCompletionItemProvider(
 		'mcfunction',
@@ -27,10 +30,15 @@ export function activate(context: vscode.ExtensionContext) {
 	);
 	context.subscriptions.push(code_provider);
 
-	// 读取函数数据
+	// 读取函数数据（init() 必须在 rootDir 设置后调用）
 	const dataloader =  DataLoader.getInstance();
+	dataloader.init();
 	// 注册命令
 	CommandRegistry.autoRegisterProviders(context);
+	// 初始化 DSL 引擎 + 注册 Demo 命令
+	const engine = new CompletionEngine(dataloader);
+	registerDemoCommands(engine);
+	YamlCommandLoader.load(engine, rootDir);
 	// 注册Signature Help
 	registerSignatureHelp();
 	// 注册CodeLens 快速命令
@@ -51,7 +59,12 @@ export function activate(context: vscode.ExtensionContext) {
 		// 新建函数文件
 		vscode.commands.registerCommand('mcf-studio.createFunctionFile', VsCommandProcessor.createNewFunctionFile),
 		// 快速debug tellraw
-		vscode.commands.registerCommand('mcf-studio.fastScoreboardDebug', VsCommandProcessor.fastScoreboardDebug)
+		vscode.commands.registerCommand('mcf-studio.fastScoreboardDebug', VsCommandProcessor.fastScoreboardDebug),
+		// DSL 调试：切换管线日志
+		vscode.commands.registerCommand('mcf-studio.toggleDslDebug', () => {
+			CompletionEngine.debug = !CompletionEngine.debug;
+			vscode.window.showInformationMessage(`DSL 管线日志: ${CompletionEngine.debug ? 'ON' : 'OFF'}（查看 Developer Tools Console）`);
+		})
 	);
 	// 注册json预览
 	const linePre = new LinePreviewManager(); 
@@ -68,9 +81,6 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 
 	});
-	// 注册运行/debug
-	registerMcfunctionDebugConfigProvider(context);
-
 
 }
 
