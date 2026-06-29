@@ -38,9 +38,16 @@ export class YamlCommandLoader {
 
     /** 重新加载用户 YAML（供 reloadWorkspace 命令调用） */
     static async reloadUser(engine: CompletionEngine, rootDir: vscode.Uri): Promise<void> {
-        if (!rootDir) { return; }
+        if (!rootDir) {
+            console.warn('[YAML] reloadUser: rootDir 为 undefined');
+            return;
+        }
         const extraDir = vscode.Uri.joinPath(rootDir, '.McfStudio', 'extra_command');
-        try { await vscode.workspace.fs.stat(extraDir); } catch { return; }
+        try { await vscode.workspace.fs.stat(extraDir); } catch {
+            console.warn(`[YAML] reloadUser: 目录不存在 ${extraDir.fsPath}`);
+            return;
+        }
+        console.log(`[YAML] 重新加载用户命令: ${extraDir.fsPath}`);
         await YamlCommandLoader.reloadScan(engine, extraDir);
     }
 

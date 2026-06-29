@@ -94,7 +94,8 @@
     "keybindings": [
       {
         "command": "mcf-studio.reloadWorkspace",
-        "when": "editorTextFocus && editorLangId == mcfunction || editorLangId == mcmacro"
+        "when": "editorTextFocus && editorLangId == mcfunction || editorLangId == mcmacro",
+        "key": "ctrl + r"
       }
     ],
     "menus": {

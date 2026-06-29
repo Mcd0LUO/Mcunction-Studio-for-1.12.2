@@ -55,7 +55,7 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('mcf-studio.reloadWorkspace', async () => {
 			await dataloader.loadExtensionConfig();
 			dataloader.loadData(true,dataloader.getConfig().FileProcessing.MaxConcurrentReads);
-			YamlCommandLoader.reloadUser(engine, rootDir);
+			await YamlCommandLoader.reloadUser(engine, rootDir);
 		}),
 		// 新建函数文件
 		vscode.commands.registerCommand('mcf-studio.createFunctionFile', VsCommandProcessor.createNewFunctionFile),
