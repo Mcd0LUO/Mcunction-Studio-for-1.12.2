@@ -135,7 +135,7 @@ export class DataLoader {
 
     public async loadExtensionConfig(): Promise<void> {
         if (!rootDir) { return; }
-        const configUri = vscode.Uri.joinPath(rootDir, 'McfunctionStudio.json');
+        const configUri = vscode.Uri.joinPath(rootDir,".McfStudio", 'McfunctionStudio.json');
         const defaultConfig: ConfigData = DataLoader.getDefaultConfig();
 
         try {

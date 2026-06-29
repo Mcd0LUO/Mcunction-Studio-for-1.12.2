@@ -55,6 +55,7 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('mcf-studio.reloadWorkspace', async () => {
 			await dataloader.loadExtensionConfig();
 			dataloader.loadData(true,dataloader.getConfig().FileProcessing.MaxConcurrentReads);
+			YamlCommandLoader.reloadUser(engine, rootDir);
 		}),
 		// 新建函数文件
 		vscode.commands.registerCommand('mcf-studio.createFunctionFile', VsCommandProcessor.createNewFunctionFile),
@@ -68,19 +69,6 @@ export function activate(context: vscode.ExtensionContext) {
 	);
 	// 注册json预览
 	const linePre = new LinePreviewManager(); 
-	// 注册辅助命令
-	vscode.commands.registerCommand('mcf-studio.checkDocCache', () => {
-		const docCache = dataloader.getDocCache().get(MinecraftUtils.buildFunctionCall(vscode.workspace.textDocuments[0].uri)??'');
-		if (!docCache) {
-			// console.log('no cache');
-			return;
-		}
-		// 遍历docCache
-		for (const [key, value] of docCache) {
-			console.log(key + 1,value);
-		}
-
-	});
 
 }
 

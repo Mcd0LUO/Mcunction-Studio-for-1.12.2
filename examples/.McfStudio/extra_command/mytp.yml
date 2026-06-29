@@ -25,7 +25,7 @@ children:
             children:
               - argument:
                   name: <location>
-                  suggest: warp
+                  suggest: wrap
   - literal:
       name: list
       description: 列出传送点

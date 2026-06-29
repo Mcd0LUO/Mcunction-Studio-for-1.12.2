@@ -1,5 +1,6 @@
 /**
- * YAML 命令加载器 — 扫描 + 解析 + 转换 + 注册 + 热重载
+ * YAML 命令加载器 — 扫描 + 解析 + 转换 + 注册
+ * 仅在 workspace reload 时触发，不监听文件变更。
  */
 import * as vscode from 'vscode';
 import { CompletionEngine } from '../engine';
@@ -11,114 +12,118 @@ import { resolveSuggest } from './suggests';
 import { registerExtractRule, unregisterCommandRules } from './extractor';
 
 export class YamlCommandLoader {
-    private static dirWatcher: vscode.FileSystemWatcher | null = null;
-    /** 追踪从 YAML 加载的命令名，热重载时先清除 */
+    /** 追踪从 YAML 加载的命令名，reload 时先清除 */
     private static loadedCommands = new Set<string>();
 
     /**
-     * 启动：扫描 rootDir/commands/*.yml，加载命令并监听文件变更热重载。
+     * 启动加载。
+     * 1. 全局 YAML（扩展自带 out/dsl/global/）
+     * 2. 用户 YAML（workspace .McfStudio/extra_command/，递归）
      */
     static async load(engine: CompletionEngine, rootDir: vscode.Uri, extensionPath: string): Promise<void> {
-        // 1. 全局 YAML（插件自带，out/dsl/global/*.yml）
+        // 1. 全局 YAML
         if (extensionPath) {
             const globalDir = vscode.Uri.joinPath(vscode.Uri.file(extensionPath), 'out', 'dsl', 'global');
-            await YamlCommandLoader.scanStatic(engine, globalDir);
+            await YamlCommandLoader.scanDir(engine, globalDir);
         }
 
-        // 2. 用户 YAML（workspace data/commands/*.yml，热重载）
+        // 2. 用户 YAML
         if (!rootDir) { return; }
-        const commandsDir = vscode.Uri.joinPath(rootDir, 'commands');
-        try { await vscode.workspace.fs.stat(commandsDir); }
+        const extraDir = vscode.Uri.joinPath(rootDir, '.McfStudio', 'extra_command');
+        try { await vscode.workspace.fs.stat(extraDir); }
         catch { return; }
 
-        await YamlCommandLoader.reloadAll(engine, commandsDir);
-
-        YamlCommandLoader.dirWatcher?.dispose();
-        const pattern = new vscode.RelativePattern(commandsDir, '**/*.yml');
-        YamlCommandLoader.dirWatcher = vscode.workspace.createFileSystemWatcher(pattern);
-        const onReload = () => YamlCommandLoader.reloadAll(engine, commandsDir);
-        YamlCommandLoader.dirWatcher.onDidCreate(onReload);
-        YamlCommandLoader.dirWatcher.onDidChange(onReload);
-        YamlCommandLoader.dirWatcher.onDidDelete(onReload);
-        console.log('[YAML] 热重载已启用，监听 data/commands/*.yml');
+        await YamlCommandLoader.reloadScan(engine, extraDir);
     }
 
-    /** 一次性扫描静态目录（不监听热重载） */
-    private static async scanStatic(engine: CompletionEngine, dir: vscode.Uri): Promise<void> {
+    /** 重新加载用户 YAML（供 reloadWorkspace 命令调用） */
+    static async reloadUser(engine: CompletionEngine, rootDir: vscode.Uri): Promise<void> {
+        if (!rootDir) { return; }
+        const extraDir = vscode.Uri.joinPath(rootDir, '.McfStudio', 'extra_command');
+        try { await vscode.workspace.fs.stat(extraDir); } catch { return; }
+        await YamlCommandLoader.reloadScan(engine, extraDir);
+    }
+
+    // ================================================================
+    // 内部
+    // ================================================================
+
+    /** 一次性扫描静态目录 */
+    private static async scanDir(engine: CompletionEngine, dir: vscode.Uri): Promise<void> {
         try { await vscode.workspace.fs.stat(dir); }
         catch { return; }
-        try {
-            const files = await vscode.workspace.fs.readDirectory(dir);
-            let count = 0;
-            for (const [name, type] of files) {
-                if (type !== vscode.FileType.File || !name.endsWith('.yml')) { continue; }
-                try {
-                    const raw = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(dir, name));
-                    const text = new TextDecoder('utf-8').decode(raw);
-                    const def = yaml.load(text) as YamlCommandDef;
-                    const root = YamlCommandLoader.convert(def);
-                    engine.register(root);
-                    if (def.extract) { YamlCommandLoader.registerExtractRules(def.command, def.extract, name); }
-                    count++;
-                } catch { /* skip bad files */ }
-            }
-            if (count > 0) { console.log(`[YAML] 从全局目录加载了 ${count} 条命令`); }
-        } catch { /* 目录扫描失败 */ }
+        const yamls = await YamlCommandLoader.collectYaml(dir);
+        let count = 0;
+        for (const uri of yamls) {
+            try {
+                const raw = await vscode.workspace.fs.readFile(uri);
+                const text = new TextDecoder('utf-8').decode(raw);
+                const def = yaml.load(text) as YamlCommandDef;
+                engine.register(YamlCommandLoader.convert(def));
+                if (def.extract) { YamlCommandLoader.registerExtractRules(def.command, def.extract, uri.fsPath); }
+                count++;
+            } catch { /* skip bad files */ }
+        }
+        if (count > 0) { console.log(`[YAML] 从全局目录加载了 ${count} 条命令`); }
     }
 
-    /** 清除旧 YAML 命令 → 重新扫描 → 注册新命令 */
-    private static async reloadAll(engine: CompletionEngine, dir: vscode.Uri): Promise<void> {
-        // 1. 清除上次加载的 YAML 命令 + 提取规则
+    /** 清除旧用户 YAML → 递归扫描 → 注册 */
+    private static async reloadScan(engine: CompletionEngine, dir: vscode.Uri): Promise<void> {
         for (const name of YamlCommandLoader.loadedCommands) {
             engine.unregister(name);
             unregisterCommandRules(name);
         }
         YamlCommandLoader.loadedCommands.clear();
 
-        // 2. 重新扫描
-        try {
-            const files = await vscode.workspace.fs.readDirectory(dir);
-            let count = 0;
-
-            for (const [name, type] of files) {
-                if (type !== vscode.FileType.File || !name.endsWith('.yml')) { continue; }
-
-                const fileUri = vscode.Uri.joinPath(dir, name);
-                const raw = await vscode.workspace.fs.readFile(fileUri);
+        const yamls = await YamlCommandLoader.collectYaml(dir);
+        let count = 0;
+        for (const uri of yamls) {
+            try {
+                const raw = await vscode.workspace.fs.readFile(uri);
                 const text = new TextDecoder('utf-8').decode(raw);
-
-                try {
-                    const def = yaml.load(text) as YamlCommandDef;
-                    const root = YamlCommandLoader.convert(def);
-                    engine.register(root);
-                    YamlCommandLoader.loadedCommands.add(root.commandName);
-                    // 注册数据提取规则
-                    if (def.extract) {
-                        YamlCommandLoader.registerExtractRules(def.command, def.extract, name);
-                    }
-                    count++;
-                } catch (err) {
-                    vscode.window.showWarningMessage(
-                        `YAML 命令解析失败: ${name} — ${(err as Error).message}`
-                    );
-                }
+                const def = yaml.load(text) as YamlCommandDef;
+                const root = YamlCommandLoader.convert(def);
+                engine.register(root);
+                YamlCommandLoader.loadedCommands.add(root.commandName);
+                if (def.extract) { YamlCommandLoader.registerExtractRules(def.command, def.extract, uri.fsPath); }
+                count++;
+            } catch (err) {
+                vscode.window.showWarningMessage(
+                    `YAML 命令解析失败: ${uri.fsPath} — ${(err as Error).message}`
+                );
             }
-
-            if (count > 0) {
-                console.log(`[YAML] 加载了 ${count} 条命令: ${[...YamlCommandLoader.loadedCommands].join(', ')}`);
-            }
-        } catch (err) {
-            console.error('[YAML] 扫描目录失败', err);
         }
+        if (count > 0) {
+            console.log(`[YAML] 加载了 ${count} 条用户命令: ${[...YamlCommandLoader.loadedCommands].join(', ')}`);
+        }
+    }
+
+    /** 递归收集目录下所有 .yml 文件 */
+    private static async collectYaml(dir: vscode.Uri): Promise<vscode.Uri[]> {
+        const result: vscode.Uri[] = [];
+        const stack = [dir];
+        while (stack.length > 0) {
+            const current = stack.pop()!;
+            try {
+                const entries = await vscode.workspace.fs.readDirectory(current);
+                for (const [name, type] of entries) {
+                    const uri = vscode.Uri.joinPath(current, name);
+                    if (type === vscode.FileType.Directory) {
+                        stack.push(uri);
+                    } else if (type === vscode.FileType.File && name.endsWith('.yml')) {
+                        result.push(uri);
+                    }
+                }
+            } catch { /* skip */ }
+        }
+        return result;
     }
 
     /** YAML 命令定义 → DSL RootNode */
     private static convert(def: YamlCommandDef): RootNode {
         const root = new RootNode(def.command);
         if (def.description) { root.description = def.description; }
-        if (def.children) {
-            root.then(...def.children.map(YamlCommandLoader.convertNode));
-        }
+        if (def.children) { root.then(...def.children.map(YamlCommandLoader.convertNode)); }
         return root;
     }
 
@@ -142,8 +147,6 @@ export class YamlCommandLoader {
     }
 
     private static registerExtractRules(command: string, rules: YamlExtractRule[], source: string): void {
-        for (const rule of rules) {
-            registerExtractRule(command, rule, source);
-        }
+        for (const rule of rules) { registerExtractRule(command, rule, source); }
     }
 }
