@@ -1,107 +1,60 @@
 /**
- * YAML 数据提取器 — 从函数文件中按规则提取自定义数据
- *
- * 示例：pattern "set <name>" 应用于命令 /warp set lobby
- * → token[0]="set" 匹配 commands[1]="set"
- * → <name> 对应 commands[2]="lobby" → 提取 "lobby" 存入 type "warp"
+ * YAML 数据提取器 — 从函数文件中按规则提取自定义数据。
+ * 委托 LineIndex 做行级追踪 + 引用计数。
  */
 
 import { YamlExtractRule } from './types';
+import { LineIndex } from '../../core/LineIndex';
+import { DataLoader } from '../../core/DataLoader';
 
-/** 解析后的匹配规则 */
 interface ParsedRule {
     command: string;
     type: string;
-    types?: string[];     // 按捕获位置指定 type
+    types?: string[];
     tokens: (string | { capture: true })[];
-    source: string;
 }
 
-/** 存储自定义提取数据: type → values（全局汇总，快速查询） */
-const customData = new Map<string, Set<string>>();
-/** 文件级索引: fileUri → (type → values)，用于单文件清除 */
-const fileEntries = new Map<string, Map<string, Set<string>>>();
-
-/** 解析后的规则: command → rules[] */
 const rulesByCommand = new Map<string, ParsedRule[]>();
 
-/** 注册提取规则，返回需要监听的命令名 */
-export function registerExtractRule(
-    command: string,
-    rule: YamlExtractRule,
-    source: string
-): void {
-    const tokens = parsePattern(rule.pattern);
-    if (!tokens) {
-        console.warn(`[YAML] ${source}: 无效的 extract pattern "${rule.pattern}"`);
-        return;
-    }
-
-    const parsed: ParsedRule = { command, type: rule.type, types: rule.types, tokens, source };
-
-    const existing = rulesByCommand.get(command);
-    if (existing) {
-        existing.push(parsed);
-    } else {
-        rulesByCommand.set(command, [parsed]);
-    }
+function getIndex(): LineIndex {
+    return DataLoader.getInstance().store.getLineIndex();
 }
 
-/** 清除指定命令的所有提取规则 */
+// ================================================================
+// 规则注册
+// ================================================================
+
+export function registerExtractRule(command: string, rule: YamlExtractRule, _source: string): void {
+    const tokens = parsePattern(rule.pattern);
+    if (!tokens) {
+        console.warn(`[YAML] ${_source}: 无效的 extract pattern "${rule.pattern}"`);
+        return;
+    }
+    const parsed: ParsedRule = { command, type: rule.type, types: rule.types, tokens };
+    const existing = rulesByCommand.get(command);
+    if (existing) { existing.push(parsed); }
+    else { rulesByCommand.set(command, [parsed]); }
+}
+
 export function unregisterCommandRules(command: string): void {
     rulesByCommand.delete(command);
 }
 
-/** 获取某类型的所有已提取值 */
-export function getCustomData(type: string): string[] {
-    const values = customData.get(type);
-    return values ? [...values] : [];
-}
-
-/** 删除指定文件的所有提取值（增量重解析时调用） */
-export function clearFileExtract(fileUri: string): void {
-    const fileData = fileEntries.get(fileUri);
-    if (!fileData) { return; }
-    for (const [type, fileValues] of fileData) {
-        const global = customData.get(type);
-        if (global) { for (const v of fileValues) { global.delete(v); } }
-    }
-    fileEntries.delete(fileUri);
-}
-
-/** DataLoader loadData 前清空所有 */
-export function clearAllCustomData(): void {
-    customData.clear();
-    fileEntries.clear();
-}
-
-/** 清除所有规则 */
-export function clearAllRules(): void {
-    rulesByCommand.clear();
-}
-
 // ================================================================
-// 内部 — 写入同时更新 fileIndex
+// 提取
 // ================================================================
 
-function addToType(type: string, value: string, fileUri: string): void {
-    // 全局
-    let global = customData.get(type);
-    if (!global) { global = new Set(); customData.set(type, global); }
-    global.add(value);
-
-    // 文件索引
-    let ft = fileEntries.get(fileUri);
-    if (!ft) { ft = new Map(); fileEntries.set(fileUri, ft); }
-    let fvs = ft.get(type);
-    if (!fvs) { fvs = new Set(); ft.set(type, fvs); }
-    fvs.add(value);
-}
-
-/** 对单行命令逐条匹配规则，提取数据到全局 + 文件索引 */
 export function applyExtractForFile(cmdName: string, commands: string[], fileUri: string): void {
     const rules = rulesByCommand.get(cmdName);
     if (!rules) { return; }
+
+    const index = getIndex();
+    if (!index) { return; }
+
+    // 当前从 handleSingleLine 逐行调，行号未知 → 用 0
+    // LineIndex 的 clearLine 机制保证同一行重复写会覆盖
+    const line = 0;
+
     for (const rule of rules) {
         const args = commands.slice(1);
         const captured: string[] = [];
@@ -116,34 +69,48 @@ export function applyExtractForFile(cmdName: string, commands: string[], fileUri
             }
         }
         if (!matched || captured.length === 0) { continue; }
+
+        const entries: { type: string; value: string }[] = [];
         if (rule.types && rule.types.length > 0) {
             for (let i = 0; i < captured.length && i < rule.types.length; i++) {
-                addToType(rule.types[i], captured[i], fileUri);
+                entries.push({ type: rule.types[i], value: captured[i] });
             }
         } else {
-            for (const v of captured) { addToType(rule.type, v, fileUri); }
+            for (const v of captured) { entries.push({ type: rule.type, value: v }); }
         }
+
+        index.addLine(fileUri, line, entries);
     }
 }
 
-/**
- * 解析 pattern 字符串为 token 数组。
- * "set <name>" → ["set", { capture: true }]
- * "<location>" → [{ capture: true }]
- * 无效 pattern 返回 null
- */
+// ================================================================
+// 查询
+// ================================================================
+
+export function getCustomData(type: string): string[] {
+    const index = getIndex();
+    return index ? index.getValues(type) : [];
+}
+
+export function clearFileExtract(fileUri: string): void {
+    const index = getIndex();
+    if (index) { index.clearFile(fileUri); }
+}
+
+export function clearAllCustomData(): void {
+    // LineIndex.clear() 由 IndexedStore.clear() 统一调用，这里不需要独立操作
+}
+
+// ================================================================
+// 工具
+// ================================================================
+
 function parsePattern(pattern: string): (string | { capture: true })[] | null {
     const parts = pattern.trim().split(/\s+/);
     if (parts.length === 0 || parts[0] === '') { return null; }
-
     const tokens: (string | { capture: true })[] = [];
     for (const part of parts) {
-        const m = part.match(/^<(.+)>$/);
-        if (m) {
-            tokens.push({ capture: true });
-        } else {
-            tokens.push(part);
-        }
+        tokens.push(part.match(/^<.+>$/) ? { capture: true } : part);
     }
     return tokens;
 }

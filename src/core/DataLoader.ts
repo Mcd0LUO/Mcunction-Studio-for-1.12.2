@@ -38,7 +38,7 @@ export class DataLoader {
     private static instance: DataLoader;
 
     // ---- 统一数据存储（替代原来 5 个分散的 Map + docCache） ----
-    private store = new IndexedStore();
+    store = new IndexedStore();
 
     // ---- 简单列表（不与 docCache 交互） ----
     private functionResNames: string[] = [];
