@@ -6,15 +6,10 @@ import * as vscode from 'vscode';
 
 /** 补全上下文 — 传递给 suggest 函数的数据源 */
 export interface SuggestContext {
-    /** 根据名称获取 DataLoader 中的动态数据 */
     loader: import('../core/DataLoader').DataLoader;
-    /** 补全上下文（提供 selectors/scoreboards/teams/tags 等数据查询） */
     cc: import('../completionProvider/CompletionContext').CompletionContext;
-    /** 创建单个 CompletionItem 的工厂 */
     item(label: string, desc: string, insert: string | vscode.SnippetString, triggerNext?: boolean, kind?: vscode.CompletionItemKind): vscode.CompletionItem;
-    /** 已解析的命令片段 */
     commands: string[];
-    /** 当前行原始文本（NBT/JSON 需要） */
     lineText: string;
 }
 
@@ -22,21 +17,19 @@ export interface SuggestContext {
 export type SuggestionProvider = (ctx: SuggestContext) => vscode.CompletionItem[] | Promise<vscode.CompletionItem[]>;
 
 /** 节点类型判别 */
-export type NodeKind = 'root' | 'literal' | 'argument' | 'forward';
+export type NodeKind = 'root' | 'literal' | 'argument' | 'forward_root' | 'jump';
 
 /** 命令树节点基类 */
 export abstract class CommandNode {
     public readonly kind: NodeKind;
     public readonly children: CommandNode[] = [];
     public description: string = '';
-    /** 该节点是否可选（argument 节点用） */
     public optional: boolean = false;
 
     constructor(kind: NodeKind) {
         this.kind = kind;
     }
 
-    /** 添加子节点，返回 this 支持链式调用 */
     then(...nodes: CommandNode[]): this {
         this.children.push(...nodes);
         return this;
@@ -81,11 +74,22 @@ export class ArgumentNode extends CommandNode {
 }
 
 /**
- * 转发节点 — 用于 execute 的 run 子命令等场景。
- * 到达此节点时，补全引擎返回所有根命令列表。
+ * 转发到根命令 — execute|foreach|superexe 的 run 子句。
+ * 到达此节点或其父节点时，引擎返回所有根命令列表。
  */
-export class ForwardNode extends CommandNode {
+export class ForwardRootNode extends CommandNode {
     constructor() {
-        super('forward');
+        super('forward_root');
+    }
+}
+
+/**
+ * 跳转节点 — 用于 superexe 等可重复链式子命令。
+ * 到达此节点时，引擎查找树上最近的「同级多分支祖先」，
+ * 展示该祖先的全部子节点，实现 if/unless/facing/positioned 的任意顺序循环。
+ */
+export class JumpNode extends CommandNode {
+    constructor() {
+        super('jump');
     }
 }

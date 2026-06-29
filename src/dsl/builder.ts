@@ -1,8 +1,4 @@
-import { RootNode, LiteralNode, ArgumentNode, ForwardNode, CommandNode, SuggestionProvider } from './nodes';
-
-// ================================================================
-// 链式 Builder API — 仿 Minecraft Brigadier
-// ================================================================
+import { RootNode, LiteralNode, ArgumentNode, ForwardRootNode, JumpNode, CommandNode, SuggestionProvider } from './nodes';
 
 /** 创建一个根命令 */
 export function command(name: string): RootNode {
@@ -14,12 +10,6 @@ export function literal(name: string): LiteralNode {
     return new LiteralNode(name);
 }
 
-/**
- * 创建一个参数节点。
- * @param name    参数名（用于签名展示，如 "<target>"）
- * @param suggest 补全建议函数，可选
- * @param options 配置：optional 表示可选参数
- */
 export function argument(
     name: string,
     suggest?: SuggestionProvider | null,
@@ -36,15 +26,24 @@ export function optional(
     return new ArgumentNode(name, suggest, true);
 }
 
-/** 创建一个转发节点（execute run 等场景，转发到根命令列表） */
-export function forward(): ForwardNode {
-    return new ForwardNode();
+/** 转发到根命令列表（execute|foreach|superexe 的 run 子句） */
+export function forwardRoot(): ForwardRootNode {
+    return new ForwardRootNode();
 }
 
-// ================================================================
-// 类型安全的 DSL 风格（函数式，无 class 开销）
-// 可替代直接使用 literal()/argument() 的组合
-// ================================================================
+/** @deprecated 请使用 forwardRoot */
+export function forward(): ForwardRootNode {
+    return new ForwardRootNode();
+}
+
+/**
+ * 创建跳转节点 — 用于可重复链式子命令。
+ * 引擎会自动查找树上最近的「多分支祖先」展示其子节点，
+ * 实现 if/unless/facing/positioned 的任意顺序循环。
+ */
+export function jump(): JumpNode {
+    return new JumpNode();
+}
 
 /** 构建命令定义并注册 */
 export interface CommandDef {
@@ -53,7 +52,6 @@ export interface CommandDef {
     root: RootNode;
 }
 
-/** 高阶工厂：一条命令完整定义 */
 export function defineCommand(name: string, description: string, build: (c: RootNode) => void): CommandDef {
     const root = command(name);
     if (description) { root.description = description; }

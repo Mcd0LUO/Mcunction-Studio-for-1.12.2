@@ -4,10 +4,10 @@
  */
 import * as vscode from 'vscode';
 import { CompletionEngine } from '../engine';
-import { RootNode, ForwardNode } from '../nodes';
+import { RootNode, ForwardRootNode, JumpNode } from '../nodes';
 import { literal, argument } from '../builder';
 import * as yaml from 'js-yaml';
-import { YamlCommandDef, YamlLiteral, YamlArgument, YamlExtractRule } from './types';
+import { YamlCommandDef, YamlLiteral, YamlArgument, YamlForwardRoot, YamlJump, YamlForward, YamlExtractRule } from './types';
 import { resolveSuggest } from './suggests';
 import { registerExtractRule, unregisterCommandRules } from './extractor';
 
@@ -35,15 +35,6 @@ export class YamlCommandLoader {
 
         await YamlCommandLoader.reloadScan(engine, extraDir);
 
-        // 热重载：监听 YAML 文件变更
-        const pattern = new vscode.RelativePattern(extraDir, '**/*.yml');
-        YamlCommandLoader.watcher?.dispose();
-        YamlCommandLoader.watcher = vscode.workspace.createFileSystemWatcher(pattern);
-        const onReload = () => YamlCommandLoader.reloadScan(engine, extraDir);
-        YamlCommandLoader.watcher.onDidCreate(onReload);
-        YamlCommandLoader.watcher.onDidChange(onReload);
-        YamlCommandLoader.watcher.onDidDelete(onReload);
-        console.log('[YAML] 监听 .McfStudio/extra_command/**/*.yml 变更');
     }
 
     private static watcher: vscode.FileSystemWatcher | null = null;
@@ -146,8 +137,12 @@ export class YamlCommandLoader {
         return root;
     }
 
-    private static convertNode(node: YamlLiteral | YamlArgument | { forward: true }): import('../nodes').CommandNode {
-        if ('forward' in node) { return new ForwardNode(); }
+    private static convertNode(
+        node: YamlLiteral | YamlArgument | YamlForwardRoot | YamlJump | YamlForward
+    ): import('../nodes').CommandNode {
+        if ('jump' in node) { return new JumpNode(); }
+        if ('forward_root' in node) { return new ForwardRootNode(); }
+        if ('forward' in node) { return new ForwardRootNode(); } // 兼容旧语法
         if ('literal' in node) {
             const y = node as YamlLiteral;
             const lit = literal(y.literal.name);

@@ -32,7 +32,8 @@
       "oneOf": [
         { "$ref": "#/definitions/Literal" },
         { "$ref": "#/definitions/Argument" },
-        { "$ref": "#/definitions/Forward" }
+        { "$ref": "#/definitions/ForwardRoot" },
+        { "$ref": "#/definitions/Jump" }
       ]
     },
 
@@ -95,14 +96,39 @@
       }
     },
 
+    "ForwardRoot": {
+      "type": "object",
+      "required": ["forward_root"],
+      "properties": {
+        "forward_root": {
+          "type": "boolean",
+          "const": true,
+          "description": "转发到根命令列表（execute|foreach|superexe 的 run 子句）"
+        }
+      }
+    },
+
     "Forward": {
       "type": "object",
       "required": ["forward"],
+      "deprecated": true,
       "properties": {
         "forward": {
           "type": "boolean",
           "const": true,
-          "description": "转发到根命令列表（execute run 场景）"
+          "description": "已废弃，请使用 forward_root"
+        }
+      }
+    },
+
+    "Jump": {
+      "type": "object",
+      "required": ["jump"],
+      "properties": {
+        "jump": {
+          "type": "boolean",
+          "const": true,
+          "description": "跳转到上层多分支节点（superexe 的可重复链式子命令）"
         }
       }
     },

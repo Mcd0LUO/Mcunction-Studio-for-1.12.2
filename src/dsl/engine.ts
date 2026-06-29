@@ -1,11 +1,7 @@
 import * as vscode from 'vscode';
-import { CommandNode, LiteralNode, ArgumentNode, ForwardNode, RootNode, SuggestContext } from './nodes';
+import { CommandNode, LiteralNode, ArgumentNode, ForwardRootNode, JumpNode, RootNode, SuggestContext } from './nodes';
 import { DataLoader } from '../core/DataLoader';
 import { CompletionContext } from '../completionProvider/CompletionContext';
-
-// ================================================================
-// CompletionEngine — 命令树遍历 → CompletionItem[]
-// ================================================================
 
 export class CompletionEngine {
     static instance: CompletionEngine;
@@ -18,22 +14,10 @@ export class CompletionEngine {
         CompletionEngine.instance = this;
     }
 
-    /** 注册一条命令的 DSL 树 */
-    register(root: RootNode): void {
-        this.roots.set(root.commandName, root);
-    }
+    register(root: RootNode): void { this.roots.set(root.commandName, root); }
+    unregister(commandName: string): void { this.roots.delete(commandName); }
+    has(command: string): boolean { return this.roots.has(command); }
 
-    /** 移除一条命令 */
-    unregister(commandName: string): void {
-        this.roots.delete(commandName);
-    }
-
-    /** 检查是否有 DSL 定义的命令处理器 */
-    has(command: string): boolean {
-        return this.roots.has(command);
-    }
-
-    /** 获取所有根命令的补全项（用于空输入或根级别补全） */
     getRootItems(): vscode.CompletionItem[] {
         const items: vscode.CompletionItem[] = [];
         for (const [name, root] of this.roots) {
@@ -42,43 +26,46 @@ export class CompletionEngine {
         return items;
     }
 
+    static debug = false;
+
     // ================================================================
     // 遍历入口
     // ================================================================
 
-    /**
-     * 根据已解析的命令片段，遍历命令树并返回补全项。
-     */
-    /** 调试模式：在控制台打印每条补全请求走的分发路径 */
-    static debug = false;
-
     async complete(commands: string[], lineText: string): Promise<vscode.CompletionItem[]> {
         const root = this.roots.get(commands[0]);
         if (!root) { return []; }
-
-        // 只有根命令名（无空格/参数）：auto-trigger 场景，VSCode 不会弹出面板，
-        // 无需提前计算子级补全。与旧管线行为一致。
         if (commands.length === 1) { return []; }
 
         let node: CommandNode = root;
         let cursor = 1;
+        const ancestors: CommandNode[] = [root];
 
-        // 最后一个 token 是光标所在位置的输入（可能是 '' 或部分输入），
-        // 不应消费——留给 suggestionsFor 触发当前位置的 suggest 函数，
-        // VSCode 负责用该 token 过滤补全结果。
         while (cursor < commands.length - 1) {
             const next = this.matchChild(node, commands[cursor]);
-            if (next) {
-                node = next;
+            if (!next) { break; }
+
+            // jump 节点：回弹到最近的多分支祖先
+            if (next.kind === 'jump') {
+                node = this.jumpTarget(ancestors) ?? node;
                 cursor++;
-            } else {
-                break;
+                continue;
             }
+
+            ancestors.push(node);
+            node = next;
+            cursor++;
+        }
+
+        // jump 节点也可能作为子节点被消费后到达
+        if (node.kind === 'jump') {
+            node = this.jumpTarget(ancestors) ?? node;
         }
 
         const items = await this.suggestionsFor(node, commands, lineText);
         if (CompletionEngine.debug) {
-            console.log(`[DSL] ${commands.join(' ')} → ${items.length} 项`, items.map(i => typeof i.label === 'string' ? i.label : i.label.label));
+            console.log(`[DSL] ${commands.join(' ')} → ${items.length} 项`,
+                items.map(i => typeof i.label === 'string' ? i.label : i.label.label));
         }
         return items;
     }
@@ -87,40 +74,54 @@ export class CompletionEngine {
     // 内部
     // ================================================================
 
-    /** 在 node 的子节点中寻找匹配。literal 优先，arg 兜底，forward 消费。 */
-    private matchChild(node: CommandNode, token: string): CommandNode | null {
-        // 1. 优先匹配字面量
-        for (const child of node.children) {
-            if (child.kind === 'literal') {
-                const lit = child as LiteralNode;
-                if (lit.literal === token) { return lit; }
-            }
-        }
-        // 2. 匹配参数（消费一个 token）
-        for (const child of node.children) {
-            if (child.kind === 'argument') {
-                return child;
-            }
-        }
-        // 3. 转发节点（如 execute 的 run）
-        for (const child of node.children) {
-            if (child.kind === 'forward') {
-                return child;
-            }
+    /** 从祖先栈中向上查找最近的多分支节点（2+ literal/forward_root/jump 子节点） */
+    private jumpTarget(ancestors: CommandNode[]): CommandNode | null {
+        for (let i = ancestors.length - 1; i >= 0; i--) {
+            const branchCount = ancestors[i].children.filter(c =>
+                c.kind === 'literal' || c.kind === 'forward_root' || c.kind === 'jump'
+            ).length;
+            if (branchCount >= 2) { return ancestors[i]; }
         }
         return null;
     }
 
-    /** 收集节点的补全建议 */
+    private matchChild(node: CommandNode, token: string): CommandNode | null {
+        for (const child of node.children) {
+            if (child.kind === 'literal' && (child as LiteralNode).literal === token) { return child; }
+        }
+        for (const child of node.children) {
+            if (child.kind === 'argument') { return child; }
+        }
+        for (const child of node.children) {
+            if (child.kind === 'forward_root' || child.kind === 'jump') { return child; }
+        }
+        return null;
+    }
+
     private async suggestionsFor(node: CommandNode, commands: string[], lineText: string): Promise<vscode.CompletionItem[]> {
-        // 转发节点 → 返回所有根命令
-        if (node.kind === 'forward') {
-            return this.getRootItems();
+        if (node.kind === 'forward_root') { return this.getRootItems(); }
+
+        // forward_root / jump 子节点 → 转发 / 跳转
+        for (const child of node.children) {
+            if (child.kind === 'forward_root') { return this.getRootItems(); }
+            if (child.kind === 'jump') {
+                // 收集所有字面量和forward_root兄弟节点
+                const items: vscode.CompletionItem[] = [];
+                for (const sib of node.children) {
+                    if (sib.kind === 'literal') {
+                        const lit = sib as LiteralNode;
+                        items.push(this.ctx.item(lit.literal, lit.description || '', lit.literal, true));
+                    }
+                    if (sib.kind === 'forward_root') {
+                        items.push(this.ctx.item('run', '执行命令', 'run', true));
+                    }
+                }
+                if (items.length > 0) { return items; }
+            }
         }
 
         const items: vscode.CompletionItem[] = [];
 
-        // 1. 字面量子节点（下一级关键字）
         for (const child of node.children) {
             if (child.kind === 'literal') {
                 const lit = child as LiteralNode;
@@ -128,14 +129,6 @@ export class CompletionEngine {
             }
         }
 
-        // 2. 转发子节点 → 直接返回所有根命令
-        for (const child of node.children) {
-            if (child.kind === 'forward') {
-                return this.getRootItems();
-            }
-        }
-
-        // 3. 参数子节点（获取动态建议，只处理第一个）
         for (const child of node.children) {
             if (child.kind === 'argument') {
                 const arg = child as ArgumentNode;
@@ -143,21 +136,17 @@ export class CompletionEngine {
                     const suggestCtx: SuggestContext = {
                         loader: this.ctx['loader'],
                         cc: this.ctx,
-                        item: (label, desc, insert, triggerNext, kind) =>
-                            this.ctx.item(label, desc, insert, triggerNext ?? true, kind),
+                        item: (l, d, i, tn, k) => this.ctx.item(l, d, i, tn ?? true, k),
                         commands,
                         lineText,
                     };
                     const result = arg.suggest(suggestCtx);
                     items.push(...(result instanceof Promise ? await result : result));
                 } else {
-                    // 仅提示，不插入内容
                     items.push({
-                        label: arg.argName,
-                        detail: ' ',
-                        insertText: '',
-                        kind: vscode.CompletionItemKind.TypeParameter,
-                        sortText: '￿',  // 排在最后
+                        label: arg.argName, detail: ' ',
+                        insertText: '', kind: vscode.CompletionItemKind.TypeParameter,
+                        sortText: '￿',
                     });
                 }
                 break;
