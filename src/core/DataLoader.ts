@@ -408,7 +408,6 @@ export class DataLoader {
     }
 
     public async loadSingleFuncFileByDoc(doc: vscode.TextDocument, startLine: number = 0): Promise<void> {
-        try { (require('../dsl/yaml/extractor') as typeof import('../dsl/yaml/extractor')).clearFileExtract(doc.uri.toString()); } catch {}
         this.parseLines(doc.uri, doc.getText().split(/\r?\n|\r/), startLine);
     }
 
