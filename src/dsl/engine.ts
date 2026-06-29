@@ -74,15 +74,17 @@ export class CompletionEngine {
     // 内部
     // ================================================================
 
-    /** 从祖先栈中向上查找最近的多分支节点（2+ literal/forward_root/jump 子节点） */
+    /** 从祖先栈中向上查找分支最多的节点（superexe 等链式命令的跳转目标） */
     private jumpTarget(ancestors: CommandNode[]): CommandNode | null {
+        let best: CommandNode | null = null;
+        let bestCount = 0;
         for (let i = ancestors.length - 1; i >= 0; i--) {
-            const branchCount = ancestors[i].children.filter(c =>
+            const count = ancestors[i].children.filter(c =>
                 c.kind === 'literal' || c.kind === 'forward_root' || c.kind === 'jump'
             ).length;
-            if (branchCount >= 2) { return ancestors[i]; }
+            if (count > bestCount) { best = ancestors[i]; bestCount = count; }
         }
-        return null;
+        return best;
     }
 
     private matchChild(node: CommandNode, token: string): CommandNode | null {
