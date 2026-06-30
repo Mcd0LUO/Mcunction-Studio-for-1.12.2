@@ -38,8 +38,8 @@ export class CompletionEngine {
         const root = this.roots.get(commands[0]);
         if (!root) { return []; }
 
-        const { node, ancestors } = this.walk(root, commands);
-        const items = await this.suggest(node, ancestors, commands, lineText);
+        const { node, ancestors, consumedRealToken } = this.walk(root, commands);
+        const items = await this.suggest(node, ancestors, commands, lineText, consumedRealToken);
 
         if (CompletionEngine.debug) {
             console.log(`[DSL] ${commands.join(' ')} → ${items.length} 项`,
@@ -52,7 +52,7 @@ export class CompletionEngine {
     // Walk — 消费 token，遇到 jump 弹栈
     // ================================================================
 
-    private walk(root: RootNode, commands: string[]): { node: CommandNode; ancestors: Ancestors } {
+    private walk(root: RootNode, commands: string[]): { node: CommandNode; ancestors: Ancestors; consumedRealToken: boolean } {
         let node: CommandNode = root;
         const ancestors: Ancestors = [];
         let cursor = 1;
@@ -82,7 +82,7 @@ export class CompletionEngine {
             }
         }
 
-        return { node, ancestors };
+        return { node, ancestors, consumedRealToken };
     }
 
     private isLeafWithJump(node: CommandNode): boolean {
@@ -137,6 +137,7 @@ export class CompletionEngine {
         ancestors: Ancestors,
         commands: string[],
         lineText: string,
+        consumedRealToken: boolean,
     ): Promise<vscode.CompletionItem[]> {
         // forward_root → 根命令列表
         if (node.kind === 'forward_root') { return this.getRootItems(); }
@@ -144,9 +145,8 @@ export class CompletionEngine {
         // 若当前节点是 argument
         if (node.kind === 'argument') {
             const arg = node as ArgumentNode;
-            const lastToken = commands[commands.length - 1] ?? '';
-            // 用户未输入值（末尾是空串）→ 展示 suggest
-            if (lastToken === '' && arg.suggest) {
+            // 未消费真实 token → 用户还没填值 → 展示 suggest
+            if (!consumedRealToken && arg.suggest) {
                 const ctx: SuggestContext = {
                     loader: this.ctx['loader'],
                     cc: this.ctx,
