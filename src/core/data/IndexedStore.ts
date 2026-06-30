@@ -13,9 +13,10 @@ export class IndexedStore {
     private index = new LineIndex();
 
     // ---- 类型特有元数据 ----
-    private scoreboardMeta = new Map<string, { type: string; desc: string; def: [vscode.Uri, number] }>();
-    private teamMeta = new Map<string, { def: [vscode.Uri, number] }>();
-    private funcDefs = new Map<string, Map<string, number[]>>(); // funcName → file → lines
+    // 直接 Map（保持引用稳定，兼容定义跳转等消费者）
+    private scoreboards = new Map<string, ScoreboardData>();
+    private teams = new Map<string, TeamData>();
+    private funcDefs = new Map<string, Map<string, number[]>>();
 
     // ---- 向后兼容：旧 docIndex 接口 ----
     private _docIndex = new Map<string, Map<number, IndexEntry[]>>();
@@ -31,18 +32,16 @@ export class IndexedStore {
     // ================================================================
 
     addScoreboard(resName: string, name: string, line: number, uri: vscode.Uri, type: string, desc: string = ''): void {
-        if (this.scoreboardMeta.has(name)) {
+        if (this.scoreboards.has(name)) {
             vscode.window.showWarningMessage(`重复定义记分板目标：${name} 在 ${resName} : ${line}`);
             return;
         }
-        this.scoreboardMeta.set(name, { type, desc, def: [uri, line] });
-        this.index.addLine(this.f(uri), line, [{ type: T.Scoreboard, value: name }]);
+        this.scoreboards.set(name, { type, desc, def: [uri, line] });
         this._indexLine(resName, line, DataType.Scoreboard, name);
     }
 
     addTeam(resName: string, name: string, line: number, uri: vscode.Uri): void {
-        this.teamMeta.set(name, { def: [uri, line] });
-        this.index.addLine(this.f(uri), line, [{ type: T.Team, value: name }]);
+        this.teams.set(name, { def: [uri, line] });
         this._indexLine(resName, line, DataType.Team, name);
     }
 
@@ -79,8 +78,8 @@ export class IndexedStore {
             if (!entries) { continue; }
             for (const entry of entries) {
                 switch (entry.type) {
-                    case DataType.Scoreboard: this.scoreboardMeta.delete(entry.value); break;
-                    case DataType.Team: this.teamMeta.delete(entry.value); break;
+                    case DataType.Scoreboard: this.scoreboards.delete(entry.value); break;
+                    case DataType.Team: this.teams.delete(entry.value); break;
                     case DataType.Function: {
                         const defs = this.funcDefs.get(entry.value);
                         if (defs) { defs.delete(resName); if (defs.size === 0) this.funcDefs.delete(entry.value); }
@@ -91,10 +90,6 @@ export class IndexedStore {
             docEntry.delete(line);
         }
         if (docEntry.size === 0) this._docIndex.delete(resName);
-
-        // 从文件视角清除 LineIndex 中的对应行
-        // 需要知道 file Uri → 遍历 _docIndex 找到 file
-        // 简化：通过 resName 映射回 file（resName 即 uri.toString()）
     }
 
     clearFile(resName: string): void {
@@ -104,8 +99,8 @@ export class IndexedStore {
         for (const [, entries] of docEntry) {
             for (const entry of entries) {
                 switch (entry.type) {
-                    case DataType.Scoreboard: this.scoreboardMeta.delete(entry.value); break;
-                    case DataType.Team: this.teamMeta.delete(entry.value); break;
+                    case DataType.Scoreboard: this.scoreboards.delete(entry.value); break;
+                    case DataType.Team: this.teams.delete(entry.value); break;
                     case DataType.Function: {
                         const defs = this.funcDefs.get(entry.value);
                         if (defs) { defs.delete(resName); if (defs.size === 0) this.funcDefs.delete(entry.value); }
@@ -134,8 +129,8 @@ export class IndexedStore {
 
     clear(): void {
         this.index.clear();
-        this.scoreboardMeta.clear();
-        this.teamMeta.clear();
+        this.scoreboards.clear();
+        this.teams.clear();
         this.funcDefs.clear();
         this._docIndex.clear();
     }
@@ -144,13 +139,7 @@ export class IndexedStore {
     // 读取
     // ================================================================
 
-    getScoreboards(): Map<string, ScoreboardData> {
-        const result = new Map<string, ScoreboardData>();
-        for (const [name, meta] of this.scoreboardMeta) {
-            result.set(name, { type: meta.type, desc: meta.desc, def: meta.def });
-        }
-        return result;
-    }
+    getScoreboards(): Map<string, ScoreboardData> { return this.scoreboards; }
 
     getFunctions(): Map<string, FunctionData> {
         const result = new Map<string, FunctionData>();
@@ -168,13 +157,7 @@ export class IndexedStore {
         return result;
     }
 
-    getTeams(): Map<string, TeamData> {
-        const result = new Map<string, TeamData>();
-        for (const [name, meta] of this.teamMeta) {
-            result.set(name, { def: meta.def });
-        }
-        return result;
-    }
+    getTeams(): Map<string, TeamData> { return this.teams; }
 
     getFakePlayers(): Map<string, number> {
         const result = new Map<string, number>();
