@@ -25,13 +25,7 @@ export function suggestScoreboards() {
 }
 
 export function suggestTeams() {
-    
-    return (ctx: SuggestContext): vscode.CompletionItem[] =>
-    {
-        console.log('[DSL] teams', Array.from(ctx.loader.getTeamsData().keys()));
-
-        return ctx.cc.teams();
-    };
+    return (ctx: SuggestContext): vscode.CompletionItem[] => ctx.cc.teams();
 }
 
 export function suggestTags() {

@@ -9,8 +9,28 @@
     Author Mcd0_LUO (小罗)
 ***
 ### 插件说明
-* 建议使用saves/***/data 即存档目录下的data文件夹作为工作区 (其实只要工作区包含data且其下存在functions的结构即可)
+* 建议使用 `saves/***/data` 即存档目录下的 **data** 文件夹作为工作区（只要工作区根下存在 `functions` 结构即可）
+* 配置目录：`data/.McfStudio/`（`McfunctionStudio.json`、自定义 YAML 命令等）
+* **索引缓存**（1.5.0+）：`data/.McfStudio/index-cache.json.gz`  
+  - 用于跨会话加快函数/记分板/标签等索引加载；**可安全删除**，下次打开会全量解析并重建  
+  - 任一 `.mcfunction` 变更后会自动失效并刷新  
 * 如有任何拓展问题请以 qq | qq邮箱 联系开发者   id: 1473522801
+
+***
+### 文档索引
+- [快速上手](docs/quickstart.md)（工作区、缓存、配置、命令）
+- [YAML 自定义命令](docs/yaml-command.md)
+- [DSL 说明](docs/dsl-guide.md)
+- 变更记录：[CHANGELOG.md](CHANGELOG.md)
+
+### 开发 / 测试（维护者）
+```bash
+npm run compile
+npm run test:index      # 索引单元测试
+npm run test:baseline   # 1.12.2 命令树基准
+npm run bench:perf      # 合成包 load/complete
+npm run bench:real -- "D:/path/to/data"   # 真实 data 目录
+```
 
 ***
 ### 功能介绍

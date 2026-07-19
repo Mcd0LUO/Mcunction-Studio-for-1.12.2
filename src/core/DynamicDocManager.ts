@@ -85,26 +85,26 @@ export class DynamicDocManager {
     }
 
     /**
-     * 处理单个文档内容变更
-     * @param change 文档内容变更参数
-     * @param document 文档
+     * 处理单个文档内容变更。
+     * - 单行内编辑：只清 + 重解析该行
+     * - 任意换行 / 多行选区 / 粘贴多行：从 startLine 清到文件尾并重解析（行号会漂移）
      */
     private handleSingleChange(change: vscode.TextDocumentContentChangeEvent, document: vscode.TextDocument): void {
         const startLine = change.range.start.line;
-        // 清理缓存
-        // 如果change 是回车或退格且换行
+        const textHasNewline = /[\r\n]/.test(change.text);
+        const rangeMultiLine = !change.range.isSingleLine;
+        // 多行粘贴（即使不以 \n 结尾）、删多行、插入换行 → 需要重排后续行索引
+        const needRescanTail = textHasNewline || rangeMultiLine;
 
-        const isInsertNewLine = change.range.isEmpty && (change.text.endsWith('\n') || change.text.endsWith('\r'));
-        const isDeleteNewLine = !change.range.isEmpty && !change.text.length && !change.range.isSingleLine;
-        const needAdjustLineOrder = isInsertNewLine || isDeleteNewLine;
-        if (needAdjustLineOrder) {
-            DataLoader.getInstance().clearCache(document, startLine);
-            DataLoader.getInstance().loadSingleFuncFileByDoc(document, startLine);
+        const loader = DataLoader.getInstance();
+        if (needRescanTail) {
+            loader.clearCache(document, startLine);
+            loader.loadSingleFuncFileByDoc(document, startLine);
+        } else {
+            loader.clearCache(document, startLine, startLine);
+            if (startLine < document.lineCount) {
+                loader.handleSingleLine(document.uri, document.lineAt(startLine).text, startLine);
+            }
         }
-        else {
-            DataLoader.getInstance().clearCache(document, startLine, startLine);
-            DataLoader.getInstance().handleSingleLine(document.uri, document.lineAt(startLine).text, startLine);
-        }
-
     }
 }

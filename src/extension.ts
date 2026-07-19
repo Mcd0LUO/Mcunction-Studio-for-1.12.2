@@ -54,7 +54,8 @@ export function activate(context: vscode.ExtensionContext) {
 		// 重载工作区
 		vscode.commands.registerCommand('mcf-studio.reloadWorkspace', async () => {
 			await dataloader.loadExtensionConfig();
-			dataloader.loadData(true,dataloader.getConfig().FileProcessing.MaxConcurrentReads);
+			// forceFull=false：按 mtime 增量跳过未改文件
+			await dataloader.loadData(true, dataloader.getConfig().FileProcessing.MaxConcurrentReads, false);
 			await YamlCommandLoader.reloadUser(engine, rootDir);
 		}),
 		// 新建函数文件

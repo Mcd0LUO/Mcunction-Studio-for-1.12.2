@@ -2,14 +2,22 @@
   "name": "mcfunction-studio",
   "displayName": "Mcfunction Studio for 1.12",
   "description": "A simple mcfunction dev specialized helper for 1.12.2",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "publisher": "Mcd0-LUO",
   "author": {
     "email": "1473522801@qq.com",
     "name": "Mcd0_LUO",
     "url": "https://github.com/Mcd0LUO/Mcunction-Studio-for-1.12.2"
   },
-  "icon": "icons/main_icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Mcd0LUO/Mcunction-Studio-for-1.12.2.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Mcd0LUO/Mcunction-Studio-for-1.12.2/issues"
+  },
+  "homepage": "https://github.com/Mcd0LUO/Mcunction-Studio-for-1.12.2#readme",
+  "icon": "icons/dark.png",
   "engines": {
     "vscode": "^1.101.0"
   },
@@ -112,7 +120,12 @@
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
-    "test": "vscode-test"
+    "test": "vscode-test",
+    "test:baseline": "npm run compile && node scripts/run-baseline-tests.mjs",
+    "test:index": "npm run compile && node scripts/run-index-tests.mjs",
+    "bench:baseline": "node scripts/bench-baseline.mjs",
+    "bench:perf": "npm run compile && node scripts/bench-perf.mjs",
+    "bench:real": "npm run compile && node scripts/bench-real-pack.mjs"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",

@@ -1,76 +1,83 @@
 # Mcfunction Studio for 1.12 — 快速上手
 
+**当前稳定版：1.5.0**
+
 ## 环境要求
 
-- VSCode `^1.101.0`
-- 一个 **Minecraft 1.12.2 数据包项目**（根目录或上级目录包含 `data/functions/` 结构）
+- VS Code `^1.101.0`
+- Minecraft **1.12.2** 数据包：工作区为 **`data`** 目录（其下有 `functions/`），或上级包含该结构
 
 ## 安装
 
-```
-code --install-extension mcfunction-studio-1.4.0.vsix
-```
-
-## 开箱即用
-
-打开数据包项目，扩展自动激活：
-
-```
-项目根目录/
-├── data/
-│   ├── functions/           ← 自动扫描 .mcfunction 文件
-│   │   ├── tick.mcfunction
-│   │   └── ...
-│   ├── advancements/         ← 自动扫描进度 JSON
-│   └── commands/            ← 可选：YAML 命令定义
-│       └── my_command.yml
-└── pack.mcmeta
+```bash
+# Marketplace 搜索 "Mcfunction Studio for 1.12"
+# 或本地 vsix：
+code --install-extension mcfunction-studio-1.5.0.vsix
 ```
 
-### 补全
+## 推荐目录结构
 
-在 `.mcfunction` 文件中输入命令即触发补全。已支持 Minecraft 1.12.2 **全部原版命令** + **EasyCber 扩展命令**。
+```
+存档或工程/
+└── data/                          ← 建议作为工作区根（rootDir）
+    ├── functions/                 ← 扫描 *.mcfunction
+    │   └── ns/
+    │       └── tick.mcfunction
+    ├── advancements/              ← 扫描进度 JSON
+    └── .McfStudio/                ← 扩展配置与缓存（自动/可手写）
+        ├── McfunctionStudio.json  ← 用户配置
+        ├── index-cache.json.gz    ← 索引缓存（1.5.0+，可删）
+        └── extra_command/         ← 可选：自定义 YAML 命令
+            └── my_command.yml
+```
+
+> 旧文档里的 `data/commands/` 已改为 **`data/.McfStudio/extra_command/`**，详见 [yaml-command.md](yaml-command.md)。
+
+## 索引缓存（1.5.0）
+
+| 项 | 说明 |
+|----|------|
+| 路径 | `data/.McfStudio/index-cache.json.gz` |
+| 作用 | 跨会话冷启动跳过全量解析函数文件，加快记分板/标签/函数等索引就绪 |
+| 失效 | 任一 `.mcfunction` 增删或 mtime 变化；或缓存 version 升级 |
+| 安全 | **可随时删除**；下次打开会全量扫描并重建 |
+| 性能量级（大包 ~2000 文件） | 无缓存全量解析约数秒；有缓存约 **~0.1s**；会话内 reload 未改文件约 **&lt;0.1s** |
+
+## 补全
+
+在 `.mcfunction` 中输入命令即触发。覆盖 1.12.2 原版主干 + EasyCber 等扩展。
 
 | 场景 | 行为 |
 |------|------|
-| 空行输入 | 列出所有命令 |
-| `scoreboard ` | 列出 `objectives` / `players` / `teams` |
-| `scoreboard players ` | 列出 `tag` / `add` / `set` / `operation` / ... |
-| `scoreboard players tag @a ` | 列出 `add` / `remove` / `list` |
-| `effect @p ` | 列出 27 种药水效果 |
-| `function ` | 列出项目内所有函数 |
+| 空行输入 | 列出根命令 |
+| `scoreboard ` | `objectives` / `players` / `teams` |
+| `effect @p ` | 效果 id 或 `clear` |
+| `time set ` | 数值或 `day` / `night` / `noon` / `midnight` |
+| `title @a ` | `clear` / `reset` / `title` / `subtitle` / `actionbar` / `times` |
+| `function ` | 项目内函数名（支持 `if` / `unless` 选择器，1.12.2 合法） |
 
-### 数据源
+### 数据源（自动从 mcfunction 抽取）
 
-扩展自动解析 `.mcfunction` 文件，提取并索引：
+- **函数名**、**记分板**、**队伍**、**标签**、**假玩家**、**进度**
 
-- **函数名**：`function xxx` 调用
-- **记分板名称**：`scoreboard objectives add <name>`
-- **队伍名称**：`scoreboard teams add <name>`
-- **标签名称**：`scoreboard players tag @s add <name>`
-- **假玩家名称**：`scoreboard players add/set <fake_name>`
+## 实用功能
 
-这些数据会自动出现在对应补全位置。
+- Json 行内 / Hover 预览（tellraw、title 等）
+- 签名帮助、定义跳转（`Ctrl+Click`）
+- 快速新建函数、记分板 debug 插入
 
-### 实用功能
-
-- **Json 行内预览**：光标在 `tellraw @s { ... }` 行时，行尾渲染 JSON 组件样式
-- **签名帮助**：输入 `(` 触发函数宏参数提示
-- **定义跳转**：`Ctrl+Click` 函数名跳转到定义
-- **Hover 提示**：悬停函数名查看函数信息
-
-## 命令
+## 命令面板
 
 | 命令 | 说明 |
 |------|------|
-| `mcf-studio.reloadWorkspace` | 重新扫描函数/记分板/进度（`Ctrl+Shift+P`） |
-| `mcf-studio.createFunctionFile` | 右键文件夹 → 新建 mcfunction 文件 |
-| `mcf-studio.fastScoreboardDebug` | 右键编辑区 → 插入快速记分板 debug |
-| `mcf-studio.toggleDslDebug` | 切换补全管线日志开关 |
+| `mcf-studio.reloadWorkspace` | 刷新函数/记分板/进度等（默认 `Ctrl+Shift+R`） |
+| `mcf-studio.createFunctionFile` | 右键文件夹 → 新建 mcfunction |
+| `mcf-studio.fastScoreboardDebug` | 插入快速记分板 debug |
+| `mcf-studio.toggleDslDebug` | 切换 DSL 补全管线日志 |
 
 ## 配置
 
-项目根目录放置 `McfunctionStudio.json`：
+路径：`data/.McfStudio/McfunctionStudio.json`（首次可自动生成）。
 
 ```json
 {
@@ -85,12 +92,27 @@ code --install-extension mcfunction-studio-1.4.0.vsix
     "HoverPreview": true
   },
   "FileProcessing": {
-    "MaxConcurrentReads": 100,
+    "MaxConcurrentReads": 16,
     "AutoRenameFunctionReference": true
-  }
+  },
+  "CommandSchemaCheck": true
 }
 ```
+
+> 默认并发读取为 **16**（过大对小文件磁盘无收益）。
 
 ## 自定义命令补全
 
 参见 [YAML 命令定义](yaml-command.md)。
+
+## 维护者：测试与基准
+
+```bash
+npm run compile
+npm run test:index       # 索引 / 缓存序列化
+npm run test:baseline    # 1.12.2 命令树基准（function/effect/time/title/...）
+npm run bench:perf       # 合成包
+npm run bench:real -- "D:/path/to/data"   # 真实 data 目录
+```
+
+更细的设计记录见 `docs/plans/`（如 `2026-07-19-stable-1.5.0.md`、`2026-07-19-index-disk-cache.md`）。

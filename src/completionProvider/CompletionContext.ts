@@ -50,6 +50,11 @@ export class CompletionContext {
     private handlers = new Map<string, CommandHandler>();
     private loader: DataLoader;
 
+    /** 静态枚举补全缓存（Enum 不变，避免每次 complete 全量 new CompletionItem） */
+    private itemsCache: vscode.CompletionItem[] | null = null;
+    private blocksCache: vscode.CompletionItem[] | null = null;
+    private entityTypesCache: vscode.CompletionItem[] | null = null;
+
     private fastCommands: vscode.CompletionItem[] = [
         { label: 'tag', detail: 'scoreboard players tag', insertText: 'scoreboard players tag', kind: vscode.CompletionItemKind.Snippet }
     ];
@@ -225,20 +230,29 @@ export class CompletionContext {
     }
 
     entityTypes(): vscode.CompletionItem[] {
-        return EntityNameList.all.map(e =>
-            this.item(e.name, e.desc, e.name, false, vscode.CompletionItemKind.TypeParameter)
-        );
+        if (!this.entityTypesCache) {
+            this.entityTypesCache = EntityNameList.all.map(e =>
+                this.item(e.name, e.desc, e.name, false, vscode.CompletionItemKind.TypeParameter)
+            );
+        }
+        return this.entityTypesCache;
     }
 
     items(): vscode.CompletionItem[] {
-        return Object.keys(ItemNameMap.all).map(key =>
-            this.item(key, ItemNameMap.getDescription(key), key, false, vscode.CompletionItemKind.Struct)
-        );
+        if (!this.itemsCache) {
+            this.itemsCache = Object.keys(ItemNameMap.all).map(key =>
+                this.item(key, ItemNameMap.getDescription(key), key, false, vscode.CompletionItemKind.Struct)
+            );
+        }
+        return this.itemsCache;
     }
 
     blocks(): vscode.CompletionItem[] {
-        return Object.keys(BlockNameMap.all).map(key =>
-            this.item(key, ItemNameMap.getDescription(key), key, false, vscode.CompletionItemKind.Struct)
-        );
+        if (!this.blocksCache) {
+            this.blocksCache = Object.keys(BlockNameMap.all).map(key =>
+                this.item(key, BlockNameMap.getDescription(key), key, false, vscode.CompletionItemKind.Struct)
+            );
+        }
+        return this.blocksCache;
     }
 }

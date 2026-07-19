@@ -2,7 +2,10 @@ import * as vscode from 'vscode';
 import { MinecraftUtils } from '../utils/MinecraftUtils';
 import { rootDir } from '../extension';
 import { CommandUtils } from '../utils/CommandUtils';
-import { IndexedStore, DataType, ScoreboardData, FunctionData, TeamData } from './data';
+import {
+    IndexedStore, DataType, ScoreboardData, FunctionData, TeamData,
+    readIndexCache, writeIndexCache, cacheMetaMatch, buildPayload,
+} from './data';
 import { registerHandlers as registerMinecraft } from './extractors/MinecraftExtractor';
 import { registerHandlers as registerEasyCber } from './extractors/EasyCberExtractor';
 export { DataType };
@@ -50,6 +53,12 @@ export class DataLoader {
     // ---- 命令解析注册表：command → handler ----
     private commandHandlers: Map<string, (uri: vscode.Uri, line: number, commands: string[]) => void> = new Map();
 
+    /** uri.toString() → mtime，用于增量跳过未改文件 */
+    private fileMtimes = new Map<string, number>();
+
+    /** 单飞行：防止重叠 loadData */
+    private loadFlight: Promise<void> | null = null;
+
     private constructor() {
         this.registerHandlers();
         // 注意：init() 不在构造函数中调用，因为此时 rootDir 可能尚未设置。
@@ -69,7 +78,7 @@ export class DataLoader {
             return;
         }
         await this.loadExtensionConfig();
-        this.loadData(true, this.configData.FileProcessing.MaxConcurrentReads);
+        await this.loadData(true, this.configData.FileProcessing.MaxConcurrentReads, true);
     }
 
     public static getInstance(): DataLoader {
@@ -123,7 +132,8 @@ export class DataLoader {
                 HoverPreview: true
             },
             FileProcessing: {
-                MaxConcurrentReads: 100,
+                // 小文件场景过高并发无收益且易打满磁盘（bench: M 包 100≈串行）
+                MaxConcurrentReads: 16,
                 AutoRenameFunctionReference: true
             },
             HoverProvider: {
@@ -271,13 +281,17 @@ export class DataLoader {
      */
     public clearCache(doc: vscode.TextDocument, startLine: number = 0, endLine: number = -1): void {
         const resName = MinecraftUtils.buildFunctionCall(doc.uri) ?? '';
-        if (!this.store.hasDocEntry(resName)) { return; }
+        if (!doc.uri) { return; }
 
         if (endLine === -1) {
-            endLine = doc.lineCount - 1;
+            // 删除行后旧索引可能超出新 lineCount；_docIndex 与 LineIndex 取较大者
+            const maxDoc = this.store.getMaxLine(resName);
+            const maxLi = this.store.getLineIndex().getMaxLine(doc.uri.toString());
+            endLine = Math.max(doc.lineCount - 1, maxDoc, maxLi);
         }
+        if (endLine < startLine) { return; }
 
-        this.store.clearLines(resName, startLine, endLine);
+        this.store.clearLines(resName, startLine, endLine, doc.uri);
     }
 
     /**
@@ -286,43 +300,174 @@ export class DataLoader {
     public clearSingleFileAllCache(uri: vscode.Uri): void {
         const resName = MinecraftUtils.buildFunctionCall(uri) ?? '';
         this.removeFunctionRes(resName);
-        this.store.clearFile(resName);
+        this.store.clearFile(resName, uri);
+        try {
+            (require('../dsl/yaml/extractor') as typeof import('../dsl/yaml/extractor')).clearFileExtract(uri.toString());
+        } catch { /* extractor 未加载 */ }
     }
 
     // ================================================================
     // 数据加载主流程
     // ================================================================
 
-    public async loadData(useConcurrentControl: boolean = true, concurrency: number = 100): Promise<void> {
-        // 原地清空（保持实例引用不变，handler 闭包不受影响）
-        this.store.clear();
-        this.functionResNames.length = 0;
-        this.advancementResNames.length = 0;
-        try { (require('../dsl/yaml/extractor') as typeof import('../dsl/yaml/extractor')).clearAllCustomData(); } catch {}
+    /**
+     * 加载 / 刷新工作区索引。
+     * @param useConcurrentControl 是否限制并发
+     * @param concurrency 并发度（默认取配置，上限 32）
+     * @param forceFull true=清空后全量解析；false=按 mtime 跳过未改文件（reload 推荐）
+     */
+    public async loadData(
+        useConcurrentControl: boolean = true,
+        concurrency: number = this.configData.FileProcessing.MaxConcurrentReads,
+        forceFull: boolean = true,
+    ): Promise<void> {
+        // 单飞行：重叠调用串行化
+        while (this.loadFlight) {
+            await this.loadFlight;
+        }
+        const flight = this.loadDataInternal(useConcurrentControl, concurrency, forceFull);
+        this.loadFlight = flight;
+        try {
+            await flight;
+        } finally {
+            if (this.loadFlight === flight) {
+                this.loadFlight = null;
+            }
+        }
+    }
 
-        const promise1 = this.loadFunctionData(useConcurrentControl, concurrency);
-        const promise2 = this.loadAdvancementData();
+    private async loadDataInternal(
+        useConcurrentControl: boolean,
+        concurrency: number,
+        forceFull: boolean,
+    ): Promise<void> {
+        const conc = Math.max(1, Math.min(concurrency || 16, 32));
 
         try {
-            const [result1, result2] = await Promise.all([promise1, promise2]);
+            // 冷启动 forceFull：优先尝试磁盘 index-cache（mtime 全匹配则跳过解析）
+            if (forceFull) {
+                const restored = await this.tryRestoreFromDiskCache();
+                if (restored) {
+                    const statusMsg =
+                        `McfunctionStudio: 函数 ${this.functionResNames.length} | 记分板 ${this.store.getScoreboards().size}` +
+                        ` | 标签 ${this.store.getTags().size} | 队伍 ${this.store.getTeams().size}` +
+                        ` | 进度 ${this.advancementResNames.length}` +
+                        ` | 缓存命中 ${restored.duration.toFixed(3)}s`;
+                    vscode.window.setStatusBarMessage(statusMsg, 5000);
+                    console.log(
+                        `【函数加载】磁盘缓存命中 文件=${this.functionResNames.length}` +
+                        ` 耗时=${restored.duration.toFixed(3)}s`,
+                    );
+                    return;
+                }
 
-            if (!result1 || !result2) {
-                console.warn('[McfunctionStudio] 数据加载未完成', { functionResult: result1, advancementResult: result2 });
+                this.store.clear();
+                this.functionResNames.length = 0;
+                this.advancementResNames.length = 0;
+                this.fileMtimes.clear();
+                try {
+                    (require('../dsl/yaml/extractor') as typeof import('../dsl/yaml/extractor')).clearAllCustomData();
+                } catch { /* extractor 未加载 */ }
+            }
+
+            const [funcStats, advOk] = await Promise.all([
+                this.loadFunctionData(useConcurrentControl, conc, forceFull),
+                this.loadAdvancementData(forceFull),
+            ]);
+
+            if (funcStats === null || advOk === null) {
+                console.warn('[McfunctionStudio] 数据加载未完成', { funcStats, advOk });
                 return;
             }
 
-            const statusMsg = `加载函数 ${this.functionResNames.length} | 记分板 ${this.store.getScoreboards().size} | 标签 ${this.store.getTags().size} | 队伍 ${this.store.getTeams().size} | 进度 ${this.advancementResNames.length} | 假玩家 ${this.store.getFakePlayers().size} 耗时>> ${result1}s <<`;
-            vscode.window.setStatusBarMessage(statusMsg, 3000);
-            vscode.window.showInformationMessage(`McfunctionStudio 初始化完成, 耗时 ${result1.toFixed(3)} s`);
+            // 全量或有解析时回写缓存；warm 全跳过则不写
+            if (forceFull || funcStats.parsed > 0) {
+                await this.persistIndexCache();
+            }
+
+            const statusMsg =
+                `McfunctionStudio: 函数 ${this.functionResNames.length} | 记分板 ${this.store.getScoreboards().size}` +
+                ` | 标签 ${this.store.getTags().size} | 队伍 ${this.store.getTeams().size}` +
+                ` | 进度 ${this.advancementResNames.length}` +
+                ` | 解析 ${funcStats.parsed}/跳过 ${funcStats.skipped}` +
+                ` | ${funcStats.duration.toFixed(3)}s`;
+            vscode.window.setStatusBarMessage(statusMsg, 5000);
+            // 不再 showInformationMessage，避免每次 reload 抢焦点
         } catch (error) {
             console.error('[McfunctionStudio] 加载数据失败', error);
             vscode.window.showErrorMessage(`加载数据失败: ${error}`);
         }
     }
 
-    public async loadAdvancementData(): Promise<boolean | null> {
+    /**
+     * 若 index-cache.json.gz 存在且所有函数 mtime 一致，恢复 IndexedStore。
+     * 进度列表仍扫描磁盘（轻量）。
+     */
+    private async tryRestoreFromDiskCache(): Promise<{ duration: number } | null> {
+        const t0 = Date.now();
+        try {
+            const functionPaths = await DataLoader.getAllFunctionsPaths();
+            const currentMtimes = new Map<string, number>();
+            for (const p of functionPaths) {
+                try {
+                    const st = await vscode.workspace.fs.stat(p);
+                    currentMtimes.set(p.toString(), st.mtime);
+                } catch {
+                    // 无法 stat 则视为缓存不可用
+                    return null;
+                }
+            }
+
+            const cached = await readIndexCache();
+            if (!rootDir || !cached || !cacheMetaMatch(cached, currentMtimes, rootDir)) {
+                return null;
+            }
+
+            this.store.importState(cached.store);
+            this.fileMtimes = new Map(currentMtimes);
+            this.functionResNames = functionPaths
+                .map(p => MinecraftUtils.buildFunctionCall(p))
+                .filter((n): n is string => !!n);
+
+            // 进度：廉价扫描，不信任缓存里的名单也可
+            await this.loadAdvancementData(true);
+
+            return { duration: (Date.now() - t0) / 1000 };
+        } catch (err) {
+            console.warn('[McfunctionStudio] 读取 index-cache 失败，回退全量解析', err);
+            return null;
+        }
+    }
+
+    /** 将当前索引写入 data/.McfStudio/index-cache.json.gz */
+    private async persistIndexCache(): Promise<void> {
+        try {
+            const payload = buildPayload(
+                this.fileMtimes,
+                this.functionResNames,
+                this.advancementResNames,
+                this.store.exportState(),
+            );
+            const ok = await writeIndexCache(payload);
+            if (ok) {
+                console.log(
+                    `[McfunctionStudio] index-cache.json.gz 已写入（函数 ${this.functionResNames.length}，` +
+                    `记分板 ${this.store.getScoreboards().size}，标签 ${this.store.getTags().size}）`,
+                );
+            }
+        } catch (err) {
+            console.warn('[McfunctionStudio] persistIndexCache 失败', err);
+        }
+    }
+
+    public async loadAdvancementData(forceFull: boolean = true): Promise<boolean | null> {
         try {
             const advancementPaths = await DataLoader.getAllAdvancementsPaths();
+            if (forceFull) {
+                this.advancementResNames.length = 0;
+            } else {
+                this.advancementResNames.length = 0;
+            }
             for (const path of advancementPaths) {
                 const resName = MinecraftUtils.buildAdvancementCall(path);
                 if (!resName) { continue; }
@@ -338,15 +483,52 @@ export class DataLoader {
 
     public async loadFunctionData(
         useConcurrentControl: boolean = false,
-        concurrency: number = 50
-    ): Promise<number | null> {
+        concurrency: number = 16,
+        forceFull: boolean = true,
+    ): Promise<{ duration: number; parsed: number; skipped: number } | null> {
         try {
-            const functionsUri = vscode.Uri.joinPath(rootDir, 'functions');
-            const functionPaths = await DataLoader.getAllFunctionsPaths(functionsUri);
+            const functionPaths = await DataLoader.getAllFunctionsPaths();
 
             if (functionPaths.length === 0) {
-                vscode.window.showInformationMessage('未找到任何 .mcfunction 函数文件');
-                return null;
+                this.functionResNames = [];
+                console.log('[McfunctionStudio] 未找到任何 .mcfunction 函数文件');
+                return { duration: 0, parsed: 0, skipped: 0 };
+            }
+
+            // 增量：剔除已删除文件的索引
+            if (!forceFull) {
+                const live = new Set(functionPaths.map(p => p.toString()));
+                for (const uriStr of [...this.fileMtimes.keys()]) {
+                    if (!live.has(uriStr)) {
+                        try {
+                            const gone = vscode.Uri.parse(uriStr);
+                            this.clearSingleFileAllCache(gone);
+                        } catch {
+                            this.fileMtimes.delete(uriStr);
+                        }
+                        this.fileMtimes.delete(uriStr);
+                    }
+                }
+            }
+
+            // 挑选需要解析的文件
+            const toParse: vscode.Uri[] = [];
+            let skipped = 0;
+            for (const path of functionPaths) {
+                const key = path.toString();
+                let mtime = -1;
+                try {
+                    const st = await vscode.workspace.fs.stat(path);
+                    mtime = st.mtime;
+                } catch {
+                    toParse.push(path);
+                    continue;
+                }
+                if (!forceFull && this.fileMtimes.get(key) === mtime) {
+                    skipped++;
+                    continue;
+                }
+                toParse.push(path);
             }
 
             this.functionResNames = functionPaths
@@ -354,33 +536,38 @@ export class DataLoader {
                 .filter((n): n is string => !!n);
 
             const startTime = Date.now();
-            const modeName = useConcurrentControl ? `限制并发（${concurrency}）` : '串行';
+            const modeName = useConcurrentControl ? `并发≤${concurrency}` : '串行';
 
-            if (useConcurrentControl) {
-                await this.concurrentMap(concurrency, functionPaths, async (path) => {
-                    const resName = MinecraftUtils.buildFunctionCall(path);
-                    if (!resName) { return; }
+            const parseOne = async (path: vscode.Uri) => {
+                try {
+                    await this.loadSingleFuncFileByUri(path);
                     try {
-                        await this.loadSingleFuncFileByUri(path);
-                    } catch (err) {
-                        vscode.window.showWarningMessage(`解析函数文件失败：${path.path}，原因：${(err as Error).message}`);
+                        const st = await vscode.workspace.fs.stat(path);
+                        this.fileMtimes.set(path.toString(), st.mtime);
+                    } catch {
+                        this.fileMtimes.set(path.toString(), Date.now());
                     }
-                });
+                } catch (err) {
+                    vscode.window.showWarningMessage(
+                        `解析函数文件失败：${path.path}，原因：${(err as Error).message}`,
+                    );
+                }
+            };
+
+            if (useConcurrentControl && concurrency > 1) {
+                await this.concurrentMap(concurrency, toParse, parseOne);
             } else {
-                for (const path of functionPaths) {
-                    const resName = MinecraftUtils.buildFunctionCall(path);
-                    if (!resName) { continue; }
-                    try {
-                        await this.loadSingleFuncFileByUri(path);
-                    } catch (err) {
-                        vscode.window.showWarningMessage(`解析函数文件失败：${path.path}，原因：${(err as Error).message}`);
-                    }
+                for (const path of toParse) {
+                    await parseOne(path);
                 }
             }
 
             const duration = (Date.now() - startTime) / 1000;
-            console.log(`【函数加载性能测试】模式：${modeName}，文件数量：${functionPaths.length}，耗时：${duration.toFixed(3)}秒`);
-            return duration;
+            console.log(
+                `【函数加载】${modeName} 全量=${forceFull} 文件=${functionPaths.length}` +
+                ` 解析=${toParse.length} 跳过=${skipped} 耗时=${duration.toFixed(3)}s`,
+            );
+            return { duration, parsed: toParse.length, skipped };
         } catch (error) {
             console.error('[McfunctionStudio] 加载函数数据失败', error);
             vscode.window.showErrorMessage(`加载函数数据失败：${(error as Error).message}`);
@@ -400,8 +587,15 @@ export class DataLoader {
     }
 
     public async loadSingleFuncFileByUri(path: vscode.Uri): Promise<void> {
-        // 清除该文件旧提取值
-        try { (require('../dsl/yaml/extractor') as typeof import('../dsl/yaml/extractor')).clearFileExtract(path.toString()); } catch {}
+        // 完整清理：_docIndex + LineIndex + 定义 Map（避免重复 push）
+        const resName = MinecraftUtils.buildFunctionCall(path) ?? '';
+        if (resName) {
+            this.store.clearFile(resName, path);
+        } else {
+            try {
+                (require('../dsl/yaml/extractor') as typeof import('../dsl/yaml/extractor')).clearFileExtract(path.toString());
+            } catch { /* extractor 未加载 */ }
+        }
         const fileContent = await vscode.workspace.fs.readFile(path);
         const content = new TextDecoder('utf-8').decode(fileContent);
         this.parseLines(path, content.split(/\r?\n|\r/));

@@ -47,8 +47,12 @@ export const scoreboardCmd: RootNode = command('scoreboard')
                 literal('remove')
                     .then(
                         argument('<target>', suggestSelectors())
-                            .then(argument('<objective>', suggestScoreboards()))
+                            .then(
+                                argument('<objective>', suggestScoreboards())
+                                    .then(argument('<count>')),
+                            ),
                     ),
+
                 literal('set')
                     .then(
                         argument('<target>', suggestSelectors())

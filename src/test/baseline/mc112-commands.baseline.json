@@ -1,0 +1,267 @@
+{
+  "$schema_comment": "Minecraft 1.12.2 命令树结构基准。只描述 kind/name/optional/children。function if|unless 为 1.12.2 合法语法。",
+  "version": "1.12.2",
+  "required": ["function", "effect", "time", "title", "scoreboard.players.remove"],
+  "commands": {
+    "function": {
+      "kind": "root",
+      "name": "function",
+      "children": [
+        {
+          "kind": "argument",
+          "name": "<name>",
+          "children": [
+            {
+              "kind": "literal",
+              "name": "if",
+              "children": [
+                {
+                  "kind": "argument",
+                  "name": "<selector>",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "kind": "literal",
+              "name": "unless",
+              "children": [
+                {
+                  "kind": "argument",
+                  "name": "<selector>",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "effect": {
+      "kind": "root",
+      "name": "effect",
+      "children": [
+        {
+          "kind": "argument",
+          "name": "<target>",
+          "children": [
+            {
+              "kind": "literal",
+              "name": "clear",
+              "children": []
+            },
+            {
+              "kind": "argument",
+              "name": "<effect>",
+              "children": [
+                {
+                  "kind": "argument",
+                  "name": "[seconds]",
+                  "optional": true,
+                  "children": [
+                    {
+                      "kind": "argument",
+                      "name": "[amplifier]",
+                      "optional": true,
+                      "children": [
+                        {
+                          "kind": "argument",
+                          "name": "[hideParticles]",
+                          "optional": true,
+                          "children": []
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "time": {
+      "kind": "root",
+      "name": "time",
+      "children": [
+        {
+          "kind": "literal",
+          "name": "set",
+          "children": [
+            {
+              "kind": "argument",
+              "name": "<value>",
+              "children": []
+            },
+            {
+              "kind": "literal",
+              "name": "day",
+              "children": []
+            },
+            {
+              "kind": "literal",
+              "name": "night",
+              "children": []
+            },
+            {
+              "kind": "literal",
+              "name": "noon",
+              "children": []
+            },
+            {
+              "kind": "literal",
+              "name": "midnight",
+              "children": []
+            }
+          ]
+        },
+        {
+          "kind": "literal",
+          "name": "add",
+          "children": [
+            {
+              "kind": "argument",
+              "name": "<value>",
+              "children": []
+            }
+          ]
+        },
+        {
+          "kind": "literal",
+          "name": "query",
+          "children": [
+            {
+              "kind": "literal",
+              "name": "daytime",
+              "children": []
+            },
+            {
+              "kind": "literal",
+              "name": "gametime",
+              "children": []
+            },
+            {
+              "kind": "literal",
+              "name": "day",
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    "title": {
+      "kind": "root",
+      "name": "title",
+      "children": [
+        {
+          "kind": "argument",
+          "name": "<target>",
+          "children": [
+            {
+              "kind": "literal",
+              "name": "clear",
+              "children": []
+            },
+            {
+              "kind": "literal",
+              "name": "reset",
+              "children": []
+            },
+            {
+              "kind": "literal",
+              "name": "title",
+              "children": [
+                {
+                  "kind": "argument",
+                  "name": "<json>",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "kind": "literal",
+              "name": "subtitle",
+              "children": [
+                {
+                  "kind": "argument",
+                  "name": "<json>",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "kind": "literal",
+              "name": "actionbar",
+              "children": [
+                {
+                  "kind": "argument",
+                  "name": "<json>",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "kind": "literal",
+              "name": "times",
+              "children": [
+                {
+                  "kind": "argument",
+                  "name": "<fadeIn>",
+                  "children": [
+                    {
+                      "kind": "argument",
+                      "name": "<stay>",
+                      "children": [
+                        {
+                          "kind": "argument",
+                          "name": "<fadeOut>",
+                          "children": []
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "scoreboard.players.remove": {
+      "_note": "子路径基准：scoreboard players remove 在 1.12.2 需要 <count>",
+      "kind": "root",
+      "name": "scoreboard",
+      "children": [
+        {
+          "kind": "literal",
+          "name": "players",
+          "children": [
+            {
+              "kind": "literal",
+              "name": "remove",
+              "children": [
+                {
+                  "kind": "argument",
+                  "name": "<target>",
+                  "children": [
+                    {
+                      "kind": "argument",
+                      "name": "<objective>",
+                      "children": [
+                        {
+                          "kind": "argument",
+                          "name": "<count>",
+                          "children": []
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

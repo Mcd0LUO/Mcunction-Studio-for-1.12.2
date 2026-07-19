@@ -2,6 +2,30 @@
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
 
+# [1.5.0] - 2026-7-19 — 稳定版
+
+### 命令（1.12.2）
+- `effect` 补齐 `clear` 分支
+- `time set` 支持 `day|night|noon|midnight`；`time query` 支持 `daytime|gametime|day`
+- `title` 补齐 `clear|reset|title|subtitle|actionbar|times` 参数树
+- `scoreboard players remove` 补齐 `<count>`
+- 基准测试锁定：`function`（含 if/unless）、`effect`、`time`、`title`、`scoreboard.players.remove`
+
+### 索引与性能
+- 索引正确性：LineIndex / 多 Tag / clear 无幽灵引用
+- 加载：默认并发 16、mtime 增量跳过、单飞行 loadData
+- **磁盘索引缓存** `data/.McfStudio/index-cache.json.gz`（相对路径 + gzip + path|mtime 指纹）
+  - 跨会话冷启动可跳过全量解析；改文件或删缓存会自动重建
+- 补全热路径：items/blocks 缓存
+
+### 文档
+- README：工作区、`.McfStudio`、索引缓存、文档索引
+- `docs/quickstart.md`：对齐 1.5.0（缓存、配置默认并发 16、extra_command 路径）
+
+# [1.4.2] - 2026-6-30
+- 修复了scoreboard链接不跳转的问题
+- 优化了命令节点定义
+
 # [1.4.0] - 2026-6-29
 - 底层重构命令调用方式，改为链式节点树，优化性能
 - 新增自定义yaml 命令配置，可自定义补全

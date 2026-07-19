@@ -38,6 +38,7 @@ export function registerHandlers(store: IndexedStore, handlers: Map<string, Line
 
     // ---- function ----
     handlers.set('function', (uri, line, commands) => {
+        if (!commands[1]) { return; }
         const resName = MinecraftUtils.buildFunctionCall(uri) ?? '';
         store.addFunctionRef(resName, commands[1], line, uri);
     });
@@ -47,13 +48,14 @@ export function registerHandlers(store: IndexedStore, handlers: Map<string, Line
         if (commands.length < 5) { return; }
         const resName = MinecraftUtils.buildFunctionCall(uri) ?? '';
         const nbt = commands[5];
+        if (!nbt || typeof nbt !== 'string') { return; }
         const startIdx = nbt.indexOf('Tags:[');
         if (startIdx >= 0) {
             const tags = nbt.slice(startIdx + 6);
             const endIdx = tags.indexOf('"]');
             if (endIdx >= 0) {
-                const tagList = tags.slice(0, endIdx).split(',').map((t: string) => t.replaceAll('"', ''));
-                tagList.forEach((tag: string) => store.addTag(resName, tag, line, uri));
+                const tagList = tags.slice(0, endIdx).split(',').map((t: string) => t.replaceAll('"', '').trim()).filter(Boolean);
+                store.addTags(resName, tagList, line, uri);
             }
         }
     });

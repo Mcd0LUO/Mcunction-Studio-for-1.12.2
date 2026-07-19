@@ -59,7 +59,12 @@ export function registerConfigFileCodeLens(context: vscode.ExtensionContext): vo
         vscode.commands.registerCommand('mcf-studio.ApplayConfig', async (uri: vscode.Uri) => {
             try {
                 await DataLoader.getInstance().loadExtensionConfig();
-                DataLoader.getInstance().loadData(true, DataLoader.getInstance().getConfig().FileProcessing.MaxConcurrentReads);
+                // 应用配置后全量刷新一次
+                await DataLoader.getInstance().loadData(
+                    true,
+                    DataLoader.getInstance().getConfig().FileProcessing.MaxConcurrentReads,
+                    true,
+                );
             } catch (error) {
                 vscode.window.showErrorMessage(`重载并重启拓展失败：${(error as Error).message}`);
             }

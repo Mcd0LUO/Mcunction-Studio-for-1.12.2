@@ -75,7 +75,8 @@ export function applyExtractForFile(cmdName: string, commands: string[], fileUri
             for (const v of captured) { entries.push({ type: rule.type, value: v }); }
         }
 
-        index.addLine(fileUri, line, entries);
+        // append：与内置 Tag/Function 等同行共存，多条 YAML 规则也不互相覆盖
+        index.appendEntries(fileUri, line, entries);
     }
 }
 
