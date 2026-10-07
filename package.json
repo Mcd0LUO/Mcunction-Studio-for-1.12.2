@@ -26,7 +26,9 @@
     "Programming Languages",
     "Visualization"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onLanguage:mcfunction"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "languages": [

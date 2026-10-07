@@ -216,6 +216,12 @@ module.exports = {
         setStatusBarMessage: () => ({ dispose() {} }),
         createTextEditorDecorationType: () => ({ dispose() {} }),
         activeTextEditor: undefined,
+        /** LinePreviewManager 依赖此事件做行内预览刷新 */
+        onDidChangeTextEditorSelection: () => ({ dispose() {} }),
+        onDidChangeActiveTextEditor: () => ({ dispose() {} }),
+        /** VsCommandProcessor 的「新建函数文件」依赖这两个 */
+        showInputBox: async () => undefined,
+        showTextDocument: async () => ({ dispose() {} }),
     },
     workspace: {
         get workspaceFolders() {
@@ -233,7 +239,15 @@ module.exports = {
         }),
         onDidChangeTextDocument: () => ({ dispose() {} }),
         onDidOpenTextDocument: () => ({ dispose() {} }),
+        onDidCloseTextDocument: () => ({ dispose() {} }),
+        // 文件系统事件：DynamicDocManager 依赖这几个 API 绑定索引更新
+        onDidCreateFiles: () => ({ dispose() {} }),
+        onDidDeleteFiles: () => ({ dispose() {} }),
+        onDidRenameFiles: () => ({ dispose() {} }),
+        onDidSaveTextDocument: () => ({ dispose() {} }),
         findFiles,
+        /** VsCommandProcessor 的「新建函数文件」依赖 */
+        openTextDocument: async () => ({ dispose() {} }),
         getConfiguration: () => ({ get: () => undefined }),
         asRelativePath: (p) => String(p),
     },

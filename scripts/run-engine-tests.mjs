@@ -25,6 +25,7 @@ Module._load = function (request, parent, isMain) {
 const Mocha = require('mocha');
 const mocha = new Mocha({ timeout: 10000, reporter: 'spec' });
 mocha.addFile(path.join(root, 'out/test/dsl/engine.test.js'));
+mocha.addFile(path.join(root, 'out/test/activation.test.js'));
 mocha.run((failures) => {
     process.exitCode = failures ? 1 : 0;
 });
