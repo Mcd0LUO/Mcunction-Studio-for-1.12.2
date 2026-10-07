@@ -17,13 +17,29 @@ export interface SuggestContext {
 export type SuggestionProvider = (ctx: SuggestContext) => vscode.CompletionItem[] | Promise<vscode.CompletionItem[]>;
 
 /** 节点类型判别 */
-export type NodeKind = 'root' | 'literal' | 'argument' | 'forward_root' | 'jump';
+export type NodeKind = 'root' | 'literal' | 'argument' | 'forward_root';
 
 /** 命令树节点基类 */
 export abstract class CommandNode {
     public readonly kind: NodeKind;
     public readonly children: CommandNode[] = [];
     public description: string = '';
+
+    /**
+     * 标记该节点对应的参数可选（对应 Minecraft 语法中的 `[...]`）。
+     *
+     * ⚠️ 仅用于**结构快照与文档表达**，引擎的 walk/suggest 不读取它 ——
+     * 补全时可选参数与必填参数一视同仁。因此像
+     * `/effect <p> speed 10 1 true` 之后仍会提示 `[hideParticles]`。
+     *
+     * 之所以保留而不删除：
+     *   1. `toTreeShape()` 会把它写进基准快照，1.12.2 的语法保真度需要它
+     *   2. 命令定义文件里 `optional('[seconds]')` 的写法本身就值得保留可读性
+     *
+     * 若将来要让引擎真正支持「跳过可选参数」，需要在 walk 中实现
+     * 回溯与 sibling 探测（Brigadier 风格的贪心/回溯匹配），属于引擎能力扩展，
+     * 届时本字段的语义才会从「标记」升级为「行为」。
+     */
     public optional: boolean = false;
 
     constructor(kind: NodeKind) {
@@ -74,25 +90,14 @@ export class ArgumentNode extends CommandNode {
 }
 
 /**
- * 转发到根命令 — execute|foreach|superexe 的 run 子句。
+ * 转发到根命令 — execute 等命令的 run 子句。
  * 到达此节点或其父节点时，引擎返回所有根命令列表。
+ *
+ * 注：原 JumpNode（可重复链式子命令）已随 EasyCber 的 superexe/foreach 一并移除，
+ * 1.12.2 的 execute 用不上它，故不再保留。
  */
 export class ForwardRootNode extends CommandNode {
     constructor() {
         super('forward_root');
-    }
-}
-
-/**
- * 跳转节点 — 用于 superexe 等可重复链式子命令。
- * 到达此节点时，引擎向上跳 `levels` 层后展示该层兄弟节点，
- * 实现 if/unless/facing/positioned 的任意顺序循环。
- * 默认跳 1 层（回到直接父节点）。
- */
-export class JumpNode extends CommandNode {
-    public readonly levels: number;
-    constructor(levels: number = 1) {
-        super('jump');
-        this.levels = levels;
     }
 }

@@ -26,17 +26,17 @@
                 },
                 "Macro": {
                     "type": "array",
-                    "description": "需要忽略的宏定义文件模式列表",
+                    "description": "[已废弃] 宏（mcmacro）功能已于 1.5.1 移除，此项仅为兼容旧配置文件而保留，不再生效。",
                     "items": {
                         "type": "string"
                     },
-                    "default": []
+                    "default": [],
+                    "deprecated": true
                 }
             },
             "required": [
                 "Function",
-                "Advancement",
-                "Macro"
+                "Advancement"
             ],
             "additionalProperties": false
         },

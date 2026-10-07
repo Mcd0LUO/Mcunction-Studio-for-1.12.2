@@ -2,6 +2,51 @@
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
 
+# [1.5.1]
+
+### 移除
+- **宏（mcmacro）功能已移除**。该功能自 1.3.0 引入后未再维护，宏展开/折叠命令（`mcf-studio.unfoldMacro` / `foldMacro`）与 `mcmacro` 语言支持均已下线。
+  - 移除 `mcmacro` 语言贡献与语法高亮；已有 `.mcmacro` 文件不再被识别
+  - 配置项 `IgnorePattern.Macro` **仅为兼容旧配置文件保留**，不再生效（旧配置不会因此报错）
+  - 函数文件中形如 `#@macro start: ...` / `#@macro end` 的内容为普通注释，可按需手动清理
+- **EasyCber 插件支持已下线**。相关 YAML 命令集此前已不存在，本次移除残留的 `EasyCberExtractor`。
+  - `/team add`、`/schedule function|repeat|random` 不再产生索引，使用这些命令的数据包将失去对应的定义跳转与补全
+
+### 修复
+- **索引 P0：同名定义跨文件互删**。两个文件定义同名 team/scoreboard 时，删除其中一个会连带删掉另一个的定义，导致补全与跳转丢失。现改为按定义点引用计数，并在定义点消失时把跳转指针迁移到仍存在的定义。磁盘索引缓存往返后计数同样有效。
+- **索引 P0：大文件编辑崩溃**。`getMaxLine` 在单文件超过约 13 万行时因参数展开过多抛 `RangeError`。已改为逐行比较。
+- **新克隆无法编译**。`src/dsl/global/` 为空目录且 git 无法跟踪，`npm run compile` 的拷贝步骤抛 `ENOENT`。已补占位文件。
+- **发布包含无关文件**。`.vscodeignore` 遗漏 `docs/`、`scripts/`、`.idea/`、`out/test/` 等，打包条目从 146 降至 108。
+- **标签 / 假玩家无法 Ctrl+Click 跳转**。二者此前能被正确识别，却因缺少目标解析分支而落到空返回。现按引用位置跳到首次出现处；`scoreboard players set #fp <obj>` 中按住 Ctrl 点击 `#fp` 也会跳到假玩家的写入位置。
+- **`/effect <player> ` 补不出 `clear`**。`clear` 是 `<target>` 的兄弟字面量分支，此前补全只运行参数自身的 suggest，用户无法发现该分支。
+- **`/weather clear` 重复提示自身**。枚举参数误用 `argument` + suggest 写法，导致输入关键字后仍被提示同一组选项、且无法下钻到 `[duration]`。改为显式 literal 分支。
+- **重复定义弹窗刷屏**。大包首次加载时同名记分板可能弹几十次窗，现每个名称只提示一次，其余仅记日志。
+- **新建函数文件不建立索引**。`onDidCreateFiles` 此前只登记资源名不解析内容，新建文件在下次刷新前没有任何标签/记分板索引。现补上解析；批量重命名的 `forEach(async)` 改为可等待的 `for...of`。
+- **YAML 自定义数据通道静默失效**。`DataLoader` 中 4 处 `require` 被空 `catch` 吞掉，模块加载失败时完全无日志。已收敛为单一惰性访问器并在首次失败时报错。
+- **`/execute` 补出错误的 `run` 关键字**。1.12.2 的 `execute <entity> <x> <y> <z> <command>` 第 5 个参数直接就是命令，并不存在 `run`（那是 1.13+ Brigadier 语法）。此前引擎在遇到 `forward_root` 节点时会硬编码插入一个 `run` 补全项，导致用户可能写出无法执行的命令。现已移除。
+- **`/clone` 缺失 cloneMode 与数据值**。1.12.2 语法为 `clone <9 个坐标> [maskMode] [cloneMode] [TileName] [dataValue]`，此前缺失 `[cloneMode]`（`force|move|normal`，1.8 即引入）与尾部 `[dataValue]`（0–15），且 `filtered` 的 `<block>` 位置有误。现已补齐全部三种模式分支。
+- **`/particle` 必填参数被误标为可选**。`<xd> <yd> <zd> <speed>` 在 1.12.2 中均为必填（1.13 起才允许省略），此前全部标成 `optional`；同时 `[mode]` 实际可选，此前把 `[player] [params]` 只挂在 `normal`/`force` 分支下，等于把 mode 变成必填。现已按 1.12.2 语义重写，`[params ...]` 支持变长（`iconcrack` 收 2 个）。
+- **调试或测试时补全会静默失效**。`CompletionEngine` 原先在构造函数里覆盖静态字段，导致 `new` 第二个引擎（调试、热重载、单元测试）会把扩展正在使用的引擎替换成空的——实测补全项从 3 项掉到 1 项且无任何报错。现改为由装配点显式 `setCurrent()`，构造不再有副作用，`deactivate()` 也会释放引用。
+- **音效补全每次按键重建 549 个对象**。`soundNames` 是唯一漏掉懒加载缓存的静态枚举（`items`/`blocks`/`entityTypes` 早有缓存）。实测 `/playsound` 单次补全从 **50.9 µs 降到 3.7 µs**，且仍返回完整 549 项。
+
+### 重构
+- **断开循环依赖**。`rootDir` 的持有者从 `extension.ts` 迁至新增的 `core/paths.ts`，`DataLoader` / `IndexCache` / `MinecraftUtils` / `CodeLens` / `DynamicDocManager` 不再反向依赖装配点。此前 `require` 数据层会因 `Base` 的类字段初始化器提前执行而崩溃，现在各模块可独立加载，为引擎单测铺平了道路。
+- 补全引擎：合并 argument 与其兄弟 literal 的补全项；`SuggestContext` 构造收敛为一处（此前重复 3 次）；改用只读访问器取代私有字段的下标穿透。
+- **移除死代码约 1369 行**：`JumpNode` 机制（其服务的 `superexe`/`foreach` 属于已下线的 EasyCber）、未被引用的 `utils/nbt/*` 与 `JsonMsgParser`、`EnumLib` 中三个零引用枚举。YAML 里若写 `jump` 现在会明确报错而非静默失效。
+
+### 索引缓存
+- **磁盘缓存语义升级至 v4**。此前指纹只覆盖扫描结果（受 `IgnorePattern` 过滤），被排除文件的索引不参与校验 → 幽灵索引跨会话永久存活并被反复写回磁盘，缓存体积单调增长。现改为以索引的真实文件键（`LineIndex.indexedFiles()`）为剔除依据，且在缓存恢复后同样执行剔除——缓存内从此不可能存在幽灵条目。**旧缓存会失效重建一次**。
+
+### 性能
+- `npm run bench:perf -- --quiet` 提供轻量负载（L 规模降为 200 文件、采样轮数与补全次数减半），避免高负载跑基准时风扇噪音。
+
+### 构建
+- 发布产物不再保留源码注释（`tsconfig` 启用 `removeComments`）。`out/**/*.js` 体积从 433 KB 降到 368 KB（**-15.1%**，注释行 1039 → 80）。sourceMap 仍在本地产出供调试使用，且已由 `.vscodeignore` 排除、不进发布包。
+
+### 测试
+- 新增 `npm run test:engine`：37 条补全引擎行为测试（matchChild 优先级、argument 合并兄弟 literal、枚举分支下钻、walk token 消费、forward_root 转发、`clone`/`particle` 的 1.12.2 语法保真、JumpNode 移除、全局引用隔离、健壮性），此前 `engine.ts` 零断言覆盖
+- 新增 12 条索引回归用例（同名定义引用计数、缓存往返、def 指针迁移、大文件行号、引用位置查询、告警去重、幽灵索引）
+
 # [1.5.0] - 2026-7-19 — 稳定版
 
 ### 命令（1.12.2）
@@ -49,8 +94,9 @@ All notable changes to the "mcfunction-studio-for-1-12" extension will be docume
 # [1.3.0] - 2026-1-30
 ### 重磅更新
 - 添加了自定义宏语言mcmacro, 语法详见技术文档 (支持宏展开|宏折叠)  | BETA TEST
+  - **[已于 1.5.1 移除]**
 ### 更新
-- 新增配置项: IgnorePattern.Macro | AutoRenameFunctionReference.AutoRenameFunctionReference 详细介绍请悬浮鼠标在配置中查看
+- 新增配置项: IgnorePattern.Macro（[已于 1.5.1 移除，仅保留旧配置兼容]）| AutoRenameFunctionReference.AutoRenameFunctionReference 详细介绍请悬浮鼠标在配置中查看
 ### 修复
 - 修复了重命名函数
 - 修复了复制进工作区的文件不会自动解析的bug

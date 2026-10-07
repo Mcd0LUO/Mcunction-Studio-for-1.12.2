@@ -47,8 +47,6 @@ import { gameruleCmd } from './vanilla/gamerule';
 import { advancementCmd } from './vanilla/advancement';
 import { worldborderCmd } from './vanilla/worldborder';
 
-// EasyCber 已迁移为 YAML（src/dsl/builtin/*.yml），不再硬编码
-
 const ALL: RootNode[] = [
     effectCmd, functionCmd, scoreboardCmd,
     killCmd, testforCmd, difficultyCmd, tpCmd, teleportCmd, spawnpointCmd,

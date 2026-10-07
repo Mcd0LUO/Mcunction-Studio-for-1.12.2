@@ -46,10 +46,8 @@ const builtins: Record<string, (items?: YamlSuggestItem[]) => SuggestionProvider
     },
 
     soundNames: () => {
-        const { SoundNames }: { SoundNames: { all: { name: string; desc: string }[] } } =
-            require('../../utils/EnumLib');
-        return (ctx: SuggestContext): vscode.CompletionItem[] =>
-            SoundNames.all.map(s => ctx.item(s.name, s.desc, s.name, false, vscode.CompletionItemKind.Reference));
+        // 委托 CompletionContext 的懒加载缓存（549 条，每次按键重建代价过高）
+        return (ctx: SuggestContext): vscode.CompletionItem[] => ctx.cc.soundNames();
     },
 
     gameRules: () => {

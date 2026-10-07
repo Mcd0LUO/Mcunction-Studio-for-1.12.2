@@ -3,13 +3,18 @@
  *  1) DataLoader.loadData — 小/中/大数据包墙钟（min / p50 / p95 / max）
  *  2) CompletionEngine.complete — 含 selectors / blocks / items / sounds（p50 / p95）
  *
- *   npm run bench:perf
- *   node scripts/bench-perf.mjs
+ *   npm run bench:perf              # 标准负载
+ *   npm run bench:perf -- --quiet   # 轻量负载（风扇友好，见下）
  *
- * 可选环境变量：
- *   BENCH_LOAD_RUNS=5
- *   BENCH_COMPLETE_N=200
- *   BENCH_KEEP_TMP=1
+ * 环境变量：
+ *   BENCH_LOAD_RUNS=5      loadData 采样轮数
+ *   BENCH_COMPLETE_N=200   complete() 采样次数
+ *   BENCH_KEEP_TMP=1       保留临时数据包（调试用）
+ *   BENCH_QUIET=1          等价于 --quiet
+ *
+ * --quiet 说明：L 规模（800 文件 × 50 行 × 5 轮）是风扇噪音主因。
+ * 轻量模式把 L 降到 200 文件、采样降到 2 轮、complete 降到 40 次，
+ * 保留 S/M 规模与 M-warm 增量路径，足以发现数量级回归。
  */
 import { createRequire } from 'node:module';
 import { performance } from 'node:perf_hooks';
@@ -23,13 +28,17 @@ const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
 
-const LOAD_RUNS = Math.max(1, Number(process.env.BENCH_LOAD_RUNS || 5));
-const COMPLETE_N = Math.max(20, Number(process.env.BENCH_COMPLETE_N || 200));
+const QUIET = process.env.BENCH_QUIET === '1' || process.argv.includes('--quiet');
+
+const LOAD_RUNS = Math.max(1, Number(process.env.BENCH_LOAD_RUNS || (QUIET ? 2 : 5)));
+const COMPLETE_N = Math.max(20, Number(process.env.BENCH_COMPLETE_N || (QUIET ? 40 : 200)));
 const KEEP_TMP = process.env.BENCH_KEEP_TMP === '1';
 
 // ---- module mocks BEFORE any out/* load ----
 const vscode = require('./vscode-mock.cjs');
-const extensionState = { rootDir: undefined };
+// rootDir 的持有者是 out/core/paths.js（2026-10 自 extension.js 迁出，用于断开循环依赖）。
+// 这里必须注入 paths 而非 extension，否则 DataLoader 拿到的 rootDir 恒为 undefined。
+const pathsState = { rootDir: undefined };
 
 const origLoad = Module._load;
 Module._load = function (request, parent, isMain) {
@@ -39,8 +48,16 @@ Module._load = function (request, parent, isMain) {
     // 拦截项目 extension，避免 activate 链与单例补全 provider
     try {
         const resolved = Module._resolveFilename(request, parent);
+        // 注入 paths 状态：DataLoader / IndexCache / MinecraftUtils 都从这里取 rootDir
+        if (resolved.replace(/\\/g, '/').endsWith('/out/core/paths.js')) {
+            return {
+                get rootDir() { return pathsState.rootDir; },
+                setRootDir: (u) => { pathsState.rootDir = u; },
+            };
+        }
+        // 拦截项目 extension，避免 activate 链与单例补全 provider
         if (resolved.replace(/\\/g, '/').endsWith('/out/extension.js')) {
-            return extensionState;
+            return pathsState;
         }
         // 避免误加载 MinecraftCompletionProvider 静态单例
         if (resolved.replace(/\\/g, '/').endsWith('/out/completionProvider/Minecraft.js')) {
@@ -160,10 +177,11 @@ const report = {
     notes: [],
 };
 
+const L_FILES = QUIET ? 200 : 800;
 const sizes = [
     { name: 'S', files: 50, lines: 20, concurrency: 16, forceFull: true },
     { name: 'M', files: 250, lines: 40, concurrency: 16, forceFull: true },
-    { name: 'L', files: 800, lines: 50, concurrency: 16, forceFull: true },
+    { name: 'L', files: L_FILES, lines: 50, concurrency: 16, forceFull: true },
     { name: 'M-serial', files: 250, lines: 40, concurrency: 1, forceFull: true },
     // 冷加载后再跑一次 forceFull=false（mtime 全命中）→ 增量暖启动
     { name: 'M-warm', files: 250, lines: 40, concurrency: 16, forceFull: false, reuseFrom: 'M' },
@@ -189,7 +207,7 @@ try {
             packCache.set(size.name, { packRoot, dataRoot });
         }
 
-        extensionState.rootDir = vscode.Uri.file(dataRoot);
+        pathsState.rootDir = vscode.Uri.file(dataRoot);
         vscode.__setWorkspaceFolders([{ uri: vscode.Uri.file(packRoot), name: size.name, index: 0 }]);
 
         // warm 场景：先强制冷加载一次建立 mtime，再测增量
@@ -243,7 +261,7 @@ try {
         const packRoot = path.join(tmpRoot, 'complete-base');
         const dataRoot = path.join(packRoot, 'data');
         writePack(dataRoot, 250, 40);
-        extensionState.rootDir = vscode.Uri.file(dataRoot);
+        pathsState.rootDir = vscode.Uri.file(dataRoot);
         vscode.__setWorkspaceFolders([{ uri: vscode.Uri.file(packRoot), name: 'complete', index: 0 }]);
         mute();
         await loader.loadData(true, 16, true);

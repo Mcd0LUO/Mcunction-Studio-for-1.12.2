@@ -11,6 +11,11 @@
 			"mocha"
 		],
 		"sourceMap": true,
+		// 发布产物不保留注释：out/ 里的 .js 会随 vsix 分发给用户，
+		// 开发注释（尤其是中文）对他无价值却占体积（实测约占 11.7% 的行）。
+		// 需要看注释时读 src/ 即可；sourceMap 仍保留（本地调试用，
+		// 且已被 .vscodeignore 的 map 规则排除，不进发布包）。
+		"removeComments": true,
 		"rootDir": "src",
 		"strict": true,   /* enable all strict type-checking options */
 		/* Additional Checks */

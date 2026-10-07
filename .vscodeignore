@@ -10,3 +10,18 @@ vsc-extension-quickstart.md
 **/*.ts
 **/.vscode-test.*
 tests/**
+
+# ---- 1.5.0 审计补充：以下内容原规则遗漏，会被打进发布包 ----
+# 开发文档（内部 plan 设计记录，非用户文档）
+docs/**
+# 构建/测试脚本源码
+scripts/**
+# IDE 配置（.idea/workspace.xml 可能泄露本地绝对路径）
+.idea/**
+**/.idea/**
+**/*.iml
+untitled/**
+# tsc 产物中的测试代码（tests/** 对 src/test 无效，产物落在 out/test）
+out/test/**
+# 本地发版产物
+*.vsix

@@ -1,13 +1,12 @@
 import * as vscode from 'vscode';
 import { MinecraftUtils } from '../utils/MinecraftUtils';
-import { rootDir } from '../extension';
+import { rootDir } from './paths';
 import { CommandUtils } from '../utils/CommandUtils';
 import {
     IndexedStore, DataType, ScoreboardData, FunctionData, TeamData,
     readIndexCache, writeIndexCache, cacheMetaMatch, buildPayload,
 } from './data';
 import { registerHandlers as registerMinecraft } from './extractors/MinecraftExtractor';
-import { registerHandlers as registerEasyCber } from './extractors/EasyCberExtractor';
 export { DataType };
 
 // ============================================================
@@ -18,7 +17,6 @@ interface ConfigData {
     IgnorePattern: {
         Function: string[];
         Advancement: string[];
-        Macro: string[];
     },
     Signature: boolean,
     JsonPreview: {
@@ -65,10 +63,9 @@ export class DataLoader {
         // 由 extension.ts 的 activate() 在 rootDir 就绪后显式调用。
     }
 
-    /** 委托给各 CommandExtractor 注册（原版 + EasyCber 各自独立） */
+    /** 委托给 CommandExtractor 注册（原版命令） */
     private registerHandlers(): void {
         registerMinecraft(this.store, this.commandHandlers);
-        registerEasyCber(this.store, this.commandHandlers);
     }
 
     /** 由 extension.ts 在 rootDir 设置后调用 */
@@ -124,8 +121,7 @@ export class DataLoader {
         return {
             IgnorePattern: {
                 Function: [],
-                Advancement: [],
-                Macro: []
+                Advancement: []
             },
             JsonPreview: {
                 LinePreview: true,
@@ -228,6 +224,36 @@ export class DataLoader {
         return null;
     }
 
+    /**
+     * 取某个标签的第一个定义位置（用于 Ctrl+Click 跳转）。
+     * 标签无唯一「定义」——它可以在多处被 add，取任意一个即可。
+     */
+    public getTagDef(tagName: string): { uri: vscode.Uri, range: vscode.Range } | null {
+        const locs = this.store.getLineIndex().getLocations('tag', tagName);
+        for (const loc of locs) {
+            try {
+                const uri = vscode.Uri.parse(loc.file);
+                return { uri, range: new vscode.Range(loc.line, 0, loc.line, 0) };
+            } catch { /* uri 损坏则试下一个 */ }
+        }
+        return null;
+    }
+
+    /**
+     * 取某个假玩家的第一个「写入」位置（用于 Ctrl+Click 跳转）。
+     * 假玩家同样无定义概念——它是 scoreboard players <op> #fakePlayer <obj> 的目标。
+     */
+    public getFakePlayerDef(name: string): { uri: vscode.Uri, range: vscode.Range } | null {
+        const locs = this.store.getLineIndex().getLocations('fake_player', name);
+        for (const loc of locs) {
+            try {
+                const uri = vscode.Uri.parse(loc.file);
+                return { uri, range: new vscode.Range(loc.line, 0, loc.line, 0) };
+            } catch { /* uri 损坏则试下一个 */ }
+        }
+        return null;
+    }
+
     // ================================================================
     // 数据写入（委托给 IndexedStore）
     // ================================================================
@@ -301,9 +327,26 @@ export class DataLoader {
         const resName = MinecraftUtils.buildFunctionCall(uri) ?? '';
         this.removeFunctionRes(resName);
         this.store.clearFile(resName, uri);
-        try {
-            (require('../dsl/yaml/extractor') as typeof import('../dsl/yaml/extractor')).clearFileExtract(uri.toString());
-        } catch { /* extractor 未加载 */ }
+        this.yamlExtractor()?.clearFileExtract(uri.toString());
+    }
+
+    /**
+     * 取 YAML extractor 模块（惰性 require，结果缓存）。
+     *
+     * 用 dynamic import 会形成 DataLoader ↔ dsl/yaml 的运行时环，故保留 require，
+     * 但统一到这一处：失败时打印一次警告（此前 4 处空 catch 会把真实故障完全静默）。
+     */
+    private _yamlExtractor: typeof import('../dsl/yaml/extractor') | null | undefined;
+    private yamlExtractor(): typeof import('../dsl/yaml/extractor') | null {
+        if (this._yamlExtractor === undefined) {
+            try {
+                this._yamlExtractor = require('../dsl/yaml/extractor') as typeof import('../dsl/yaml/extractor');
+            } catch (err) {
+                this._yamlExtractor = null;
+                console.error('[McfunctionStudio] YAML extractor 加载失败，YAML extract 数据将不会被索引：', err);
+            }
+        }
+        return this._yamlExtractor;
     }
 
     // ================================================================
@@ -365,9 +408,7 @@ export class DataLoader {
                 this.functionResNames.length = 0;
                 this.advancementResNames.length = 0;
                 this.fileMtimes.clear();
-                try {
-                    (require('../dsl/yaml/extractor') as typeof import('../dsl/yaml/extractor')).clearAllCustomData();
-                } catch { /* extractor 未加载 */ }
+                this.yamlExtractor()?.clearAllCustomData();
             }
 
             const [funcStats, advOk] = await Promise.all([
@@ -429,6 +470,11 @@ export class DataLoader {
                 .map(p => MinecraftUtils.buildFunctionCall(p))
                 .filter((n): n is string => !!n);
 
+            // 缓存里可能带着上一版遗留的幽灵索引（当时 IgnorePattern 排除的
+            // 文件被写进了缓存）。指纹只覆盖扫描结果，看不见它们 —— 必须显式剔除，
+            // 否则它们会随缓存反复复活。
+            this.evictStaleFiles(functionPaths);
+
             // 进度：廉价扫描，不信任缓存里的名单也可
             await this.loadAdvancementData(true);
 
@@ -457,6 +503,39 @@ export class DataLoader {
             }
         } catch (err) {
             console.warn('[McfunctionStudio] persistIndexCache 失败', err);
+        }
+    }
+
+    /**
+     * 剔除「已被索引、但不在当前扫描结果中」的文件的全部索引。
+     *
+     * 判定基准是 LineIndex 的真实文件键，而非 fileMtimes：
+     * fileMtimes 只记录扫描到的文件，被 IgnorePattern 排除的文件曾被索引时
+     * 不在其中 → 永远清不掉 → 幽灵索引跨会话永久残留（且被反复写回磁盘）。
+     *
+     * @param livePaths 当前扫描到的函数文件
+     */
+    private evictStaleFiles(livePaths: vscode.Uri[]): void {
+        const live = new Set(livePaths.map(p => p.toString()));
+        // 三个来源取并集，任何一处残留都能被发现
+        const candidates = new Set<string>([
+            ...this.store.getLineIndex().indexedFiles(),
+            ...this.fileMtimes.keys(),
+        ]);
+        // docIndex 以 resName 为键，需反查文件键
+        for (const res of this.store.getDocIndex().keys()) {
+            const key = this.store.getFileKeyByResName(res);
+            if (key) { candidates.add(key); }
+        }
+
+        for (const uriStr of candidates) {
+            if (live.has(uriStr)) { continue; }
+            try {
+                this.clearSingleFileAllCache(vscode.Uri.parse(uriStr));
+            } catch {
+                this.fileMtimes.delete(uriStr);
+            }
+            this.fileMtimes.delete(uriStr);
         }
     }
 
@@ -495,20 +574,9 @@ export class DataLoader {
                 return { duration: 0, parsed: 0, skipped: 0 };
             }
 
-            // 增量：剔除已删除文件的索引
+            // 增量：剔除「已不在扫描结果中」的文件的索引
             if (!forceFull) {
-                const live = new Set(functionPaths.map(p => p.toString()));
-                for (const uriStr of [...this.fileMtimes.keys()]) {
-                    if (!live.has(uriStr)) {
-                        try {
-                            const gone = vscode.Uri.parse(uriStr);
-                            this.clearSingleFileAllCache(gone);
-                        } catch {
-                            this.fileMtimes.delete(uriStr);
-                        }
-                        this.fileMtimes.delete(uriStr);
-                    }
-                }
+                this.evictStaleFiles(functionPaths);
             }
 
             // 挑选需要解析的文件
@@ -592,9 +660,7 @@ export class DataLoader {
         if (resName) {
             this.store.clearFile(resName, path);
         } else {
-            try {
-                (require('../dsl/yaml/extractor') as typeof import('../dsl/yaml/extractor')).clearFileExtract(path.toString());
-            } catch { /* extractor 未加载 */ }
+            this.yamlExtractor()?.clearFileExtract(path.toString());
         }
         const fileContent = await vscode.workspace.fs.readFile(path);
         const content = new TextDecoder('utf-8').decode(fileContent);
@@ -619,10 +685,7 @@ export class DataLoader {
             handler(uri, index, commands);
         }
         // YAML 自定义数据提取（与 scoreboard/team 提取走同一通道）
-        try {
-            const { applyExtractForFile } = require('../dsl/yaml/extractor') as typeof import('../dsl/yaml/extractor');
-            applyExtractForFile(commands[0], commands, uri.toString(), index);
-        } catch { /* extractor 未加载 */ }
+        this.yamlExtractor()?.applyExtractForFile(commands[0], commands, uri.toString(), index);
     }
 
     // ================================================================

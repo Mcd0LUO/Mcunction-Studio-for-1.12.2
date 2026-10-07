@@ -2,7 +2,7 @@
   "name": "mcfunction-studio",
   "displayName": "Mcfunction Studio for 1.12",
   "description": "A simple mcfunction dev specialized helper for 1.12.2",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "publisher": "Mcd0-LUO",
   "author": {
     "email": "1473522801@qq.com",
@@ -44,20 +44,6 @@
           "dark": "icons/dark.png"
         },
         "configuration": "./syntaxes/language-configuration.json"
-      },
-      {
-        "id": "mcmacro",
-        "aliases": [
-          "McFunction Studio Macro"
-        ],
-        "extensions": [
-          ".mcmacro"
-        ],
-        "icon": {
-          "light": "icons/light.png",
-          "dark": "icons/dark.png"
-        },
-        "configuration": "./syntaxes/mcmacro-language-configuration.json"
       }
     ],
     "commands": [
@@ -123,6 +109,7 @@
     "test": "vscode-test",
     "test:baseline": "npm run compile && node scripts/run-baseline-tests.mjs",
     "test:index": "npm run compile && node scripts/run-index-tests.mjs",
+    "test:engine": "npm run compile && node scripts/run-engine-tests.mjs",
     "bench:baseline": "node scripts/bench-baseline.mjs",
     "bench:perf": "npm run compile && node scripts/bench-perf.mjs",
     "bench:real": "npm run compile && node scripts/bench-real-pack.mjs"

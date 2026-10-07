@@ -24,6 +24,14 @@ const T = {
     FakePlayer: 'fake_player',
 } as const;
 
+/** "resName:line" → [resName, line]；resName 内含冒号（命名空间）时按最后一个冒号切分 */
+function parseDefKey(key: string): [string, number] {
+    const idx = key.lastIndexOf(':');
+    if (idx < 0) { return [key, 0]; }
+    const line = Number(key.slice(idx + 1));
+    return [key.slice(0, idx), Number.isNaN(line) ? 0 : line];
+}
+
 export class IndexedStore {
 
     private index = new LineIndex();
@@ -33,11 +41,23 @@ export class IndexedStore {
     private teams = new Map<string, TeamData>();
     private funcDefs = new Map<string, Map<string, number[]>>();
 
+    // ---- 定义点反向索引（引用计数），修「同名定义跨文件互删」 ----
+    // value → "resName:line" 定义点集合。removeMeta 时只移除本条，
+    // 集合非空则保留主 Map 条目（并把 def 指针迁到仍在的定义点），空了才 delete。
+    private _scoreboardDefs = new Map<string, Set<string>>();
+    private _teamDefs = new Map<string, Set<string>>();
+
+    /** 已提示过的重复定义名，避免同名定义刷屏式弹窗 */
+    private _warnedDupes = new Set<string>();
+
     // ---- 行级元数据（resName → line → entries）----
     private _docIndex = new Map<string, Map<number, IndexEntry[]>>();
 
     /** resName → uri.toString()，保证 LineIndex 清理键一致 */
     private _fileKeyByRes = new Map<string, string>();
+
+    /** uri.toString() → resName（def 指针反向定位，用于判断指针是否指向被删的定义点） */
+    private _resByFileKey = new Map<string, string>();
 
     // ================================================================
     // 内部
@@ -47,7 +67,9 @@ export class IndexedStore {
 
     private rememberFile(resName: string, uri: vscode.Uri): void {
         if (resName) {
-            this._fileKeyByRes.set(resName, this.f(uri));
+            const key = this.f(uri);
+            this._fileKeyByRes.set(resName, key);
+            this._resByFileKey.set(key, resName);
         }
     }
 
@@ -69,17 +91,41 @@ export class IndexedStore {
     addScoreboard(resName: string, name: string, line: number, uri: vscode.Uri, type: string, desc: string = ''): void {
         this.rememberFile(resName, uri);
         if (this.scoreboards.has(name)) {
-            vscode.window.showWarningMessage(`重复定义记分板目标：${name} 在 ${resName} : ${line}`);
+            // 大包首次加载时同名定义可能有几十处，逐条弹窗会淹没编辑器。
+            // 每个名称只提示一次，之后仅记日志。
+            if (!this._warnedDupes.has(name)) {
+                this._warnedDupes.add(name);
+                vscode.window.showWarningMessage(`重复定义记分板目标：${name}（后续同名的重复定义不再提示）`);
+                console.warn(`[IndexedStore] 重复定义记分板：${name}（首个重复位于 ${resName}:${line}）`);
+            }
+            // 重复定义仍要记录定义点：否则删掉本文件时会连带删掉别处的定义；
+            // 同时写进 _docIndex，使该定义点能随 exportState 持久化、importState 后继续有效。
+            this._trackDef(this._scoreboardDefs, name, resName, line);
+            this._indexLine(resName, line, DataType.Scoreboard, name);
             return;
         }
         this.scoreboards.set(name, { type, desc, def: [uri, line] });
+        this._trackDef(this._scoreboardDefs, name, resName, line);
         this._indexLine(resName, line, DataType.Scoreboard, name);
     }
 
     addTeam(resName: string, name: string, line: number, uri: vscode.Uri): void {
         this.rememberFile(resName, uri);
-        this.teams.set(name, { def: [uri, line] });
+        if (!this.teams.has(name)) {
+            this.teams.set(name, { def: [uri, line] });
+        }
+        this._trackDef(this._teamDefs, name, resName, line);
         this._indexLine(resName, line, DataType.Team, name);
+    }
+
+    /** 记录一个定义点（同一文件同一行只记一次） */
+    private _trackDef(map: Map<string, Set<string>>, name: string, resName: string, line: number): void {
+        let set = map.get(name);
+        if (!set) {
+            set = new Set();
+            map.set(name, set);
+        }
+        set.add(`${resName}:${line}`);
     }
 
     addTag(resName: string, name: string, line: number, uri: vscode.Uri): void {
@@ -169,6 +215,9 @@ export class IndexedStore {
 
         if (fileKey) {
             this.index.clearFile(fileKey);
+            if (this._resByFileKey.get(fileKey) === resName) {
+                this._resByFileKey.delete(fileKey);
+            }
         }
         this._fileKeyByRes.delete(resName);
     }
@@ -176,11 +225,11 @@ export class IndexedStore {
     private removeMeta(entry: IndexEntry, resName: string, line: number): void {
         switch (entry.type) {
             case DataType.Scoreboard: {
-                this.scoreboards.delete(entry.value);
+                this._releaseDef(this._scoreboardDefs, this.scoreboards, entry.value, resName, line);
                 break;
             }
             case DataType.Team: {
-                this.teams.delete(entry.value);
+                this._releaseDef(this._teamDefs, this.teams, entry.value, resName, line);
                 break;
             }
             case DataType.Function: {
@@ -206,6 +255,53 @@ export class IndexedStore {
         }
     }
 
+    /**
+     * 释放一个定义点。
+     * 只有当该名称再无任何定义点残留时，才从主 Map 删除；
+     * 否则保留条目，并把 def 指针迁到仍在的定义点，避免指向已删文件的悬空引用。
+     */
+    private _releaseDef<T extends { def: [vscode.Uri, number] }>(
+        map: Map<string, Set<string>>,
+        main: Map<string, T>,
+        name: string,
+        resName: string,
+        line: number,
+    ): void {
+        const defs = map.get(name);
+        if (!defs) {
+            // 无追踪记录（缓存导入的旧数据等）：退化为原行为
+            main.delete(name);
+            return;
+        }
+
+        defs.delete(`${resName}:${line}`);
+
+        if (defs.size === 0) {
+            map.delete(name);
+            main.delete(name);
+            return;
+        }
+
+        // 仍有其他定义点：若 def 指针正好指向刚被删的点，迁到剩余定义点
+        const data = main.get(name);
+        if (data) {
+            const defResName = this._resByFileKey.get(data.def[0].toString());
+            const pointsHere = defResName === resName && data.def[1] === line;
+            if (pointsHere || data.def[1] === line && defResName === undefined) {
+                const survivor = defs.values().next();
+                if (!survivor.done) {
+                    const [survRes, survLine] = parseDefKey(survivor.value);
+                    const fileKey = this._fileKeyByRes.get(survRes);
+                    if (fileKey) {
+                        try {
+                            data.def = [vscode.Uri.parse(fileKey), survLine];
+                        } catch { /* uri 坏了就保持原指针 */ }
+                    }
+                }
+            }
+        }
+    }
+
     hasDocEntry(resName: string): boolean {
         return this._docIndex.has(resName) || this._fileKeyByRes.has(resName);
     }
@@ -213,7 +309,12 @@ export class IndexedStore {
     getMaxLine(resName: string): number {
         const docEntry = this._docIndex.get(resName);
         if (!docEntry || docEntry.size === 0) { return -1; }
-        return Math.max(...docEntry.keys());
+        // 不用 Math.max(...keys)：单文件行数超过约 12.5 万时展开参数会撑爆调用栈（RangeError）
+        let max = -1;
+        for (const line of docEntry.keys()) {
+            if (line > max) { max = line; }
+        }
+        return max;
     }
 
     // ================================================================
@@ -227,6 +328,10 @@ export class IndexedStore {
         this.funcDefs.clear();
         this._docIndex.clear();
         this._fileKeyByRes.clear();
+        this._resByFileKey.clear();
+        this._scoreboardDefs.clear();
+        this._teamDefs.clear();
+        this._warnedDupes.clear();
     }
 
     // ================================================================
@@ -263,6 +368,11 @@ export class IndexedStore {
 
     getDocIndex(): Map<string, Map<number, IndexEntry[]>> { return this._docIndex; }
     getLineIndex(): LineIndex { return this.index; }
+
+    /** resName → uri.toString()（清理时反查文件键用） */
+    getFileKeyByResName(resName: string): string | undefined {
+        return this._fileKeyByRes.get(resName);
+    }
 
     // ================================================================
     // 序列化（磁盘 index-cache）
@@ -399,12 +509,34 @@ export class IndexedStore {
                 const [resName, fileKey] = row;
                 if (typeof resName === 'string' && typeof fileKey === 'string') {
                     this._fileKeyByRes.set(resName, fileKey);
+                    this._resByFileKey.set(fileKey, resName);
                 }
             }
         }
 
         if (data.lineIndex) {
             this.index.importState(data.lineIndex);
+        }
+
+        // 从 docIndex 重建 Scoreboard/Team 的定义点引用计数。
+        // docIndex 已序列化全部 (resName, line, entries)，无需改磁盘格式即可恢复计数。
+        this._rebuildDefCounts();
+    }
+
+    /** 从 _docIndex 重建 Scoreboard/Team 定义点集合（缓存导入后调用） */
+    private _rebuildDefCounts(): void {
+        this._scoreboardDefs.clear();
+        this._teamDefs.clear();
+        for (const [resName, lineMap] of this._docIndex) {
+            for (const [line, entries] of lineMap) {
+                for (const e of entries) {
+                    if (e.type === DataType.Scoreboard) {
+                        this._trackDef(this._scoreboardDefs, e.value, resName, line);
+                    } else if (e.type === DataType.Team) {
+                        this._trackDef(this._teamDefs, e.value, resName, line);
+                    }
+                }
+            }
         }
     }
 

@@ -28,7 +28,8 @@ if (!fs.existsSync(functionsDir)) {
 }
 
 const vscode = require('./vscode-mock.cjs');
-const extensionState = { rootDir: undefined };
+// rootDir 的持有者是 out/core/paths.js（2026-10 自 extension.js 迁出，用于断开循环依赖）。
+const pathsState = { rootDir: undefined };
 const origLoad = Module._load;
 Module._load = function (request, parent, isMain) {
     if (request === 'vscode') {
@@ -37,8 +38,15 @@ Module._load = function (request, parent, isMain) {
     try {
         const resolved = Module._resolveFilename(request, parent);
         const norm = resolved.replace(/\\/g, '/');
+        // 注入 paths 状态：DataLoader / IndexCache / MinecraftUtils 都从这里取 rootDir
+        if (norm.endsWith('/out/core/paths.js')) {
+            return {
+                get rootDir() { return pathsState.rootDir; },
+                setRootDir: (u) => { pathsState.rootDir = u; },
+            };
+        }
         if (norm.endsWith('/out/extension.js')) {
-            return extensionState;
+            return pathsState;
         }
         if (norm.endsWith('/out/completionProvider/Minecraft.js')) {
             return { MinecraftCompletionProvider: class {} };
@@ -108,7 +116,7 @@ const { CommandUtils } = require(path.join(root, 'out/utils/CommandUtils.js'));
 unmute();
 
 const loader = DataLoader.getInstance();
-extensionState.rootDir = vscode.Uri.file(dataRoot);
+pathsState.rootDir = vscode.Uri.file(dataRoot);
 vscode.__setWorkspaceFolders([{ uri: vscode.Uri.file(packRoot), name: 'real', index: 0 }]);
 
 const COLD_N = Number(process.env.BENCH_COLD_N || 3);
@@ -206,7 +214,8 @@ async function measureComplete(name, n, fn) {
     return { name, items, ms: summarize(samples) };
 }
 
-const completeN = 100;
+const QUIET = process.env.BENCH_QUIET === '1' || process.argv.includes('--quiet');
+const completeN = Math.max(10, Number(process.env.BENCH_COMPLETE_N || (QUIET ? 30 : 100)));
 const complete = [];
 complete.push(await measureComplete('function names', completeN, () => engine.complete(['function', ''], 'function ')));
 complete.push(await measureComplete('selectors', completeN, () => engine.complete(['kill', ''], 'kill ')));

@@ -7,10 +7,7 @@ const lazyData = {
   BlockNameMap: null as any | null,
   EntityNameList: null as any | null,
   ItemNameMap: null as any | null,
-  MinecraftStats: null as any | null,
-  MinecraftStatsDetail: null as any | null,
   ParticleNames: null as any | null,
-  Enchantments: null as any | null,
   SoundNames: null as any | null,
 };
 
@@ -879,110 +876,6 @@ export const ItemNameMap = {
     return this.all[key] || key;
   }
 };
-export const MinecraftStats = {
-  get all(): Array<{ name: string; desc: string }> {
-    if (!lazyData.MinecraftStats) {
-      lazyData.MinecraftStats = [
-        { name: "air", desc: "玩家氧气值" },
-        { name: "armor", desc: "玩家护甲值" },
-        { name: "dummy", desc: "（只能通过命令改变）" },
-        { name: "deathCount", desc: "死亡次数" },
-        { name: "food", desc: "食物值" },
-        { name: "health", desc: "生命数（正常满血是20）" },
-        { name: "killedByTeam.", desc: "被**队击杀次数（**为队伍颜色）" },
-        { name: "level", desc: "等级数" },
-        { name: "playerKillCount", desc: "玩家击杀数" },
-        { name: "stat.", desc: "统计信息（详见具体子项）" },
-        { name: "teamkill.", desc: "击杀**队伍的次数（**为队伍颜色）" },
-        { name: "totalKillCount", desc: "总击杀数" },
-        { name: "trigger", desc: "普通玩家可使用trigger命令设置自己的分数（详见上面目录，可以快速跳转）" },
-        { name: "xp", desc: "玩家经验数" }
-      ];
-    }
-    return [...lazyData.MinecraftStats]; // 返回副本避免外部修改
-  },
-
-  // 按前缀过滤枚举项
-  filterByPrefix(prefix: string): Array<{ name: string; desc: string }> {
-    const lowerPrefix = prefix.toLowerCase();
-    return this.all.filter(item =>
-      item.name.toLowerCase().startsWith(lowerPrefix)
-    );
-  }
-};
-export const MinecraftStatsDetail = {
-  get all(): Array<{ name: string; desc: string }> {
-    if (!lazyData.MinecraftStatsDetail) {
-      lazyData.MinecraftStatsDetail = [
-        { name: "stat.animalsBred", desc: "动物繁殖次数" },
-        { name: "stat.armorCleaned", desc: "在炼药锅中洗掉装备颜色的次数" },
-        { name: "stat.aviateOneCm", desc: "滑翔1cm加1分" },
-        { name: "stat.bannerCleaned", desc: "在炼药锅洗掉旗帜颜色的次数" },
-        { name: "stat.beaconInteraction", desc: "与信标交互次数" },
-        { name: "stat.boatOneCm", desc: "划船每1cm加1分" },
-        { name: "stat.breakItem.minecraft.", desc: "用坏**工具/装备的次数（**为工具/装备名称）" },
-        { name: "stat.brewingstandInteraction", desc: "与酿造台交互的次数" },
-        { name: "stat.cakeSlicesEaten", desc: "吃掉的蛋糕片数" },
-        { name: "stat.cauldronFilled", desc: "炼药锅装水次数" },
-        { name: "stat.cauldronUsed", desc: "炼药锅用水次数" },
-        { name: "stat.chestOpened", desc: "打开箱子次数" },
-        { name: "stat.climbOneCm", desc: "攀爬1cm（攀爬藤蔓或者梯子）" },
-        { name: "stat.craftItem.minecraft.", desc: "合成出**物品" },
-        { name: "stat.crouchOneCm", desc: "潜行每1cm加1分" },
-        { name: "stat.damageDealt", desc: "造成的伤害总和 * 10" },
-        { name: "stat.damageTaken", desc: "受到的伤害总和 * 10" },
-        { name: "stat.deaths", desc: "死亡次数" },
-        { name: "stat.dispenserInspected", desc: "打开发射器GUI的次数" },
-        { name: "stat.peOneCm", desc: "水下移动每1cm加1分" },
-        { name: "stat.drop.minecraft.", desc: "丢弃|掉落**物品（**为物品名）" },
-        { name: "stat.dropperInspected", desc: "打开投掷器GUI的次数" },
-        { name: "stat.enderchestOpened", desc: "打开末影箱次数" },
-        { name: "stat.entityKilledBy.", desc: "被**生物击杀的次数（**为生物名）" },
-        { name: "stat.fallOneCm", desc: "摔落每1cm加1分" },
-        { name: "stat.fishCaught", desc: "钓到鱼的次数" },
-        { name: "stat.flowerPotted", desc: "在花盆中种花的次数" },
-        { name: "stat.flyOneCm", desc: "飞行1cm加一分" },
-        { name: "stat.furnaceInteraction", desc: "与熔炉交互的次数" },
-        { name: "stat.hopperInspected", desc: "与漏斗交互次数" },
-        { name: "stat.horseOneCm", desc: "骑马每1cm加1分" },
-        { name: "stat.itemEnchanted", desc: "物品被附魔" },
-        { name: "stat.jump", desc: "跳跃次数" },
-        { name: "stat.killEntity.", desc: "击杀**生物次数（**为生物名）" },
-        { name: "stat.leaveGame", desc: "离开游戏次数" },
-        { name: "stat.mineBlock.minecraft.", desc: "采掘**方块次数（**为方块名）" },
-        { name: "stat.minecartOneCm", desc: "坐矿车每1cm加1分" },
-        { name: "stat.mobKills", desc: "击杀生物次数" },
-        { name: "stat.noteblockPlayed", desc: "击打音符盒次数" },
-        { name: "stat.noteblockTuned", desc: "给音符盒调音次数" },
-        { name: "stat.pickup.minecraft.", desc: "捡起**物品次数（**为物品名）" },
-        { name: "stat.pigOneCm", desc: "骑猪每1cm加1分" },
-        { name: "stat.playOneMinute", desc: "玩家游玩游戏刻（每秒加20）" },
-        { name: "stat.playerKills", desc: "击杀玩家次数" },
-        { name: "stat.recordPlayed", desc: "播放CD次数" },
-        { name: "stat.shulkerBoxOpened", desc: "打开潜影箱次数" },
-        { name: "stat.sleepInBed", desc: "在床上睡觉次数" },
-        { name: "stat.sneakTime", desc: "潜行时间" },
-        { name: "stat.sprintOneCm", desc: "疾跑每1cm加1分" },
-        { name: "stat.swimOneCm", desc: "游泳每1cm加1分" },
-        { name: "stat.talkedToVillager", desc: "打开与村民的交易框次数" },
-        { name: "stat.timeSinceDeath", desc: "自从上次死亡以来的时间" },
-        { name: "stat.tradedWithVillager", desc: "与村民进行交易的次数" },
-        { name: "stat.trappedChestTriggered", desc: "陷阱箱被触发的次数" },
-        { name: "stat.useItem.minecraft.", desc: "使用**物品的次数（**为方块或物品名）" },
-        { name: "stat.walkOneCm", desc: "行走每1cm加1分" },
-      ];
-    }
-    return [...lazyData.MinecraftStatsDetail]; // 返回副本避免外部修改
-  },
-
-  // 按前缀过滤枚举项
-  filterByPrefix(prefix: string): Array<{ name: string; desc: string }> {
-    const lowerPrefix = prefix.toLowerCase();
-    return this.all.filter(item =>
-      item.name.toLowerCase().startsWith(lowerPrefix)
-    );
-  }
-};
 export const ParticleNames = {
   get all(): Array<{ name: string; desc: string }> {
     if (!lazyData.ParticleNames) {
@@ -1050,64 +943,6 @@ export const ParticleNames = {
   }
 };
 
-export const Enchantments = {
-  get all(): Array<{ name: string; desc: string }> {
-    if (!lazyData.Enchantments) {
-      lazyData.Enchantments = [
-        { name: "minecraft:aqua_affinity", desc: "水下速掘" },
-        { name: "minecraft:bane_of_arthropods", desc: "节肢杀手" },
-        { name: "minecraft:binding_curse", desc: "绑定诅咒" },
-        { name: "minecraft:blast_protection", desc: "爆炸保护" },
-        { name: "minecraft:depth_strider", desc: "深海探索者" },
-        { name: "minecraft:efficiency", desc: "效率" },
-        { name: "minecraft:feather_falling", desc: "摔落保护" },
-        { name: "minecraft:fire_aspect", desc: "火焰附加" },
-        { name: "minecraft:fire_protection", desc: "火焰保护" },
-        { name: "minecraft:flame", desc: "火矢" },
-        { name: "minecraft:fortune", desc: "时运" },
-        { name: "minecraft:frost_walker", desc: "冰霜行者" },
-        { name: "minecraft:infinity", desc: "无限" },
-        { name: "minecraft:knockback", desc: "击退" },
-        { name: "minecraft:looting", desc: "抢夺" },
-        { name: "minecraft:luck_of_the_sea", desc: "海之眷顾" },
-        { name: "minecraft:lure", desc: "饵钓" },
-        { name: "minecraft:mending", desc: "经验修补" },
-        { name: "minecraft:power", desc: "力量" },
-        { name: "minecraft:projectile_protection", desc: "弹射物保护" },
-        { name: "minecraft:protection", desc: "保护" },
-        { name: "minecraft:punch", desc: "冲击" },
-        { name: "minecraft:respiration", desc: "水下呼吸" },
-        { name: "minecraft:sharpness", desc: "锋利" },
-        { name: "minecraft:silk_touch", desc: "精准采集" },
-        { name: "minecraft:smite", desc: "亡灵杀手" },
-        { name: "minecraft:sweeping", desc: "横扫之刃" },
-        { name: "minecraft:thorns", desc: "荆棘" },
-        { name: "minecraft:unbreaking", desc: "耐久" },
-        { name: "minecraft:vanishing_curse", desc: "消失诅咒" }
-      ];
-    }
-    return [...lazyData.Enchantments]; // 返回副本避免外部修改
-  },
-
-  // 按前缀过滤枚举项
-  filterByPrefix(prefix: string): Array<{ name: string; desc: string }> {
-    const lowerPrefix = prefix.toLowerCase();
-    return this.all.filter(item =>
-      item.name.toLowerCase().startsWith(lowerPrefix)
-    );
-  }
-};
-
-
-export function refreshEnumCache() {
-  lazyData.EntityNameList = null;
-  lazyData.ItemNameMap = null;
-  lazyData.MinecraftStats = null;
-  lazyData.MinecraftStatsDetail = null;
-  lazyData.ParticleNames = null;
-  lazyData.Enchantments = null;
-  lazyData.SoundNames = null;
-}
 export const SoundNames = {
   get all(): Array<{ name: string; desc: string }> {
     if (!lazyData.SoundNames) {

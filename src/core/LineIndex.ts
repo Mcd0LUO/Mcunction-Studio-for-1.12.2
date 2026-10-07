@@ -122,6 +122,17 @@ export class LineIndex {
     // 查询
     // ================================================================
 
+    /**
+     * 所有被索引过的文件键（uri.toString）。
+     *
+     * 这是索引的「真实全集」——不同于扫描入口 getAllFunctionsPaths()，
+     * 它不受 IgnorePattern 过滤，因此能反映历史上曾被索引过的文件。
+     * 增量剔除与磁盘缓存校验都需要它，否则被排除的文件会留下永久幽灵。
+     */
+    indexedFiles(): string[] {
+        return [...this.lines.keys()];
+    }
+
     /** 获取某类型的所有值 */
     getByType(type: string): { value: string; count: number; meta?: unknown }[] {
         const tm = this.types.get(type);
@@ -139,6 +150,21 @@ export class LineIndex {
         return tm ? [...tm.keys()] : [];
     }
 
+    /** 某类型某值的全部引用位置（file uri.toString → 行号列表），用于定义跳转 */
+    getLocations(type: string, value: string): { file: string; line: number }[] {
+        const rc = this.types.get(type)?.get(value);
+        if (!rc) { return []; }
+        const result: { file: string; line: number }[] = [];
+        for (const l of rc.locations) {
+            const idx = l.lastIndexOf(':');
+            if (idx < 0) { continue; }
+            const line = Number(l.slice(idx + 1));
+            if (Number.isNaN(line)) { continue; }
+            result.push({ file: l.slice(0, idx), line });
+        }
+        return result;
+    }
+
     /** 测试/调试：某文件某行的条目 */
     getLineEntries(file: string, line: number): Entry[] {
         return this.lines.get(file)?.get(line)?.slice() ?? [];
@@ -148,7 +174,12 @@ export class LineIndex {
     getMaxLine(file: string): number {
         const fileMap = this.lines.get(file);
         if (!fileMap || fileMap.size === 0) { return -1; }
-        return Math.max(...fileMap.keys());
+        // 不用 Math.max(...keys)：单文件行数超过约 12.5 万时展开参数会撑爆调用栈（RangeError）
+        let max = -1;
+        for (const line of fileMap.keys()) {
+            if (line > max) { max = line; }
+        }
+        return max;
     }
 
     // ================================================================

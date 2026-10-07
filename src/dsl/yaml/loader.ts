@@ -4,10 +4,10 @@
  */
 import * as vscode from 'vscode';
 import { CompletionEngine } from '../engine';
-import { RootNode, ForwardRootNode, JumpNode } from '../nodes';
+import { RootNode, ForwardRootNode } from '../nodes';
 import { literal, argument } from '../builder';
 import * as yaml from 'js-yaml';
-import { YamlCommandDef, YamlLiteral, YamlArgument, YamlForwardRoot, YamlJump, YamlForward, YamlExtractRule } from './types';
+import { YamlCommandDef, YamlLiteral, YamlArgument, YamlForwardRoot, YamlForward, YamlExtractRule } from './types';
 import { resolveSuggest } from './suggests';
 import { registerExtractRule, unregisterCommandRules } from './extractor';
 
@@ -138,9 +138,13 @@ export class YamlCommandLoader {
     }
 
     private static convertNode(
-        node: YamlLiteral | YamlArgument | YamlForwardRoot | YamlJump | YamlForward
+        node: YamlLiteral | YamlArgument | YamlForwardRoot | YamlForward
     ): import('../nodes').CommandNode {
-        if ('jump' in node) { return new JumpNode((node as YamlJump).jump ?? 1); }
+        // jump 机制已随 EasyCber 的 superexe/foreach 一并移除。
+        // 明确报错而不是静默忽略，避免用户写了却以为生效。
+        if ('jump' in node) {
+            throw new Error('jump 节点已移除（其服务的 superexe/foreach 命令属于 EasyCber 扩展，已下线）');
+        }
         if ('forward_root' in node) { return new ForwardRootNode(); }
         if ('forward' in node) { return new ForwardRootNode(); } // 兼容旧语法
         if ('literal' in node) {

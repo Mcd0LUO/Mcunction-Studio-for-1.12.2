@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { rootDir } from '../extension';
+import { rootDir } from './paths';
 import { DataLoader } from '../core/DataLoader';
 
 /**

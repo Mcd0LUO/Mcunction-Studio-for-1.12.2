@@ -164,9 +164,9 @@ export function suggestParticleNames() {
         ParticleNames.all.map(p => ctx.item(p.name, p.desc, p.name, false, vscode.CompletionItemKind.Class));
 }
 
+/** 音效名（549 条）—— 委托 CompletionContext 的懒加载缓存，避免每次按键重建 */
 export function suggestSoundNames() {
-    return (ctx: SuggestContext): vscode.CompletionItem[] =>
-        SoundNames.all.map(s => ctx.item(s.name, s.desc, s.name, false, vscode.CompletionItemKind.Reference));
+    return (ctx: SuggestContext): vscode.CompletionItem[] => ctx.cc.soundNames();
 }
 
 export function suggestGameRules() {

@@ -1,5 +1,7 @@
 /**
- * P0 索引单元测试（Node + mocha + vscode mock）
+ * 单元测试（Node + mocha + vscode mock）
+ *   npm run test:index    索引 / 缓存序列化
+ *   npm run test:engine   补全引擎行为
  */
 import { createRequire } from 'node:module';
 import path from 'node:path';

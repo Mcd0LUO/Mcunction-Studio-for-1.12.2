@@ -166,7 +166,7 @@ describe('IndexCache path compression helpers', () => {
         assert.strictEqual(mtimesMatch({ 'file:///a': 9, 'file:///b': 2 }, cur), false);
     });
 
-    it('buildPayload carries version 3 and fingerprint', () => {
+    it('buildPayload carries current version and fingerprint', () => {
         const p = buildPayload(new Map([['file:///x', 1]]), ['ns:a'], [], {
             scoreboards: [],
             teams: [],
@@ -176,7 +176,8 @@ describe('IndexCache path compression helpers', () => {
             lineIndex: [],
         }, 'abc');
         assert.strictEqual(p.version, INDEX_CACHE_VERSION);
-        assert.strictEqual(INDEX_CACHE_VERSION, 3);
+        // v4 起文件全集语义修正（幽灵索引不再可能进入缓存），旧缓存必须失效重建
+        assert.strictEqual(INDEX_CACHE_VERSION, 4);
         assert.strictEqual(p.fingerprint, 'abc');
     });
 
@@ -190,7 +191,6 @@ describe('IndexCache path compression helpers', () => {
 
     it('estimateDiskBytes prefers short relative paths', () => {
         // 用真实 vscode.Uri（mock）构造长绝对路径
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const vscode = require('vscode') as typeof import('vscode');
         const root = vscode.Uri.file(path.join('D:', 'pack', 'data'));
         const f1 = vscode.Uri.joinPath(root, 'functions', 'ns', 'a.mcfunction').toString();
@@ -217,7 +217,6 @@ describe('IndexCache path compression helpers', () => {
     });
 
     it('v2 compress/expand keeps mtime keys stable for match', async () => {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const vscode = require('vscode') as typeof import('vscode');
         const fs = require('fs') as typeof import('fs');
         const os = require('os') as typeof import('os');
@@ -233,10 +232,11 @@ describe('IndexCache path compression helpers', () => {
         const fileUri = vscode.Uri.file(absFile);
         const fileKey = fileUri.toString();
 
-        // 注入 extension.rootDir（IndexCache 读写依赖）
-        const ext = require('../../extension') as { rootDir?: typeof root };
-        const prev = ext.rootDir;
-        ext.rootDir = root;
+        // 注入 paths.rootDir（IndexCache 读写依赖）
+        // 注意：rootDir 现在由 core/paths 持有，不再从 extension 导入
+        const paths = require('../../core/paths') as typeof import('../../core/paths');
+        const prev = paths.rootDir;
+        paths.setRootDir(root);
 
         try {
             const store = new IndexedStore();
@@ -267,10 +267,239 @@ describe('IndexCache path compression helpers', () => {
             restored.importState(loaded!.store);
             assert.strictEqual(restored.getTags().get('hello'), 1);
         } finally {
-            ext.rootDir = prev;
+            paths.setRootDir(prev);
             try {
                 fs.rmSync(tmp, { recursive: true, force: true });
             } catch { /* ignore */ }
         }
+    });
+});
+
+// ============================================================
+// P0 回归：同名定义跨文件互删 + getMaxLine 爆栈
+// ============================================================
+
+describe('IndexedStore 定义点引用计数（P0 回归）', () => {
+    it('两个文件同名 team：删一个不应连带删掉另一个', () => {
+        const store = new IndexedStore();
+        const uA = uri('file:///data/functions/a.mcfunction') as never;
+        const uB = uri('file:///data/functions/b.mcfunction') as never;
+
+        store.addTeam('ns:a', 'red', 1, uA);
+        store.addTeam('ns:b', 'red', 2, uB);
+        assert.strictEqual(store.getTeams().size, 1, '同名 team 只有一条定义记录');
+
+        store.clearFile('ns:a', uA);
+        assert.strictEqual(store.getTeams().size, 1, 'b.mcfunction 的 team red 必须保留');
+        assert.ok(store.getTeams().has('red'), 'team red 不应被连带删除');
+
+        store.clearFile('ns:b', uB);
+        assert.strictEqual(store.getTeams().size, 0, '全部删除后才归零');
+    });
+
+    it('三个文件同名 scoreboard：逐个删除直到最后一个才消失', () => {
+        const store = new IndexedStore();
+        const uA = uri('file:///data/functions/a.mcfunction') as never;
+        const uB = uri('file:///data/functions/b.mcfunction') as never;
+        const uC = uri('file:///data/functions/c.mcfunction') as never;
+
+        store.addScoreboard('ns:a', 'obj', 1, uA, 'dummy');
+        store.addScoreboard('ns:b', 'obj', 5, uB, 'trigger');
+        store.addScoreboard('ns:c', 'obj', 9, uC, 'dummy');
+        assert.strictEqual(store.getScoreboards().size, 1);
+
+        store.clearFile('ns:a', uA);
+        assert.strictEqual(store.getScoreboards().size, 1, '删 a 后 b/c 仍在');
+        store.clearFile('ns:b', uB);
+        assert.strictEqual(store.getScoreboards().size, 1, '删 b 后 c 仍在');
+        store.clearFile('ns:c', uC);
+        assert.strictEqual(store.getScoreboards().size, 0, '删光后归零');
+    });
+
+    it('删除后 def 指针迁移到仍存在的定义点', () => {
+        const store = new IndexedStore();
+        const uA = uri('file:///data/functions/a.mcfunction') as never;
+        const uB = uri('file:///data/functions/b.mcfunction') as never;
+
+        store.addScoreboard('ns:a', 'obj', 1, uA, 'dummy');
+        store.addScoreboard('ns:b', 'obj', 7, uB, 'trigger');
+        assert.strictEqual(store.getScoreboards().get('obj')!.def[1], 1);
+
+        store.clearFile('ns:a', uA);
+        assert.strictEqual(
+            store.getScoreboards().get('obj')!.def[1], 7,
+            'def 指针应从已删的 a 迁到仍存在的 b',
+        );
+    });
+
+    it('定义点引用计数经 exportState/importState 保持', () => {
+        const store = new IndexedStore();
+        const uA = uri('file:///data/functions/a.mcfunction') as never;
+        const uB = uri('file:///data/functions/b.mcfunction') as never;
+
+        store.addScoreboard('ns:a', 'obj', 1, uA, 'dummy');
+        store.addScoreboard('ns:b', 'obj', 5, uB, 'trigger');
+
+        const snap = JSON.parse(JSON.stringify(store.exportState()));
+        const restored = new IndexedStore();
+        restored.importState(snap);
+        assert.strictEqual(restored.getScoreboards().size, 1);
+
+        restored.clearFile('ns:a', uA);
+        assert.strictEqual(restored.getScoreboards().size, 1, '导入后删 a，b 的定义必须保留');
+
+        restored.clearFile('ns:b', uB);
+        assert.strictEqual(restored.getScoreboards().size, 0);
+    });
+});
+
+describe('getMaxLine 大文件不爆栈（P0 回归）', () => {
+    it('LineIndex.getMaxLine 处理超过 13 万行', () => {
+        const idx = new LineIndex();
+        const f = 'file:///big.mcfunction';
+        const n = 130000;
+        for (let i = 0; i < n; i++) {
+            idx.appendEntries(f, i, [{ type: 'tag', value: 't' + i }]);
+        }
+        // Math.max(...keys) 在此规模会抛 RangeError: Maximum call stack size exceeded
+        assert.strictEqual(idx.getMaxLine(f), n - 1);
+    });
+
+    it('IndexedStore.getMaxLine 处理超过 13 万行', () => {
+        const store = new IndexedStore();
+        const u = uri('file:///data/functions/big.mcfunction') as never;
+        const n = 130000;
+        for (let i = 0; i < n; i++) {
+            store.addTag('ns:big', 't' + i, i, u);
+        }
+        assert.strictEqual(store.getMaxLine('ns:big'), n - 1);
+    });
+
+    it('空索引返回 -1', () => {
+        const idx = new LineIndex();
+        assert.strictEqual(idx.getMaxLine('file:///none.mcfunction'), -1);
+    });
+});
+
+// ============================================================
+// 回归：跳转所需的引用位置查询
+// ============================================================
+
+describe('LineIndex.getLocations（定义跳转用）', () => {
+    it('返回某值的全部引用位置', () => {
+        const idx = new LineIndex();
+        idx.appendEntries('file:///a.mcfunction', 3, [{ type: 'tag', value: 'red' }]);
+        idx.appendEntries('file:///b.mcfunction', 7, [{ type: 'tag', value: 'red' }]);
+        const locs = idx.getLocations('tag', 'red');
+        assert.strictEqual(locs.length, 2);
+        assert.ok(locs.some(l => l.file === 'file:///a.mcfunction' && l.line === 3));
+        assert.ok(locs.some(l => l.file === 'file:///b.mcfunction' && l.line === 7));
+    });
+
+    it('不存在的值返回空数组', () => {
+        const idx = new LineIndex();
+        assert.deepStrictEqual(idx.getLocations('tag', 'nope'), []);
+    });
+
+    it('clearLine 后位置同步消失', () => {
+        const idx = new LineIndex();
+        idx.appendEntries('file:///a.mcfunction', 1, [{ type: 'fake_player', value: '#fp' }]);
+        assert.strictEqual(idx.getLocations('fake_player', '#fp').length, 1);
+        idx.clearLine('file:///a.mcfunction', 1);
+        assert.strictEqual(idx.getLocations('fake_player', '#fp').length, 0);
+    });
+
+    it('文件名含冒号时仍能正确切分行号', () => {
+        const idx = new LineIndex();
+        // resName 形如 "ns:sub:name" 时位置键为 "ns:sub:name:12"
+        idx.appendEntries('file:///data/functions/ns/sub/x.mcfunction', 12, [{ type: 'tag', value: 't' }]);
+        const locs = idx.getLocations('tag', 't');
+        assert.strictEqual(locs.length, 1);
+        assert.strictEqual(locs[0].line, 12);
+    });
+});
+
+describe('重复定义告警去重', () => {
+    it('同名记分板重复定义时每个名称只提示一次', () => {
+        const warnings: string[] = [];
+        const vscodeMock = require('vscode') as { window: { showWarningMessage: (m: string) => void } };
+        const original = vscodeMock.window.showWarningMessage;
+        vscodeMock.window.showWarningMessage = (m: string) => { warnings.push(m); };
+
+        try {
+            const store = new IndexedStore();
+            const uA = uri('file:///d/functions/a.mcfunction') as never;
+            for (let i = 0; i < 20; i++) {
+                const u = uri(`file:///d/functions/f${i}.mcfunction`) as never;
+                store.addScoreboard(`ns:f${i}`, 'shared', 0, u, 'dummy');
+            }
+            assert.strictEqual(warnings.length, 1, `期望只弹 1 次，实际 ${warnings.length} 次`);
+            assert.ok(warnings[0].includes('shared'));
+        } finally {
+            vscodeMock.window.showWarningMessage = original;
+        }
+    });
+});
+
+// ============================================================
+// 回归：幽灵索引（v4 缓存语义修正的核心目标）
+// ============================================================
+
+describe('LineIndex.indexedFiles（索引真实全集）', () => {
+    it('列出所有被索引过的文件', () => {
+        const idx = new LineIndex();
+        idx.appendEntries('file:///a.mcfunction', 0, [{ type: 'tag', value: 't' }]);
+        idx.appendEntries('file:///b.mcfunction', 2, [{ type: 'tag', value: 't' }]);
+        const files = idx.indexedFiles().sort();
+        assert.deepStrictEqual(files, ['file:///a.mcfunction', 'file:///b.mcfunction']);
+    });
+
+    it('clearFile 后不再出现（这是幽灵能被剔除的前提）', () => {
+        const idx = new LineIndex();
+        const f = 'file:///ghost.mcfunction';
+        idx.appendEntries(f, 0, [{ type: 'tag', value: 'ghost' }]);
+        assert.strictEqual(idx.indexedFiles().length, 1);
+        idx.clearFile(f);
+        assert.strictEqual(idx.indexedFiles().length, 0, '被剔除的文件必须从全集消失');
+        assert.strictEqual(idx.getValues('tag').length, 0);
+    });
+
+    it('空索引返回空数组', () => {
+        assert.deepStrictEqual(new LineIndex().indexedFiles(), []);
+    });
+});
+
+describe('被 IgnorePattern 排除的文件不会留下幽灵', () => {
+    it('排除文件的索引可被 evicted（模拟 evictStaleFiles 的判定）', () => {
+        const store = new IndexedStore();
+        const kept = uri('file:///d/functions/kept.mcfunction') as unknown as { toString(): string };
+        const excluded = uri('file:///d/functions/misc/ignored.mcfunction') as unknown as { toString(): string };
+
+        // 两个文件都被索引过（当时排除规则尚未生效）
+        store.addTag('ns:kept', 'kept_tag', 0, kept as never);
+        store.addTag('ns:ignored', 'ghost_tag', 0, excluded as never);
+        store.addScoreboard('ns:ignored', 'ghost_obj', 0, excluded as never, 'dummy');
+
+        assert.strictEqual(store.getTags().get('ghost_tag'), 1);
+        assert.strictEqual(store.getTags().size, 2);
+
+        // 用户随后把 misc/ 加入 IgnorePattern → 再次扫描时 ignored.mcfunction
+        // 不在扫描结果里。evictStaleFiles 以 indexedFiles() 为判定基准。
+        const live = new Set([kept.toString()]);
+        const candidates = new Set<string>([
+            ...store.getLineIndex().indexedFiles(),
+        ]);
+
+        for (const key of candidates) {
+            if (live.has(key)) { continue; }
+            const resName = key.endsWith('ignored.mcfunction') ? 'ns:ignored' : '';
+            store.clearFile(resName, { toString: () => key } as never);
+        }
+
+        // 幽灵必须彻底消失
+        assert.strictEqual(store.getTags().get('ghost_tag'), undefined, '被排除文件的标签应消失');
+        assert.strictEqual(store.getTags().has('kept_tag'), true, '仍在扫描范围内的文件不受影响');
+        assert.strictEqual(store.getScoreboards().has('ghost_obj'), false, '被排除文件的记分板应消失');
+        assert.deepStrictEqual(store.getLineIndex().indexedFiles(), [kept.toString()]);
     });
 });

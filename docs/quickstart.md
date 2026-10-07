@@ -45,7 +45,8 @@ code --install-extension mcfunction-studio-1.5.0.vsix
 
 ## 补全
 
-在 `.mcfunction` 中输入命令即触发。覆盖 1.12.2 原版主干 + EasyCber 等扩展。
+在 `.mcfunction` 中输入命令即触发。覆盖 1.12.2 原版主干命令。
+非原版命令（其他插件的自定义命令）可通过 [YAML 命令定义](yaml-command.md) 自行添加补全。
 
 | 场景 | 行为 |
 |------|------|
@@ -83,8 +84,7 @@ code --install-extension mcfunction-studio-1.5.0.vsix
 {
   "IgnorePattern": {
     "Function": [],
-    "Advancement": [],
-    "Macro": []
+    "Advancement": []
   },
   "Signature": true,
   "JsonPreview": {

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { rootDir } from '../extension';
+import { rootDir } from '../core/paths';
 
 /**
  * Minecraft相关工具类（性能优化版）
@@ -184,6 +184,7 @@ export class MinecraftUtils {
      * @returns [命名空间, 函数路径] | null 解析成功返回数组，格式错误（如多冒号）返回null
     */
     public static parseFunctionUri(uri: vscode.Uri) {
+        if (!rootDir) { return null; }
         const releivePath = path.relative(rootDir.fsPath, uri.fsPath).split(path.sep);
         const callPath = releivePath.slice(1).join('/').replace("/",":").slice(0,-11);
         return this.parseResourcePath(callPath);
@@ -199,6 +200,7 @@ export class MinecraftUtils {
      * @returns [命名空间, 函数路径] | null 解析成功返回数组，格式错误（如多冒号）返回null
     */
     public static parseAdvancementUri(uri: vscode.Uri) {
+        if (!rootDir) { return null; }
         const releivePath = path.relative(rootDir.fsPath, uri.fsPath).split(path.sep).join('/');
         const callPath = releivePath.split('/').slice(1).join('/').replace("/", ":").slice(0, -5);
         return this.parseResourcePath(callPath);

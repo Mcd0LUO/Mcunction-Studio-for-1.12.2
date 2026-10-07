@@ -213,10 +213,22 @@ export class McFunctionDefinitionProvider implements vscode.DefinitionProvider {
         }
 
         // 2. 匹配 players 子命令（操作记分板数据）
+        //    格式：scoreboard players <set|add|remove|reset|enable|test> <目标> <记分板>
+        //    其中 <目标> 可能是假玩家（#开头），此时目标与记分板都可跳转
         const playersNormalRegex = /scoreboard\s+players\s+(set|add|remove|reset|enable|test)\s+([^\s]+)\s+([^\s]+)/u;
         const playersNormalMatch = lineText.match(playersNormalRegex);
         if (playersNormalMatch) {
+            const target = playersNormalMatch[2];
             const scoreboardName = playersNormalMatch[3];
+
+            // 优先：光标在假玩家名（#xxx）上 → 跳到该假玩家的写入位置
+            if (target.startsWith('#')) {
+                const fakeRange = this.getWordRange(lineText, position, target);
+                if (fakeRange) {
+                    return { type: CommandType.ScoreboardFakePlayer, resource: target.slice(1), range: fakeRange };
+                }
+            }
+
             const range = this.getWordRange(lineText, position, scoreboardName);
             return range ? { type: CommandType.Scoreboard, resource: scoreboardName, range } : null;
         }
@@ -295,6 +307,10 @@ export class McFunctionDefinitionProvider implements vscode.DefinitionProvider {
                 return advUri ? { uri: advUri, range: new vscode.Range(0, 0, 0, 0) } : null;
             case CommandType.Scoreboard:
                 return DataLoader.getInstance().getScoreboardDef(resourcePath);
+            case CommandType.Tag:
+                return DataLoader.getInstance().getTagDef(resourcePath);
+            case CommandType.ScoreboardFakePlayer:
+                return DataLoader.getInstance().getFakePlayerDef(resourcePath);
             case CommandType.Team:
                 const teamUri = DataLoader.getInstance().getTeamDef(resourcePath);
                 return teamUri;

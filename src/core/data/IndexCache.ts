@@ -13,13 +13,21 @@ import * as crypto from 'crypto';
 import * as path from 'path';
 import * as zlib from 'zlib';
 import * as vscode from 'vscode';
-import { rootDir } from '../../extension';
+import { rootDir } from '../paths';
 import { IndexedStoreExport } from './IndexedStore';
 import { LineIndexExport } from '../LineIndex';
 import { IndexEntry } from './types';
 
-/** v3：相对路径 + 文件表 + fingerprint；旧版缓存失效并重建 */
-export const INDEX_CACHE_VERSION = 3;
+/**
+ * v4：文件全集语义修正 —— 指纹覆盖「扫描结果 ∪ 索引真实文件键」
+ *
+ * v3 的指纹只覆盖扫描结果（受 IgnorePattern 过滤），被排除文件的索引
+ * 不参与校验 → 幽灵索引跨会话永久存活并被反复写回磁盘，缓存体积单调增长。
+ * v4 起，加载与写盘两侧都会先剔除越界文件，缓存内不再可能存在幽灵条目。
+ *
+ * 格式未变，但语义已变：旧缓存必须失效重建，否则其中的幽灵条目会被当成有效数据。
+ */
+export const INDEX_CACHE_VERSION = 4;
 /** 主缓存：gzip 压缩的 JSON */
 export const INDEX_CACHE_REL = ['index-cache.json.gz'] as const;
 /** 兼容读取旧明文 JSON（写入时会清理） */
@@ -49,8 +57,8 @@ interface DiskStoreV2 {
     lineIndex: Array<[number, Array<[number, { type: string; value: string; meta?: unknown }[]]>]>;
 }
 
-interface IndexCacheDiskV3 {
-    version: 3;
+interface IndexCacheDiskV4 {
+    version: number;
     /** 相对路径 + mtime 的元数据指纹 */
     fingerprint: string;
     /** 相对 rootDir 的 posix 路径（如 functions/ns/a.mcfunction） */
@@ -270,7 +278,7 @@ export function fingerprintFromAbsMtimes(
     return computeFingerprint(pairs);
 }
 
-function toDisk(payload: IndexCachePayload, root: vscode.Uri): IndexCacheDiskV3 | null {
+function toDisk(payload: IndexCachePayload, root: vscode.Uri): IndexCacheDiskV4 | null {
     const files = new FileTable();
     // 先登记 mtimes 中的文件，保证与磁盘扫到的集合对齐
     const mtimeEntries = Object.entries(payload.mtimes);
@@ -294,7 +302,7 @@ function toDisk(payload: IndexCachePayload, root: vscode.Uri): IndexCacheDiskV3 
     if (!fp) { return null; }
 
     return {
-        version: 3,
+        version: INDEX_CACHE_VERSION,
         fingerprint: fp,
         files: files.paths,
         mtimes,
@@ -304,7 +312,7 @@ function toDisk(payload: IndexCachePayload, root: vscode.Uri): IndexCacheDiskV3 
     };
 }
 
-function fromDisk(disk: IndexCacheDiskV3, root: vscode.Uri): IndexCachePayload | null {
+function fromDisk(disk: IndexCacheDiskV4, root: vscode.Uri): IndexCachePayload | null {
     if (!Array.isArray(disk.files) || !Array.isArray(disk.mtimes)) { return null; }
     if (disk.files.length !== disk.mtimes.length) { return null; }
     if (typeof disk.fingerprint !== 'string' || !disk.fingerprint) { return null; }
@@ -370,7 +378,7 @@ async function readCacheFile(uri: vscode.Uri): Promise<IndexCachePayload | null>
     if (!raw || raw.version !== INDEX_CACHE_VERSION) {
         return null;
     }
-    return fromDisk(raw as IndexCacheDiskV3, rootDir);
+    return fromDisk(raw as IndexCacheDiskV4, rootDir);
 }
 
 export async function readIndexCache(): Promise<IndexCachePayload | null> {

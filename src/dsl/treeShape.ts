@@ -2,14 +2,13 @@
  * 命令树结构快照 — 用于基准测试与 diff。
  * 只保留语法形状（kind / name / optional / children），忽略 suggest 实现。
  */
-import { CommandNode, RootNode, LiteralNode, ArgumentNode, JumpNode } from './nodes';
+import { CommandNode, RootNode, LiteralNode, ArgumentNode } from './nodes';
 
 /** 可 JSON 序列化的树节点 */
 export interface TreeShape {
     kind: string;
     name?: string;
     optional?: boolean;
-    levels?: number;
     children: TreeShape[];
 }
 
@@ -32,9 +31,6 @@ export function toTreeShape(node: CommandNode): TreeShape {
             if (node.optional) {
                 shape.optional = true;
             }
-            break;
-        case 'jump':
-            shape.levels = (node as JumpNode).levels;
             break;
         case 'forward_root':
             break;
@@ -102,18 +98,8 @@ export function diffTreeShape(
         });
     }
 
-    if (expected.kind === 'jump') {
-        const el = expected.levels ?? 1;
-        const al = actual.levels ?? 1;
-        if (el !== al) {
-            diffs.push({
-                path,
-                kind: 'mismatch',
-                expected: el,
-                actual: al,
-                message: `levels: expected ${el}, got ${al}`,
-            });
-        }
+    if (expected.kind === 'forward_root') {
+        // 叶子节点，无子节点可比较
     }
 
     const expChildren = expected.children ?? [];
@@ -164,9 +150,6 @@ function childKey(node: TreeShape, index: number): string {
 function childSignature(node: TreeShape): string {
     if (node.kind === 'literal' || node.kind === 'argument' || node.kind === 'root') {
         return `${node.kind}:${node.name ?? ''}`;
-    }
-    if (node.kind === 'jump') {
-        return `jump:${node.levels ?? 1}`;
     }
     return node.kind;
 }

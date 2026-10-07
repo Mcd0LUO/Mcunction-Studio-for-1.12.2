@@ -18,7 +18,7 @@ export interface YamlCommandDef {
     children?: YamlNode[];
 }
 
-export type YamlNode = YamlLiteral | YamlArgument | YamlForwardRoot | YamlJump;
+export type YamlNode = YamlLiteral | YamlArgument | YamlForwardRoot;
 
 export interface YamlLiteral {
     literal: {
@@ -44,10 +44,6 @@ export interface YamlForwardRoot {
 /** @deprecated 请使用 forward_root */
 export interface YamlForward {
     forward: true;
-}
-
-export interface YamlJump {
-    jump: number;  // 向上跳几层（默认 1）
 }
 
 /** 自定义静态 suggest 列表项 */
