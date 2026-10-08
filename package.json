@@ -41,6 +41,9 @@
         "extensions": [
           "*.mcfunction"
         ],
+        "filenamePatterns": [
+          "**/*.mcfunction"
+        ],
         "icon": {
           "light": "icons/light.png",
           "dark": "icons/dark.png"
@@ -109,6 +112,7 @@
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
     "test": "vscode-test",
+    "test:e2e": "npm run compile && vscode-test",
     "test:baseline": "npm run compile && node scripts/run-baseline-tests.mjs",
     "test:index": "npm run compile && node scripts/run-index-tests.mjs",
     "test:engine": "npm run compile && node scripts/run-engine-tests.mjs",

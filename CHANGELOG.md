@@ -13,6 +13,7 @@ All notable changes to the "mcfunction-studio-for-1-12" extension will be docume
   - `/team add`、`/schedule function|repeat|random` 不再产生索引，使用这些命令的数据包将失去对应的定义跳转与补全
 
 ### 修复
+- **`.mcfunction` 文件不会被识别为 mcfunction 语言**（此问题只有真实 VS Code 才能暴露）。语言贡献仅声明 `extensions: ["*.mcfunction"]`，而 VS Code 1.141 对已注册语言还需要 `filenamePatterns` 才能完成绑定 —— 实际打开 `.mcfunction` 得到的 `languageId` 是 `plaintext`，连带导致扩展不激活、全部功能无反应。现同时声明 `filenamePatterns`。
 - **扩展无法激活**。`activationEvents` 是空数组，而 `contributes.languages` 只注册语言、**不触发激活** —— 用户打开 `.mcfunction` 文件时扩展根本不会被加载，补全/Hover/跳转全部无反应。现声明 `onLanguage:mcfunction`。
 - **定位数据包目录失败时整个扩展静默失效**。`getRootDir()` 在未打开工作区、或打开的不是数据包时会抛异常，而 `activate()` 未捕获 —— 异常向上冒泡导致激活中断，扩展表现为「完全没反应」。现在照常注册全部 provider（静态补全不依赖项目数据），并给出一次明确提示；「刷新工作区」命令会重试定位。
 - **索引 P0：同名定义跨文件互删**。两个文件定义同名 team/scoreboard 时，删除其中一个会连带删掉另一个的定义，导致补全与跳转丢失。现改为按定义点引用计数，并在定义点消失时把跳转指针迁移到仍存在的定义。磁盘索引缓存往返后计数同样有效。
@@ -48,6 +49,8 @@ All notable changes to the "mcfunction-studio-for-1-12" extension will be docume
 ### 测试
 - 新增 `npm run test:engine`：45 条测试 = 37 条补全引擎行为（matchChild 优先级、argument 合并兄弟 literal、枚举分支下钻、walk token 消费、forward_root 转发、`clone`/`particle` 的 1.12.2 语法保真、JumpNode 移除、全局引用隔离、健壮性）+ 8 条激活冒烟（`activationEvents` 声明、正常数据包工作区的定位与索引、异常环境优雅降级、deactivate 释放引用），此前 `engine.ts` 与扩展激活路径均零断言覆盖
 - 新增 12 条索引回归用例（同名定义引用计数、缓存往返、def 指针迁移、大文件行号、引用位置查询、告警去重、幽灵索引）
+- 新增 `npm run test:e2e`：6 条**真实 VS Code 集成测试**（由 `@vscode/test-electron` 在 Electron 宿主中运行），验证语言绑定、扩展激活、补全 provider 注册、命令注册 —— 这些只有真实宿主才能确认，Node + mock 环境完全测不出。
+- `syntaxes/language-configuration.json` 补上 Tokenization 规则（此前只有注释/括号/缩进配置，没有任何着色规则，`.mcfunction` 打开后无关键字高亮）。
 
 # [1.5.0] - 2026-7-19 — 稳定版
 

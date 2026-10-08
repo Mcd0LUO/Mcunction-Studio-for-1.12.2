@@ -19,8 +19,72 @@
             "}"
         ]
     ],
-    "autoClosingPairs": [
-        {
+    "patterns": [
+        { "include": "#comment" },
+        { "include": "#string" },
+        { "include": "#selector" },
+        { "include": "#coordinate" },
+        { "include": "#number" },
+        { "include": "#keyword" }
+    ],
+    "repository": {
+        "comment": {
+            "patterns": [
+                {
+                    "name": "comment.line.number-sign.mcfunction",
+                    "match": "#.*$"
+                }
+            ]
+        },
+        "string": {
+            "name": "string.quoted.double.mcfunction",
+            "begin": "\"",
+            "end": "\"",
+            "patterns": [
+                {
+                    "name": "constant.character.escape.mcfunction",
+                    "match": "\\\\."
+                },
+                {
+                    "name": "constant.numeric.color-code.mcfunction",
+                    "match": "§[0-9a-fk-orA-FK-OR]"
+                }
+            ]
+        },
+        "selector": {
+            "name": "entity.name.tag.mcfunction",
+            "match": "@[aeprs](?=\\[)|@[aeprs]"
+        },
+        "coordinate": {
+            "patterns": [
+                {
+                    "name": "constant.numeric.relative-coordinate.mcfunction",
+                    "match": "^[~^]\\d*\\.?\\d*"
+                },
+                {
+                    "name": "constant.numeric.coordinate.mcfunction",
+                    "match": "(?<![\\w.])-?\\d+\\.?\\d*(?![\\w.])"
+                }
+            ]
+        },
+        "number": {
+            "name": "constant.numeric.mcfunction",
+            "match": "\\b\\d+\\b"
+        },
+        "keyword": {
+            "patterns": [
+                {
+                    "name": "keyword.control.mcfunction",
+                    "match": "\\b(add|remove|replace|reset|set|list|clear|merge|execute|if|unless|run|as|at|rotate|align|anchored|positioned|facing|normal|force|test|damage|amount|buffer|distance|time|every|replaceitem|use|normal)\\b"
+                },
+                {
+                    "name": "support.type.property-name.mcfunction",
+                    "match": "\\b(scoreboard|objectives|players|teams|team|function|effect|time|weather|title|gamerule|gamemode|difficulty|tp|teleport|give|enchant|kill|clear|spawnpoint|summon|tellraw|playsound|stopsound|particle|fill|setblock|clone|worldborder|stats|trigger|advancement|detect|defaultgamemode|toggledownfall|xp|spreadplayers|testfor|testforblock|testforblocks|entitydata|blockdata|replaceitem)\\b"
+                }
+            ]
+        }
+    },
+    "autoClosingPairs": [        {
             "open": "{",
             "close": "}"
         },
