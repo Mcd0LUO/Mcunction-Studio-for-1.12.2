@@ -206,6 +206,16 @@ export class DataLoader {
     public getTeamsData(): Map<string, TeamData> { return this.store.getTeams(); }
     public getDocCache(): Map<string, Map<number, { type: DataType, value: string }[]>> { return this.store.getDocIndex(); }
 
+    /**
+     * 暴露 LineIndex 供符号层（References / Rename）查询。
+     *
+     * LineIndex 只提供「某值出现在哪些行」的 O(1) 反查，没有列位置；
+     * 精确到字符的区间由 `core/symbols/extractor` 在解析时现场计算。
+     */
+    public getLineIndexForSymbols(): import('./LineIndex').LineIndex {
+        return this.store.getLineIndex();
+    }
+
     public getScoreboardDef(scoreboardName: string): { uri: vscode.Uri, range: vscode.Range } | null {
         const data = this.store.getScoreboards().get(scoreboardName);
         if (data) {

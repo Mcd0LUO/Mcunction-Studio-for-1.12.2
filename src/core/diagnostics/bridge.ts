@@ -46,6 +46,14 @@ export function createValidationContext(
             const e = CompletionEngine.getCurrent();
             return e ? e.commandNames() : [];
         },
+        /**
+         * 索引是否真的加载过。
+         *
+         * 判据不是「rootDir 非空」而是「索引里有东西」：
+         * activate 中 dataloader.init() 是异步的，诊断可能在其完成前就跑了第一轮。
+         * 若用 rootDir 判断，这段时间里所有"未定义引用"规则都会误报。
+         */
+        isIndexReady: () => loader.getFunctionResNames().length > 0,
         hasScoreboard: (name) => loader.getScoreboardsData().has(name),
         hasTeam: (name) => loader.getTeamsData().has(name),
         hasTag: (name) => loader.getTagsData().has(name),

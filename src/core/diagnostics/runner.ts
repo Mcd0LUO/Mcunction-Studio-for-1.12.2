@@ -75,8 +75,11 @@ export class DiagnosticRunner {
         if (this.opts.engine) { attachEngine(rc, this.opts.engine); }
 
         const out: Diagnostic[] = [];
+        // 索引未加载时，依赖索引的规则整体跳过（否则空索引 = 满屏"未定义"）
+        const indexReady = this.opts.ctx.isIndexReady();
         for (const { rule, level } of this.active) {
             if (rule.commands && !rule.commands.includes(rc.commandName)) { continue; }
+            if (rule.needsIndex && !indexReady) { continue; }
             // 用户正在敲的半截命令一律跳过 —— 误报比漏报致命得多
             if (rc.isIncomplete) { continue; }
             try {

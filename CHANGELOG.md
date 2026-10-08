@@ -2,6 +2,45 @@
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
 
+# [1.6.0]
+
+### 新增
+- **查找引用（Shift+F12）**。光标停在记分板目标 / 队伍 / 标签 / 假玩家 / 函数 / 进度上，
+  可列出跨文件的全部引用位置。区间精确到 token，不高亮整行。
+- **重命名（F2）**。跨文件重命名记分板目标、队伍、标签、假玩家，
+  同时改掉定义与全部引用，**包括选择器里的 `score_<目标名>=`**。
+  - 消息文本（`say total points` 里的 total）不会被误改 —— 按**角色**而非按字符串匹配
+  - 假玩家保留 `#` 前缀
+  - 拒绝非法名（超 16 字符、含空格或命令分隔符）
+  - 不支持函数重命名（改名需同时改文件名，语义不对），显式拒绝而非半吊子处理
+
+### 修复
+- **Ctrl+Click 跳转与查找引用对记分板目标、队伍完全失效**。
+  `LineIndex` 只写入了 tag / fake_player / function 三类，scoreboard 与 team 从未入索引，
+  而 `getLocations()` 的唯一数据源就是它 —— 于是这两类符号既跳不动、也找不到引用。
+- **选择器里的引用从未被索引**。索引只覆盖 `scoreboard` / `function` / `summon` 三条命令，
+  `kill @a[score_x=1]` 里的引用在索引里根本不存在。现对全部可带选择器的命令抽取引用。
+- **重命名会改坏选择器**（新功能自测发现）。`@a[score_shared=5]` 的目标名在 **key** 里，
+  若按谓词的 value 定位，改名会把 `5` 换掉。现在区间指向 key 中的目标名。
+- **打开数据包根目录时 rootDir 定位失败**。`getRootDir()` 只做「从工作区根逐级向上」查找
+  `data`，于是最常见的布局（工作区根就是数据包根、`data` 是子目录）反而失败，
+  表现为扩展无反应。现三种布局都支持：工作区是数据包根 / 工作区就是 data / 工作区是 data 的子目录。
+- **激活之后才打开数据包目录的用户，功能一直不可用**。`activate()` 时 `workspaceFolders`
+  可能尚未就绪，此前只能手动执行「刷新工作区」重试。现监听 `onDidChangeWorkspaceFolders` 自动重试。
+- **`scoreboard players operation` 的目标位置取错下标**（诊断与符号抽取均受影响）。
+  1.12.2 实为 `operation <targetName> <targetObjective> <operation> <selector> <objective>`，
+  两个 objective 在下标 4 与 7，此前误取 3 与 5 ——
+  连带导致 `players operation Steve kills += Steve src` 把玩家名 Steve 报成"记分板目标未定义"。
+  诊断规则现已改为复用符号抽取器，避免同一套下标在两处各写一遍。
+
+### 重构
+- **新增 `core/symbols/` 符号层**。`LineIndex` 只有行号没有列位置，不足以支撑重命名；
+  新的抽取器在解析当下即算出字符区间，不给索引增加负担。
+  诊断层的记分板引用检查也改为复用它。
+- **e2e 测试改为在启动参数里注入真实数据包工作区**（`.vscode-test/e2e-pack`），
+  并使用隔离的 `--user-data-dir`。此前 VS Code 会恢复上次会话的工作区，
+  覆盖 launchArgs 指向一个已被删除的临时目录，导致索引型用例全部拿不到数据。
+
 # [1.5.2]
 
 ### 新增

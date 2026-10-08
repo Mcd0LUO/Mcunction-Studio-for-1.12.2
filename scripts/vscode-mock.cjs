@@ -253,6 +253,8 @@ module.exports = {
         onDidDeleteFiles: () => ({ dispose() {} }),
         onDidRenameFiles: () => ({ dispose() {} }),
         onDidSaveTextDocument: () => ({ dispose() {} }),
+        // activate 在 rootDir 定位失败时会挂这个监听，等用户打开数据包目录
+        onDidChangeWorkspaceFolders: () => ({ dispose() {} }),
         findFiles,
         /** VsCommandProcessor 的「新建函数文件」依赖 */
         openTextDocument: async () => ({ dispose() {} }),
@@ -265,6 +267,8 @@ module.exports = {
         registerDefinitionProvider: () => ({ dispose() {} }),
         registerHoverProvider: () => ({ dispose() {} }),
         registerCodeLensProvider: () => ({ dispose() {} }),
+        registerReferenceProvider: () => ({ dispose() {} }),
+        registerRenameProvider: () => ({ dispose() {} }),
         /**
          * 诊断集合。mock 下只记录最后一次 set 的内容，
          * 便于 Node 侧测试断言"某文档被判出了哪些诊断"。
@@ -349,6 +353,28 @@ module.exports = {
         }
     },
     DiagnosticSeverity: { Error: 0, Warning: 1, Information: 2, Hint: 3 },
+    /**
+     * 收集式 WorkspaceEdit。mock 下记录所有 replace 操作，
+     * 便于测试断言"重命名改了哪些位置、改成了什么"。
+     */
+    WorkspaceEdit: class {
+        constructor() { this._edits = []; }
+        replace(uri, range, newText) { this._edits.push({ uri, range, newText }); }
+        insert(uri, range, newText) { this._edits.push({ uri, range, newText, insert: true }); }
+        delete(uri, range) { this._edits.push({ uri, range, delete: true }); }
+        get size() { return this._edits.length; }
+        entries() { return this._edits; }
+    },
+    Selection: class {
+        constructor(a, b, c, d) {
+            if (a && typeof a === 'object') {
+                this.anchor = a; this.active = b;
+            } else {
+                this.anchor = new module.exports.Position(a, b);
+                this.active = new module.exports.Position(c, d);
+            }
+        }
+    },
     ThemeColor: class {
         constructor(id) { this.id = id; }
     },

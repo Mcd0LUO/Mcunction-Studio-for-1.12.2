@@ -19,8 +19,19 @@ const EXT_ID = 'Mcd0-LUO.mcfunction-studio';
 
 /** 创建一个符合 README 的临时数据包：<tmp>/data/functions/...
  *  @returns data 目录（即 README 要求作为工作区的那个目录） */
-function makePack(): { dataDir: string; packRoot: string; funcFile: string; goodFile: string; badFile: string } {
-    const packRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mcf-e2e-'));
+/**
+ * e2e 数据包目录。
+ *
+ * 必须是**固定路径**并与 .vscode-test.mjs 的 launchArgs 一致 ——
+ * 测试用例要断言具体文件内容，若用 mkdtemp 随机目录则无从得知打开的是哪个文件。
+ * 也不能在测试里用 vscode.openFolder 打开（会重启窗口并杀死测试运行器），
+ * 因此工作区由启动参数注入。
+ */
+const PACK_ROOT = path.join(__dirname, '../../../.vscode-test/e2e-pack');
+
+/** 写入全部测试夹具 */
+function makePack(): { dataDir: string; packRoot: string; funcFile: string; goodFile: string; badFile: string; refFile: string; renameFile: string } {
+    const packRoot = PACK_ROOT;
     const dataDir = path.join(packRoot, 'data');
     fs.mkdirSync(path.join(dataDir, 'functions/ns'), { recursive: true });
     const funcFile = path.join(dataDir, 'functions/ns/a.mcfunction');
@@ -61,7 +72,33 @@ function makePack(): { dataDir: string; packRoot: string; funcFile: string; good
         ].join('\n'),
     );
 
-    return { dataDir, packRoot, funcFile, goodFile, badFile };
+    // References / Rename 用：定义 + 多处引用 + 一处同名字符串
+    const refFile = path.join(dataDir, 'functions/ns/refs.mcfunction');
+    fs.writeFileSync(
+        refFile,
+        [
+            'scoreboard objectives add shared dummy',   // 0: 定义
+            'scoreboard players set @s shared 1',        // 1: 引用
+            'kill @a[score_shared=5]',                   // 2: 选择器引用
+            'say shared is my score',                    // 3: 同名字符串（不该被当作引用）
+            '',
+        ].join('\n'),
+    );
+
+    // Rename 用：改名后必须只动 shared/total，不动消息文本
+    const renameFile = path.join(dataDir, 'functions/ns/rename.mcfunction');
+    fs.writeFileSync(
+        renameFile,
+        [
+            'scoreboard objectives add total dummy',
+            'scoreboard players set @s total 5',
+            'kill @a[score_total=1]',
+            'say total points',
+            '',
+        ].join('\n'),
+    );
+
+    return { dataDir, packRoot, funcFile, goodFile, badFile, refFile, renameFile };
 }
 
 async function openInVsCode(fsPath: string): Promise<vscode.TextDocument> {
@@ -87,27 +124,51 @@ suite('Mcfunction Studio — 真实 VS Code 集成', () => {
     let funcFile: string;
     let goodFile: string;
     let badFile: string;
+    let refFile: string;
+    let renameFile: string;
 
     suiteSetup(async function () {
-        this.timeout(60000);
+        this.timeout(90000);
         const pack = makePack();
         dataDir = pack.dataDir;
         packRoot = pack.packRoot;
         funcFile = pack.funcFile;
         goodFile = pack.goodFile;
         badFile = pack.badFile;
+        refFile = pack.refFile;
+        renameFile = pack.renameFile;
 
         // 注意：不能用 vscode.openFolder —— 它会重启窗口并杀死测试运行器。
         // 这里只打开文档：扩展的 activationEvents 是 onLanguage:mcfunction，
-        // 打开 .mcfunction 文件本身就会触发激活（rootDir 定位失败也不影响，
-        // activate 已改为优雅降级）。
+        // 打开 .mcfunction 文件本身就会触发激活。
         await openInVsCode(funcFile);
         // 给激活与 provider 注册留出时间
         await new Promise(r => setTimeout(r, 2500));
+
+        // 索引型能力（References / Rename / 未定义引用诊断）依赖 rootDir，
+        // 它只能从工作区文件夹推导。工作区由 .vscode-test.mjs 的 launchArgs 注入，
+        // 这里确认它确实在，并等待一次全量索引完成。
+        const ready = await waitFor(
+            () => (vscode.workspace.workspaceFolders?.length ?? 0) > 0,
+            20000,
+        );
+        const wsPaths = (vscode.workspace.workspaceFolders ?? []).map(w => w.uri.fsPath);
+        assert.ok(ready, `工作区未打开（launchArgs 里的 e2e-pack 未生效）`);
+        assert.ok(
+            fs.existsSync(path.join(wsPaths[0], 'data', 'functions')),
+            `工作区根下没有 data/functions，实际工作区：${JSON.stringify(wsPaths)}`,
+        );
+
+        await vscode.commands.executeCommand('mcf-studio.reloadWorkspace');
+        await new Promise(r => setTimeout(r, 3000));
     });
 
     suiteTeardown(async () => {
-        try { fs.rmSync(packRoot, { recursive: true, force: true }); } catch { /* ignore */ }
+        // 工作区指向此目录，不能删（下次运行还要用）；只清理索引缓存
+        try {
+            const cache = path.join(packRoot, '.McfStudio');
+            fs.rmSync(cache, { recursive: true, force: true });
+        } catch { /* ignore */ }
     });
 
     test('扩展已安装并可被识别', () => {
@@ -231,6 +292,132 @@ suite('Mcfunction Studio — 真实 VS Code 集成', () => {
         assert.strictEqual(
             diags.length, 0,
             `正确写法被误报：${diags.map(d => `${d.code}: ${d.message}`).join(' | ')}`,
+        );
+    });
+
+    // ================================================================
+    // References / Rename
+    // ================================================================
+
+    test('引用查找能找到定义与全部引用', async function () {
+        this.timeout(30000);
+        const uri = vscode.Uri.file(refFile);
+        const doc = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(doc);
+
+        // 第 1 行 "scoreboard players set @s shared 1" —— 光标落在 shared 上
+        const line = doc.lineAt(1).text;
+        const col = line.indexOf('shared');
+        assert.ok(col > 0, '第 1 行应含 shared');
+
+        const refs = await vscode.commands.executeCommand<vscode.Location[]>(
+            'vscode.executeReferenceProvider',
+            uri,
+            new vscode.Position(1, col + 1),
+        );
+        assert.ok(refs, '引用查找未返回结果（provider 未注册？）');
+        assert.ok(refs.length >= 2, `应至少找到定义 + 1 处引用，实际 ${refs.length} 处`);
+
+        // 必须包含定义所在的那一行
+        const lines = refs.map(r => r.range.start.line);
+        assert.ok(lines.includes(0), `应包含定义行（0），实际 ${JSON.stringify(lines)}`);
+        // 区间必须精确指向 token
+        for (const r of refs) {
+            assert.strictEqual(
+                doc.lineAt(r.range.start.line).text.slice(r.range.start.character, r.range.end.character),
+                'shared',
+                '引用区间必须精确指向 shared',
+            );
+        }
+    });
+
+    test('say 里的同名字符串不算引用（角色隔离）', async function () {
+        this.timeout(30000);
+        const uri = vscode.Uri.file(refFile);
+        const doc = await vscode.workspace.openTextDocument(uri);
+
+        // refFile 第 3 行是 "say shared is my score" —— 消息里的 shared 不是记分板引用
+        const line = doc.lineAt(3).text;
+        const col = line.indexOf('shared');
+        const refs = await vscode.commands.executeCommand<vscode.Location[]>(
+            'vscode.executeReferenceProvider',
+            uri,
+            new vscode.Position(3, col + 1),
+        );
+        // 要么不返回，要么返回空数组——绝不能返回记分板的引用
+        assert.ok(
+            !refs || refs.length === 0,
+            `消息文本被误判为符号引用：${JSON.stringify(refs?.map(r => r.range.start.line))}`,
+        );
+    });
+
+    test('重命名会同时改掉定义与引用，且不动无关文本', async function () {
+        this.timeout(30000);
+        const uri = vscode.Uri.file(renameFile);
+        const doc = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(doc);
+
+        const col = doc.lineAt(0).text.indexOf('total');
+        const edit = await vscode.commands.executeCommand<vscode.WorkspaceEdit>(
+            'vscode.executeDocumentRenameProvider',
+            uri,
+            new vscode.Position(0, col + 1),
+            'sum_all',
+        );
+        assert.ok(edit, '重命名 provider 未返回编辑集');
+
+        const applied = await vscode.workspace.applyEdit(edit);
+        assert.ok(applied, 'WorkspaceEdit 应用失败');
+
+        // 验证结果：定义与引用都改了
+        const after = await vscode.workspace.openTextDocument(uri);
+        assert.ok(
+            after.getText().includes('scoreboard objectives add sum_all dummy'),
+            `定义未改名，当前内容：\n${after.getText()}`,
+        );
+        assert.ok(
+            after.getText().includes('scoreboard players set @s sum_all 5'),
+            '引用未改名',
+        );
+        // 第 3 行 "say total points" 必须原样保留
+        assert.ok(
+            after.getText().includes('say total points'),
+            `消息文本被误改！当前内容：\n${after.getText()}`,
+        );
+
+        // 复原，避免影响后续用例
+        await vscode.commands.executeCommand('workbench.action.files.revert');
+    });
+
+    test('非法重命名名被拒绝', async function () {
+        this.timeout(30000);
+        const uri = vscode.Uri.file(renameFile);
+        const doc = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(doc);
+        const col = doc.lineAt(0).text.indexOf('total');
+
+        // 超过 1.12.2 的 16 字符上限 —— provider 应返回 null / 空编辑集。
+        // 注意：executeDocumentRenameProvider 在 provider 返回 null 时会**抛错**
+        //（"No result."），因此这里两种表现都算"拒绝成功"。
+        let rejected = false;
+        try {
+            const edit = await vscode.commands.executeCommand<vscode.WorkspaceEdit>(
+                'vscode.executeDocumentRenameProvider',
+                uri,
+                new vscode.Position(0, col + 1),
+                'a'.repeat(17),
+            );
+            rejected = !edit || edit.size === 0;
+        } catch {
+            rejected = true;   // provider 返回 null → 命令报 "No result."
+        }
+        assert.ok(rejected, '超长名字应被拒绝，却返回了可用的编辑集');
+
+        // 且文件内容未被改动
+        const after = await vscode.workspace.openTextDocument(uri);
+        assert.ok(
+            after.getText().includes('scoreboard objectives add total dummy'),
+            `被拒绝的重命名不应修改文件，当前内容：\n${after.getText()}`,
         );
     });
 });

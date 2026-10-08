@@ -13,6 +13,9 @@ import { CompletionEngine } from './dsl/engine';
 import { registerDemoCommands } from './dsl/demo';
 import { YamlCommandLoader } from './dsl/yaml/loader';
 import { registerDiagnostics, onIndexReady } from './core/diagnostics/vscodeAdapter';
+import { registerReferencesProvider } from './core/ReferencesProvider';
+import { registerRenameProvider } from './core/RenameProvider';
+import { invalidateDocCache } from './core/symbols/bridge';
 import { setRootDir, rootDir } from './core/paths';
 
 // rootDir 的实际持有者是 core/paths（无副作用模块）。
@@ -67,6 +70,15 @@ export function activate(context: vscode.ExtensionContext) {
 	registerFunctionDefinitionProvider(context);
 	// 注册Hover
 	registerHoverProvider(context);
+	// 注册引用查找（Shift+F12）与重命名（F2）
+	registerReferencesProvider(context);
+	registerRenameProvider(context);
+	// 保存后清掉符号层的文档文本缓存，避免 References 读到过期内容
+	context.subscriptions.push(
+		vscode.workspace.onDidSaveTextDocument(doc => {
+			if (doc.languageId === 'mcfunction') { invalidateDocCache(doc.uri); }
+		}),
+	);
 	// 注册文档管理
 	const docManager = DynamicDocManager.getInstance();
 	// 注册诊断（红线）
@@ -114,6 +126,27 @@ export function activate(context: vscode.ExtensionContext) {
 			`Mcfunction Studio 未找到数据包目录：${rootDirError}\n` +
 			`命令补全、定义跳转等将不可用。\n` +
 			`请打开包含 data/functions 结构的目录后，执行「Mcfunction Studio: 刷新函数|计分板|进度|标签池」重试。`,
+		);
+	}
+
+	// 用户在激活之后才打开（或切换到）数据包目录时，自动重试一次。
+	// activate 时 workspaceFolders 可能尚未就绪、或用户还没打开数据包——
+	// 早先只能靠用户手动执行「刷新工作区」，体验上等同于功能不可用。
+	if (rootDirError) {
+		context.subscriptions.push(
+			vscode.workspace.onDidChangeWorkspaceFolders(async () => {
+				if (rootDir) { return; }          // 已有则无需重复加载
+				try {
+					const resolved = MinecraftUtils.getRootDir();
+					setRootDir(resolved);
+					console.log('[McfunctionStudio] 工作区变化后 rootDir 已设置', resolved.fsPath);
+				} catch {
+					return;                          // 仍不是数据包目录，继续等待
+				}
+				await dataloader.init();
+				await YamlCommandLoader.reloadUser(engine, rootDir!);
+				onIndexReady();
+			}),
 		);
 	}
 }

@@ -331,7 +331,16 @@ export class MinecraftUtils {
 
     /**
      * 查找项目中的根数据目录 (data directory)
-     * 功能：从当前工作区根目录开始，逐级向上查找名为 'data' 的目录，并验证其下是否存在 'functions' 子目录。
+     *
+     * 两种常见布局都要支持：
+     *   A. 打开数据包根目录   <workspace>/data/functions
+     *   B. 直接打开 data 目录 <workspace>/functions，或 workspace 本身就是 data
+     *   C. 打开 data 的子目录（如 resources）—— 需**向上**回溯
+     *
+     * ⚠️ 早先只做「从工作区根逐级向上」这一个方向，
+     *    于是布局 A（最标准的那种）反而定位失败，扩展表现为"完全没反应"。
+     *    因此先向下找 data/functions，找不到再向上回溯。
+     *
      * @returns 包含 'functions' 子目录的有效 'data' 目录的 Uri。
      * @throws 当未打开工作区，或未能找到符合 data/functions 结构的目录时抛出错误。
      */
@@ -345,17 +354,39 @@ export class MinecraftUtils {
         // 2. 转换为本地文件路径字符串
         const workspacePath = workspaceFolder.uri.fsPath;
 
-        // 3. 从当前路径开始向上查找，定位 'data' 目录
+        /** 校验某个路径是不是有效的 data 目录 */
+        const asDataDir = (p: string): vscode.Uri | null => {
+            if (path.basename(p).toLowerCase() !== 'data') { return null; }
+            const functionsDirPath = path.join(p, 'functions');
+            try {
+                if (fs.existsSync(functionsDirPath) && fs.lstatSync(functionsDirPath).isDirectory()) {
+                    return vscode.Uri.file(p);
+                }
+            } catch { /* 不可访问则视为不是 */ }
+            return null;
+        };
+
+        // 3a. 向下：工作区根本身就是 data（布局 B：打开 data 目录）
+        const direct = asDataDir(workspacePath);
+        if (direct) {
+            console.log(`成功定位并验证项目根数据目录 (data directory): ${direct.fsPath}`);
+            return direct;
+        }
+
+        // 3b. 向下：工作区根下有 data/functions（布局 A：打开数据包根目录）
+        const childData = asDataDir(path.join(workspacePath, 'data'));
+        if (childData) {
+            console.log(`成功定位并验证项目根数据目录 (data directory): ${childData.fsPath}`);
+            return childData;
+        }
+
+        // 3c. 向上：从当前路径开始逐级回溯（布局 C：打开的是 data 的子目录）
         let currentPath = workspacePath;
         while (currentPath !== path.dirname(currentPath)) {
-            // 检查当前目录是否命名为 'data'
-            if (path.basename(currentPath).toLowerCase() === 'data') {
-                // 验证该 'data' 目录下是否存在 'functions' 子目录
-                const functionsDirPath = path.join(currentPath, 'functions');
-                if (fs.existsSync(functionsDirPath) && fs.lstatSync(functionsDirPath).isDirectory()) {
-                    console.log(`成功定位并验证项目根数据目录 (data directory): ${currentPath}`);
-                    return vscode.Uri.file(currentPath);
-                }
+            const found = asDataDir(currentPath);
+            if (found) {
+                console.log(`成功定位并验证项目根数据目录 (data directory): ${found.fsPath}`);
+                return found;
             }
             currentPath = path.dirname(currentPath);
         }

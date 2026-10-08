@@ -254,6 +254,30 @@ describe('diagnostics/引用规则', () => {
         assert.strictEqual(hit.severity, Severity.Hint);
     });
 
+    it('players operation 只检查 objective 位（回归：曾错用下标 3/5）', () => {
+        const all2 = ['say', 'scoreboard', 'kill', 'function', 'trigger'];
+        // 玩家名 Steve 未定义不应报"记分板目标未定义"；
+        // 只有 kills / src 两个 objective 才是记分板目标。
+        const d = run(['scoreboard players operation Steve kills += Steve src'], {
+            commands: all2,
+            scoreboards: ['kills', 'src'],
+        });
+        assert.strictEqual(
+            d.filter(x => x.ruleId === 'resource/undefined-scoreboard-command').length, 0,
+            `不应报记分板目标未定义：${d.map(x => x.message).join(' | ')}`,
+        );
+    });
+
+    it('players operation 检出未定义的 objective', () => {
+        const all2 = ['say', 'scoreboard', 'kill', 'function', 'trigger'];
+        const d = run(['scoreboard players operation @s kills += @s missing'], {
+            commands: all2,
+            scoreboards: ['kills'],
+        });
+        const hit = d.find(x => x.message.includes('missing'));
+        assert.ok(hit, '未定义的源 objective 应被检出');
+    });
+
     it('trigger 未定义目标报 warning', () => {
         const d = run(['trigger nope'], { commands: all });
         const hit = d.find(x => x.ruleId === 'resource/undefined-trigger');

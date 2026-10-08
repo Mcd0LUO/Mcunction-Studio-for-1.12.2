@@ -91,6 +91,15 @@ export interface DiagnosticRule {
     readonly defaultLevel: Severity;
     /** 仅对这些命令生效；undefined = 对所有命令检查 */
     readonly commands?: readonly string[];
+    /**
+     * 该规则是否依赖工作区索引（记分板/队伍/标签/函数/进度是否存在）。
+     *
+     * true 的规则在索引未加载时会被**整体跳过**。
+     * 不加这道闸的后果：未打开数据包时，空索引会把每一处引用都判成
+     * "未定义"，连正确写法也满屏红线（e2e 实测踩到过）。
+     * 纯语法/取值规则（int32、名字长度、选择器范围）不依赖索引，保持 false。
+     */
+    readonly needsIndex?: boolean;
     /** 行级检查，返回空表示通过 */
     check(rc: RuleContext): readonly Diagnostic[];
 }
@@ -112,6 +121,7 @@ export class ValidationContext {
     private readonly _hasAdvancement: (res: string) => boolean;
     private readonly _definitionsOf: (kind: 'scoreboard' | 'team', name: string) => readonly string[];
     private readonly _getScoreboardCriteria: (name: string) => string | undefined;
+    private readonly _indexReady: () => boolean;
 
     constructor(deps: {
         commandTable(): readonly string[];
@@ -122,6 +132,8 @@ export class ValidationContext {
         hasAdvancement(res: string): boolean;
         definitionsOf(kind: 'scoreboard' | 'team', name: string): readonly string[];
         getScoreboardCriteria?(name: string): string | undefined;
+        /** 索引是否已加载；不传视为 true（单测里 fake 索引总是就绪） */
+        isIndexReady?(): boolean;
     }) {
         this._commandTable = deps.commandTable;
         this._hasScoreboard = deps.hasScoreboard;
@@ -131,6 +143,7 @@ export class ValidationContext {
         this._hasAdvancement = deps.hasAdvancement;
         this._definitionsOf = deps.definitionsOf;
         this._getScoreboardCriteria = deps.getScoreboardCriteria ?? (() => undefined);
+        this._indexReady = deps.isIndexReady ?? (() => true);
     }
 
     /**
@@ -140,6 +153,15 @@ export class ValidationContext {
      * 此时**语法类规则必须整体跳过**，否则会把每一条命令都判成"未知命令"。
      */
     commandTable(): readonly string[] { return this._commandTable(); }
+
+    /**
+     * 索引（记分板/队伍/标签/函数/进度）是否已加载。
+     *
+     * false = 未打开数据包目录，或 DataLoader 尚未 init 完。
+     * 此时**所有"引用是否存在"类规则必须跳过**——
+     * 否则空索引会把每一处引用都判成"未定义"，连正确写法也满屏红线。
+     */
+    isIndexReady(): boolean { return this._indexReady(); }
     hasScoreboard(name: string): boolean { return this._hasScoreboard(name); }
     hasTeam(name: string): boolean { return this._hasTeam(name); }
     hasTag(name: string): boolean { return this._hasTag(name); }

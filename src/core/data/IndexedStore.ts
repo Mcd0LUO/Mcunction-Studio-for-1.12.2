@@ -90,6 +90,10 @@ export class IndexedStore {
 
     addScoreboard(resName: string, name: string, line: number, uri: vscode.Uri, type: string, desc: string = ''): void {
         this.rememberFile(resName, uri);
+        // ⚠️ 必须写入 LineIndex：它是 getLocations() 的唯一数据源，
+        //    缺了它「查找引用 / Ctrl+Click 跳转到定义」对记分板目标全部失效
+        //    （曾长期如此——只有 tag/fake_player/function 进了 LineIndex）。
+        this.index.appendEntries(this.f(uri), line, [{ type: T.Scoreboard, value: name }]);
         if (this.scoreboards.has(name)) {
             // 大包首次加载时同名定义可能有几十处，逐条弹窗会淹没编辑器。
             // 每个名称只提示一次，之后仅记日志。
@@ -109,8 +113,31 @@ export class IndexedStore {
         this._indexLine(resName, line, DataType.Scoreboard, name);
     }
 
+    /**
+     * 只登记一条**记分板目标引用**（不定义）。
+     *
+     * 与 addScoreboard 的区别：后者是 `objectives add`，会创建定义、
+     * 参与重复定义判定与定义点追踪；这里仅用于
+     * `scoreboard players set @s <obj>` / 选择器 `score_<obj>=` 这类
+     * 只读引用，让 References 能找到它们。
+     *
+     * 不写 _docIndex，避免被 removeMeta 当成定义点释放掉。
+     */
+    addScoreboardRef(resName: string, name: string, line: number, uri: vscode.Uri): void {
+        this.rememberFile(resName, uri);
+        this.index.appendEntries(this.f(uri), line, [{ type: T.Scoreboard, value: name }]);
+    }
+
+    /** 队伍引用（teams join / 选择器 team=） */
+    addTeamRef(resName: string, name: string, line: number, uri: vscode.Uri): void {
+        this.rememberFile(resName, uri);
+        this.index.appendEntries(this.f(uri), line, [{ type: T.Team, value: name }]);
+    }
+
     addTeam(resName: string, name: string, line: number, uri: vscode.Uri): void {
         this.rememberFile(resName, uri);
+        // 同 addScoreboard：队伍也必须进 LineIndex，否则 References/Rename 对队伍无效
+        this.index.appendEntries(this.f(uri), line, [{ type: T.Team, value: name }]);
         if (!this.teams.has(name)) {
             this.teams.set(name, { def: [uri, line] });
         }
