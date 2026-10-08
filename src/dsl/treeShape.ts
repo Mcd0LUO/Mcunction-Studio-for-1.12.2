@@ -2,7 +2,7 @@
  * 命令树结构快照 — 用于基准测试与 diff。
  * 只保留语法形状（kind / name / optional / children），忽略 suggest 实现。
  */
-import { CommandNode, RootNode, LiteralNode, ArgumentNode } from './nodes';
+import { CommandNode, RootNode, LiteralNode, ArgumentNode, GreedyArgumentNode } from './nodes';
 
 /** 可 JSON 序列化的树节点 */
 export interface TreeShape {
@@ -31,6 +31,10 @@ export function toTreeShape(node: CommandNode): TreeShape {
             if (node.optional) {
                 shape.optional = true;
             }
+            break;
+        case 'greedy':
+            // 贪婪参数：名字参与对齐，否则同层多个贪婪分支会互相错配
+            shape.name = (node as GreedyArgumentNode).argName;
             break;
         case 'forward_root':
             break;
@@ -148,7 +152,7 @@ function childKey(node: TreeShape, index: number): string {
 }
 
 function childSignature(node: TreeShape): string {
-    if (node.kind === 'literal' || node.kind === 'argument' || node.kind === 'root') {
+    if (node.kind === 'literal' || node.kind === 'argument' || node.kind === 'root' || node.kind === 'greedy') {
         return `${node.kind}:${node.name ?? ''}`;
     }
     return node.kind;

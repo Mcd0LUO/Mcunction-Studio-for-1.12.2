@@ -12,6 +12,7 @@ import { VsCommandProcessor } from './core/VsCommandProcessor';
 import { CompletionEngine } from './dsl/engine';
 import { registerDemoCommands } from './dsl/demo';
 import { YamlCommandLoader } from './dsl/yaml/loader';
+import { registerDiagnostics, onIndexReady } from './core/diagnostics/vscodeAdapter';
 import { setRootDir, rootDir } from './core/paths';
 
 // rootDir 的实际持有者是 core/paths（无副作用模块）。
@@ -68,6 +69,10 @@ export function activate(context: vscode.ExtensionContext) {
 	registerHoverProvider(context);
 	// 注册文档管理
 	const docManager = DynamicDocManager.getInstance();
+	// 注册诊断（红线）
+	// 无 rootDir 时**仍然注册**：语法类规则不依赖索引，只依赖命令表。
+	// 索引类规则会因 commandTable 为空/查不到定义而自然不报，不会误报。
+	registerDiagnostics(context);
 	// 注册编辑器命令
 	context.subscriptions.push(
 		// 重载工作区
@@ -86,6 +91,8 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 			await dataloader.init();
 			await YamlCommandLoader.reloadUser(engine, rootDir!);
+			// 索引已更新：重算所有已开启文档的诊断（否则补全里已知的对象仍被判"未定义"）
+			onIndexReady();
 		}),
 		// 新建函数文件
 		vscode.commands.registerCommand('mcf-studio.createFunctionFile', VsCommandProcessor.createNewFunctionFile),

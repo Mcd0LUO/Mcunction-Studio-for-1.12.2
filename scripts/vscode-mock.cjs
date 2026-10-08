@@ -200,6 +200,8 @@ const workspaceFs = {
 /** 可在外部设置 workspaceFolders */
 const workspaceState = {
     workspaceFolders: [],
+    /** 已打开的文档；测试可用 __addTextDocument 注入 */
+    textDocuments: [],
 };
 
 module.exports = {
@@ -231,6 +233,12 @@ module.exports = {
             workspaceState.workspaceFolders = v;
         },
         fs: workspaceFs,
+        /**
+         * 已打开的文档集合。
+         * DiagnosticsManager 激活时会遍历它做首轮诊断，
+         * 缺少这个字段会让 activate 直接抛错（扩展表现为"完全没反应"）。
+         */
+        get textDocuments() { return workspaceState.textDocuments; },
         createFileSystemWatcher: () => ({
             onDidCreate: () => ({ dispose() {} }),
             onDidChange: () => ({ dispose() {} }),
@@ -257,6 +265,25 @@ module.exports = {
         registerDefinitionProvider: () => ({ dispose() {} }),
         registerHoverProvider: () => ({ dispose() {} }),
         registerCodeLensProvider: () => ({ dispose() {} }),
+        /**
+         * 诊断集合。mock 下只记录最后一次 set 的内容，
+         * 便于 Node 侧测试断言"某文档被判出了哪些诊断"。
+         * 真实 VS Code 的渲染行为无法在 mock 中体现，须由 e2e 覆盖。
+         */
+        createDiagnosticCollection: (name) => {
+            const store = new Map();
+            return {
+                name,
+                set(uri, diags) { store.set(String(uri), diags); },
+                delete(uri) { store.delete(String(uri)); },
+                clear() { store.clear(); },
+                dispose() { store.clear(); },
+                get(uri) { return store.get(String(uri)); },
+                has(uri) { return store.has(String(uri)); },
+                forEach(cb) { for (const [u, d] of store) { cb({ uri: u }, d); } },
+                _store: store,
+            };
+        },
     },
     commands: {
         registerCommand: () => ({ dispose() {} }),
@@ -316,6 +343,12 @@ module.exports = {
     CodeLens: class {
         constructor(range, command) { this.range = range; this.command = command; }
     },
+    Diagnostic: class {
+        constructor(range, message, severity) {
+            this.range = range; this.message = message; this.severity = severity;
+        }
+    },
+    DiagnosticSeverity: { Error: 0, Warning: 1, Information: 2, Hint: 3 },
     ThemeColor: class {
         constructor(id) { this.id = id; }
     },
@@ -323,5 +356,9 @@ module.exports = {
     /** 测试辅助：重置/注入 workspaceFolders */
     __setWorkspaceFolders(folders) {
         workspaceState.workspaceFolders = folders;
+    },
+    /** 测试辅助：注入/清空已打开文档 */
+    __setTextDocuments(docs) {
+        workspaceState.textDocuments = docs ?? [];
     },
 };

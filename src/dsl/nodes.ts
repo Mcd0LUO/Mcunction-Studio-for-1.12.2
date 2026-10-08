@@ -17,7 +17,7 @@ export interface SuggestContext {
 export type SuggestionProvider = (ctx: SuggestContext) => vscode.CompletionItem[] | Promise<vscode.CompletionItem[]>;
 
 /** 节点类型判别 */
-export type NodeKind = 'root' | 'literal' | 'argument' | 'forward_root';
+export type NodeKind = 'root' | 'literal' | 'argument' | 'greedy' | 'forward_root';
 
 /** 命令树节点基类 */
 export abstract class CommandNode {
@@ -86,6 +86,27 @@ export class ArgumentNode extends CommandNode {
         this.argName = argName;
         this.suggest = suggest ?? null;
         if (optional) { this.optional = true; }
+    }
+}
+
+/**
+ * 贪婪参数节点 —— 吃掉其后**所有**剩余 token。
+ *
+ * 对应 1.12.2 中若干命令的自由文本参数（wiki 写作 `<message …>` / `<raw json …>`）：
+ *   say <message …>
+ *   me <message …>（Bedrock/Java 视版本）
+ *   title <target> title <raw json title …>
+ *
+ * ⚠️ 之所以需要独立节点类型：普通 ArgumentNode 每层只消费一个 token，
+ *    `say hello world` 里的 world 会成为"未消费 token"，
+ *    诊断层一上线就会把完全合法的 say 命令判成语法错误。
+ */
+export class GreedyArgumentNode extends CommandNode {
+    public readonly argName: string;
+
+    constructor(argName: string) {
+        super('greedy');
+        this.argName = argName;
     }
 }
 

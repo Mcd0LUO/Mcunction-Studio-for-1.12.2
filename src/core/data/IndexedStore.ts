@@ -170,6 +170,33 @@ export class IndexedStore {
     }
 
     // ================================================================
+    // 只读查询（供诊断层使用）
+    // ================================================================
+
+    /**
+     * 某记分板目标的全部分义点（`resName:line` 列表）。
+     *
+     * 长度 > 1 即为重复定义——注意这是**按定义点计数**而非按名称计数，
+     * 同一文件同一行只算一次（见 _trackDef）。
+     * 诊断层的 duplicate-scoreboard 规则直接依赖此方法。
+     */
+    getScoreboardDefPoints(name: string): string[] {
+        const s = this._scoreboardDefs.get(name);
+        return s ? [...s] : [];
+    }
+
+    /** 某队伍的全部分义点，语义同 getScoreboardDefPoints */
+    getTeamDefPoints(name: string): string[] {
+        const s = this._teamDefs.get(name);
+        return s ? [...s] : [];
+    }
+
+    /** 某记分板目标的 criteria（dummy/player/kill 等），未定义返回 undefined */
+    getScoreboardCriteria(name: string): string | undefined {
+        return this.scoreboards.get(name)?.type;
+    }
+
+    // ================================================================
     // 清除
     // ================================================================
 

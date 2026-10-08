@@ -2,6 +2,27 @@
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
 
+# [1.5.2]
+
+### 新增
+- **诊断（红线）**。此前扩展只有补全/Hover/跳转，从不告诉用户「你写错了」。新增 15 条规则，覆盖 4 类问题：
+  - **语法**：未知命令（1.13+/模组命令）、参数个数超出 1.12.2 语法、`execute` 之后有多余内容
+  - **引用**：未定义的记分板目标/队伍/标签/进度、**不存在的 function**（error）、`trigger` 未定义目标
+  - **重复定义**：同名记分板目标/队伍被定义多次
+  - **取值**：整数超出 32 位有符号范围、记分板目标名 > 16 字符、显示名 > 32 字符、选择器 `score_X_min` > `score_X`（恒为空集）、`c=` 非法
+
+  规则级别可在 `mcfStudio.diagnostics.rules` 逐条调整或关闭（`off`）。
+  设计见 [docs/plans/2026-07-20-diagnostics-design.md](docs/plans/2026-07-20-diagnostics-design.md)。
+
+### 修复
+- **`/say` 被当成没有参数**。1.12.2 的 `say <message …>` 是**贪婪文本参数**（wiki 原文末尾的省略号），此前定义成了空节点，导致 `say hello world` 里的每个词都被判为多余 token。新增 `greedy` 节点类型（`say` / `title` 的 raw json 参数）。
+- **`/kill` 目标被误标为必填**。wiki 原文是 `kill [player|entity]`，1.12.2 中目标**可省略**（缺省为命令执行者，注明 "optional until 1.13"）。此前按必填实现，会把命令方块里的裸 `kill` 判成缺参数。
+- **`/title` 的 raw json 参数被当作单 token**。改用贪婪节点。
+
+### 重构
+- **命令树基准补齐 `say` / `kill` 条目**并纳入 `required`。此前这两条命令不在基准里，上述两个 1.12.2 语义错误正是因为没有基准覆盖才长期存在。`title` 的 raw json 参数同步按 wiki 原文更新为贪婪。
+- **引擎新增 `validate()`**。`walk()` 遇到匹配不上的 token 原本直接 `break` 丢弃，现在把「未消费的 token」作为结构化结果返回（`leftovers` / `reachedLeaf` / `trailing` / `extraOnLeaf` / `missingRequired`），诊断层据此判定语法错误。`complete()` 行为不变。
+
 # [1.5.1]
 
 ### 移除

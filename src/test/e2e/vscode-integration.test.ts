@@ -19,7 +19,7 @@ const EXT_ID = 'Mcd0-LUO.mcfunction-studio';
 
 /** 创建一个符合 README 的临时数据包：<tmp>/data/functions/...
  *  @returns data 目录（即 README 要求作为工作区的那个目录） */
-function makePack(): { dataDir: string; packRoot: string; funcFile: string } {
+function makePack(): { dataDir: string; packRoot: string; funcFile: string; goodFile: string; badFile: string } {
     const packRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mcf-e2e-'));
     const dataDir = path.join(packRoot, 'data');
     fs.mkdirSync(path.join(dataDir, 'functions/ns'), { recursive: true });
@@ -33,7 +33,35 @@ function makePack(): { dataDir: string; packRoot: string; funcFile: string } {
             '',
         ].join('\n'),
     );
-    return { dataDir, packRoot, funcFile };
+
+    // 诊断用：内容全部合法的文件（断言不被误报）
+    const goodFile = path.join(dataDir, 'functions/ns/good.mcfunction');
+    fs.writeFileSync(
+        goodFile,
+        [
+            'scoreboard objectives add used dummy',
+            'scoreboard teams add blue',
+            'say hello world',
+            'kill',
+            'scoreboard players set @s used 1',
+            'scoreboard players set @s used 5',
+            '',
+        ].join('\n'),
+    );
+
+    // 诊断用：含已知缺陷的文件
+    const badFile = path.join(dataDir, 'functions/ns/bad.mcfunction');
+    fs.writeFileSync(
+        badFile,
+        [
+            'function ns:missing',                              // 0: 函数不存在 → error
+            'scoreboard objectives add toolongobjective dummy', // 1: 名称 18 字符 > 16 → error
+            'scoreboard players set @s used 3000000000',         // 2: 超出 int32 → warning
+            '',
+        ].join('\n'),
+    );
+
+    return { dataDir, packRoot, funcFile, goodFile, badFile };
 }
 
 async function openInVsCode(fsPath: string): Promise<vscode.TextDocument> {
@@ -57,6 +85,8 @@ suite('Mcfunction Studio — 真实 VS Code 集成', () => {
     let packRoot: string;
     let dataDir: string;
     let funcFile: string;
+    let goodFile: string;
+    let badFile: string;
 
     suiteSetup(async function () {
         this.timeout(60000);
@@ -64,6 +94,8 @@ suite('Mcfunction Studio — 真实 VS Code 集成', () => {
         dataDir = pack.dataDir;
         packRoot = pack.packRoot;
         funcFile = pack.funcFile;
+        goodFile = pack.goodFile;
+        badFile = pack.badFile;
 
         // 注意：不能用 vscode.openFolder —— 它会重启窗口并杀死测试运行器。
         // 这里只打开文档：扩展的 activationEvents 是 onLanguage:mcfunction，
@@ -145,5 +177,60 @@ suite('Mcfunction Studio — 真实 VS Code 集成', () => {
         assert.ok(cmds.includes('mcf-studio.createFunctionFile'));
         assert.ok(cmds.includes('mcf-studio.fastScoreboardDebug'));
         assert.ok(cmds.includes('mcf-studio.toggleDslDebug'));
+    });
+
+    // ================================================================
+    // 诊断（红线）—— 只有真实宿主能验证的部分
+    // ================================================================
+
+    test('诊断已发布到 DiagnosticCollection（红线真的会出现）', async function () {
+        this.timeout(30000);
+        const uri = vscode.Uri.file(badFile);
+        const doc = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(doc);
+
+        // 诊断是防抖 300ms 的，等它落定
+        const got = await waitFor(
+            () => vscode.languages.getDiagnostics(uri).length > 0,
+            15000,
+        );
+
+        const diags = vscode.languages.getDiagnostics(uri);
+        assert.ok(
+            got,
+            `扩展未对该文件发布任何诊断（实际 ${diags.length} 条）—— DiagnosticCollection 未注册或未触发刷新`,
+        );
+        assert.strictEqual(diags[0].source, 'mcfunction-studio', '诊断来源标记不正确');
+        assert.ok(diags[0].code, '诊断缺少机器码（ruleId），配置抑制会失效');
+    });
+
+    test('诊断覆盖到预期的问题行（未定义 function）', async function () {
+        this.timeout(30000);
+        const uri = vscode.Uri.file(badFile);
+        const doc = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(doc);
+        await waitFor(() => vscode.languages.getDiagnostics(uri).length > 0, 15000);
+
+        const diags = vscode.languages.getDiagnostics(uri);
+        const fnHit = diags.find(d => d.code === 'resource/undefined-function');
+        assert.ok(
+            fnHit,
+            `未报出 resource/undefined-function，实际诊断：${diags.map(d => d.code).join(', ')}`,
+        );
+        // bad.mcfunction 第 0 行是 "function ns:missing"
+        assert.strictEqual(fnHit.range.start.line, 0, '诊断行号与源文件不符');
+    });
+
+    test('合法文件不被误报（防误报是头等大事）', async function () {
+        this.timeout(30000);
+        const doc = vscode.Uri.file(goodFile);
+        await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(doc));
+        // 等索引与诊断都稳定
+        await new Promise(r => setTimeout(r, 3000));
+        const diags = vscode.languages.getDiagnostics(doc);
+        assert.strictEqual(
+            diags.length, 0,
+            `正确写法被误报：${diags.map(d => `${d.code}: ${d.message}`).join(' | ')}`,
+        );
     });
 });

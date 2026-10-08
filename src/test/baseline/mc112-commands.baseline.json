@@ -1,7 +1,7 @@
 {
   "$schema_comment": "Minecraft 1.12.2 命令树结构基准。只描述 kind/name/optional/children。function if|unless 为 1.12.2 合法语法。",
   "version": "1.12.2",
-  "required": ["function", "effect", "time", "title", "scoreboard.players.remove"],
+  "required": ["function", "effect", "time", "title", "scoreboard.players.remove", "say", "kill"],
   "commands": {
     "function": {
       "kind": "root",
@@ -150,6 +150,7 @@
       ]
     },
     "title": {
+      "_note": "wiki Commands/title（2018-05-09 修订）原文为 title <player> title <raw json title …>，末尾省略号表示贪婪文本，故实现用 greedy 节点",
       "kind": "root",
       "name": "title",
       "children": [
@@ -172,8 +173,8 @@
               "name": "title",
               "children": [
                 {
-                  "kind": "argument",
-                  "name": "<json>",
+                  "kind": "greedy",
+                  "name": "<raw json title>",
                   "children": []
                 }
               ]
@@ -183,8 +184,8 @@
               "name": "subtitle",
               "children": [
                 {
-                  "kind": "argument",
-                  "name": "<json>",
+                  "kind": "greedy",
+                  "name": "<raw json title>",
                   "children": []
                 }
               ]
@@ -194,8 +195,8 @@
               "name": "actionbar",
               "children": [
                 {
-                  "kind": "argument",
-                  "name": "<json>",
+                  "kind": "greedy",
+                  "name": "<raw json title>",
                   "children": []
                 }
               ]
@@ -224,6 +225,31 @@
               ]
             }
           ]
+        }
+      ]
+    },
+    "say": {
+      "_note": "wiki Commands/say（2018-05-09 修订）原文 say <message …>：省略号 = 贪婪文本，消息可含空格分词的多词",
+      "kind": "root",
+      "name": "say",
+      "children": [
+        {
+          "kind": "greedy",
+          "name": "<message>",
+          "children": []
+        }
+      ]
+    },
+    "kill": {
+      "_note": "wiki Commands/kill（2018-05-09 修订）原文 kill [player|entity]：1.12.2 目标可省略（缺省为命令执行者），1.13 起才必填",
+      "kind": "root",
+      "name": "kill",
+      "children": [
+        {
+          "kind": "argument",
+          "name": "[player|entity]",
+          "optional": true,
+          "children": []
         }
       ]
     },

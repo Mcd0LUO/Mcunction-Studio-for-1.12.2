@@ -31,9 +31,10 @@ VS Code 扩展，为 Minecraft **1.12.2** 数据包的 `.mcfunction` 文件提�
 | 模块 | 行数 | 职责 |
 |------|------|------|
 | `core/DataLoader.ts` | ~730 | God Class：配置 + 并发 + 扫描 + 解析调度 + 缓存持久化 |
-| `dsl/engine.ts` | ~200 | 补全引擎，walk/suggest 两阶段分离 |
-| `core/data/IndexedStore.ts` | ~540 | 定义点引用计数（scoreboard/team）+ 按行清理 |
+| `dsl/engine.ts` | ~360 | 补全引擎，walk/suggest 两阶段分离 + `validate()` 语法校验 |
+| `core/data/IndexedStore.ts` | ~580 | 定义点引用计数（scoreboard/team）+ 按行清理 |
 | `core/LineIndex.ts` | ~215 | 行级追踪 + 引用计数 + 位置反查 |
+| `core/diagnostics/` | ~700 | 诊断（红线）：纯数据规则层 + vscode 适配层 |
 | `utils/EnumLib.ts` | ~1510 | 懒加载静态枚举（物品/方块/实体/粒子/音效） |
 
 ## 关键设计约束（改动前务必了解）
@@ -55,18 +56,39 @@ VS Code 扩展，为 Minecraft **1.12.2** 数据包的 `.mcfunction` 文件提�
 5. **同名定义必须按定义点计数**。`teams`/`scoreboards` 早期是无条件 `delete`，
    导致删一个文件连带删掉另一个文件的同名定义。现由 `_scoreboardDefs`/`_teamDefs` 追踪。
 
+6. **`greedy` 表示贪婪文本参数**（wiki 里的 `<message …>`）。
+   它吃掉其后所有 token；普通 `argument` 每层只消费一个。
+   `say` / `title` 的 raw json 都必须是 greedy，否则诊断会把合法命令判成多余参数。
+
+7. **诊断层的规则目录（`core/diagnostics/` 除 `bridge.ts`/`vscodeAdapter.ts` 外）
+   禁止 import vscode**。这是让规则能被 Node + mock 单测覆盖的前提，
+   也是将来真要抽 headless core / 写 LSP 时唯一不用重写的部分。
+
 ## 开发命令
 
 ```bash
-npm run compile        # 编译（注释不进产物）
-npm run lint           # ESLint
-npm run test:engine    # 补全引擎行为测试（37 项）
-npm run test:index     # 索引 / 缓存序列化（31 项）
-npm run test:baseline  # 1.12.2 命令树基准（8 项）
+npm run compile              # 编译（注释不进产物）
+npm run lint                 # ESLint
+npm run test:engine          # 补全引擎行为测试（45 项）
+npm run test:diagnostics      # 诊断规则（46 项）
+npm run test:index           # 索引 / 缓存序列化（31 项）
+npm run test:baseline        # 1.12.2 命令树基准（10 项）
+npm run test:e2e             # 真实 VS Code 集成（9 项，含红线是否真的出现）
 npm run bench:perf              # 合成包性能基准
 npm run bench:perf -- --quiet   # 轻量负载（降低风扇噪音）
 npm run bench:real -- "D:/path/to/data"
 ```
+
+测试分三层，**各管各的盲区**：
+
+| 层 | 环境 | 能测 | 测不到 |
+|----|------|------|--------|
+| `test:engine/index/diagnostics/baseline` | Node + `scripts/vscode-mock.cjs` | 纯逻辑、规则、索引 | 宿主 API 是否存在 |
+| `test:e2e` | 真实 VS Code（复用 `D:/tools/ide/VSCode`） | 语言绑定、激活、provider 注册、红线渲染 | — |
+| 手工安装 vsix | 真实用户环境 | 发布流程 | — |
+
+> 语言绑定失败（`languageId = plaintext`）只有第二层能发现：
+> 扩展加载成功、贡献点在、语言也在 `getLanguages()` 里，但就是不绑定。
 
 构建发布包：`npx @vscode/vsce package --allow-missing-repository`
 
@@ -77,7 +99,10 @@ npm run bench:real -- "D:/path/to/data"
   本项目历史上曾因此误判 5 条命令为「语法错误」。
   查 1.12 时期的精确原文可用 MediaWiki API：
   `?action=query&prop=revisions&rvstart=2018-06-01&rvdir=older`
-- **提交前跑完三个测试脚本 + lint**（当前应分别为 37 / 31 / 8 passing，lint 0 error）。
+- **提交前跑完 Node 侧四个测试脚本 + lint**
+  （当前应分别为 45 / 46 / 31 / 10 passing，lint 0 error）。
+  改动 `package.json` 的 `contributes`、扩展激活、语言绑定相关代码时，
+  额外跑 `npm run test:e2e`。
 - 迭代计划写 `docs/plans/`，缺陷报告写 `docs/bugs/`，待决策项写 `docs/actions/`，
   阶段快照写 `docs/status/`。
 
@@ -89,5 +114,6 @@ npm run bench:real -- "D:/path/to/data"
 | [dsl-guide.md](dsl-guide.md) | 命令树定义写法 |
 | [yaml-command.md](yaml-command.md) | 自定义命令补全 |
 | [status/2026-10-08-v1.5.0-audit.md](status/2026-10-08-v1.5.0-audit.md) | 1.5.1 审计与修复快照 |
+| [plans/2026-07-20-diagnostics-design.md](plans/2026-07-20-diagnostics-design.md) | 诊断层设计与规则清单 |
 | [actions/2026-10-08-architecture-audit-decisions.md](actions/2026-10-08-architecture-audit-decisions.md) | 审计结论与待决策项（含已推翻的结论勘误） |
 | [plans/](plans/) | 历史设计记录 |

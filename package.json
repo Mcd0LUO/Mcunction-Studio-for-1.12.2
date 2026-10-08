@@ -2,7 +2,7 @@
   "name": "mcfunction-studio",
   "displayName": "Mcfunction Studio for 1.12",
   "description": "A simple mcfunction dev specialized helper for 1.12.2",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "publisher": "Mcd0-LUO",
   "author": {
     "email": "1473522801@qq.com",
@@ -103,7 +103,110 @@
         "fileMatch": "McfunctionStudio.json",
         "url": "./schemas/McfunctionSutdio.schema.json"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Mcfunction Studio",
+      "properties": {
+        "mcfStudio.diagnostics.rules": {
+          "type": "object",
+          "default": {},
+          "markdownDescription": "诊断规则级别覆盖。`off` 关闭该规则；未列出的规则使用其默认级别。修改后需重新打开文件生效。",
+          "properties": {
+            "syntax/unknown-command": {
+              "type": "string",
+              "enum": ["off", "hint", "information", "warning", "error"],
+              "default": "error",
+              "markdownDescription": "命令不存在于 1.12.2（含 1.13+ 或模组命令）。"
+            },
+            "syntax/extra-token": {
+              "type": "string",
+              "enum": ["off", "hint", "information", "warning", "error"],
+              "default": "error",
+              "markdownDescription": "参数个数多于该命令 1.12.2 语法所允许。"
+            },
+            "syntax/execute-trailing": {
+              "type": "string",
+              "enum": ["off", "hint", "information", "warning", "error"],
+              "default": "error",
+              "markdownDescription": "execute 之后有多余内容（1.12.2 无 `run` 关键字）。"
+            },
+            "resource/undefined-scoreboard": {
+              "type": "string",
+              "enum": ["off", "hint", "information", "warning", "error"],
+              "default": "hint",
+              "markdownDescription": "选择器 `score_X` 引用的记分板目标未定义。"
+            },
+            "resource/undefined-scoreboard-command": {
+              "type": "string",
+              "enum": ["off", "hint", "information", "warning", "error"],
+              "default": "hint",
+              "markdownDescription": "`scoreboard` 命令引用了未定义的目标/队伍/标签。"
+            },
+            "resource/undefined-trigger": {
+              "type": "string",
+              "enum": ["off", "hint", "information", "warning", "error"],
+              "default": "warning",
+              "markdownDescription": "`trigger` 的目标不存在（会被游戏静默忽略）。"
+            },
+            "resource/undefined-function": {
+              "type": "string",
+              "enum": ["off", "hint", "information", "warning", "error"],
+              "default": "error",
+              "markdownDescription": "`function` 引用的函数文件不存在。"
+            },
+            "resource/undefined-advancement": {
+              "type": "string",
+              "enum": ["off", "hint", "information", "warning", "error"],
+              "default": "hint",
+              "markdownDescription": "`advancement` 引用的进度不存在。"
+            },
+            "resource/duplicate-scoreboard": {
+              "type": "string",
+              "enum": ["off", "hint", "information", "warning", "error"],
+              "default": "warning",
+              "markdownDescription": "记分板目标被重复定义。"
+            },
+            "resource/duplicate-team": {
+              "type": "string",
+              "enum": ["off", "hint", "information", "warning", "error"],
+              "default": "warning",
+              "markdownDescription": "队伍被重复定义。"
+            },
+            "score/out-of-int32": {
+              "type": "string",
+              "enum": ["off", "hint", "information", "warning", "error"],
+              "default": "warning",
+              "markdownDescription": "整数超出 32 位有符号范围（记分板值上限 2147483647）。"
+            },
+            "scoreboard/name-too-long": {
+              "type": "string",
+              "enum": ["off", "hint", "information", "warning", "error"],
+              "default": "error",
+              "markdownDescription": "记分板目标名超过 16 字符。"
+            },
+            "scoreboard/display-name-too-long": {
+              "type": "string",
+              "enum": ["off", "hint", "information", "warning", "error"],
+              "default": "warning",
+              "markdownDescription": "记分板显示名超过 32 字符。"
+            },
+            "selector/invalid-score-range": {
+              "type": "string",
+              "enum": ["off", "hint", "information", "warning", "error"],
+              "default": "error",
+              "markdownDescription": "`score_X_min` 大于 `score_X`，选择器恒为空集。"
+            },
+            "selector/invalid-count": {
+              "type": "string",
+              "enum": ["off", "hint", "information", "warning", "error"],
+              "default": "warning",
+              "markdownDescription": "选择器 `c=` 不是非负整数。"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
@@ -116,6 +219,7 @@
     "test:baseline": "npm run compile && node scripts/run-baseline-tests.mjs",
     "test:index": "npm run compile && node scripts/run-index-tests.mjs",
     "test:engine": "npm run compile && node scripts/run-engine-tests.mjs",
+    "test:diagnostics": "npm run compile && node scripts/run-diagnostics-tests.mjs",
     "bench:baseline": "node scripts/bench-baseline.mjs",
     "bench:perf": "npm run compile && node scripts/bench-perf.mjs",
     "bench:real": "npm run compile && node scripts/bench-real-pack.mjs"

@@ -1,4 +1,4 @@
-import { RootNode, LiteralNode, ArgumentNode, ForwardRootNode, CommandNode, SuggestionProvider } from './nodes';
+import { RootNode, LiteralNode, ArgumentNode, GreedyArgumentNode, ForwardRootNode, CommandNode, SuggestionProvider } from './nodes';
 
 /** 创建一个根命令 */
 export function command(name: string): RootNode {
@@ -29,6 +29,16 @@ export function optional(
     suggest?: SuggestionProvider | null
 ): ArgumentNode {
     return new ArgumentNode(name, suggest, true);
+}
+
+/**
+ * 贪婪参数：吃掉其后所有剩余 token。
+ *
+ * 用于 1.12.2 的自由文本参数（wiki 写作 `<message …>`）。
+ * 校验与诊断层据此认定：进入该节点后，剩余 token 全部合法。
+ */
+export function greedy(name: string): GreedyArgumentNode {
+    return new GreedyArgumentNode(name);
 }
 
 /** 转发到根命令列表（execute 的末段：1.12.2 中该位置直接接命令，无 run 关键字） */
