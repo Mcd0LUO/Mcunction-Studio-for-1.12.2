@@ -76,7 +76,16 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
             }
         }
 
-        result.push(...this.fastCommands);
+        // 快捷片段同样要过前缀过滤。
+        // 此前是无条件追加，于是 `k`、`ga`、`sco` …… 任何前缀的结果里都混着一个 `tag`
+        // （实测：前缀 k → ["kill","tag"]，前缀 ga → ["gamemode","gamerule","tag"]）。
+        for (const item of this.fastCommands) {
+            const label = typeof item.label === 'string' ? item.label : item.label.label;
+            if (prefix === '' || label.toLowerCase().startsWith(prefix)) {
+                result.push(item);
+            }
+        }
+
         return result;
     }
 

@@ -666,9 +666,12 @@ describe('根命令补全', () => {
         }
     });
 
-    it('未注册的命令名不当作根命令（前缀过滤由 provider 负责）', async () => {
-        // engine 只认已注册的根命令；`sc` 不是命令名，故返回空。
-        // 前缀过滤在 Base.provideRootCompletions 里做 —— 这里锁定该分工。
+    it('未注册的命令名返回空（前缀匹配由补全 provider 负责）', async () => {
+        // 正在输入的根命令前缀（`sco`）不是已注册命令，引擎不管 ——
+        // Base.provideRootCompletions 自己按前缀过滤 getRootItems()。
+        // 这里锁定该分工，避免两边各实现一遍。
+        assert.deepStrictEqual(await engine.complete(['sco'], 'sco'), []);
         assert.deepStrictEqual(await engine.complete(['sc'], 'sc'), []);
+        assert.deepStrictEqual(await engine.complete(['zzz'], 'zzz'), []);
     });
 });
