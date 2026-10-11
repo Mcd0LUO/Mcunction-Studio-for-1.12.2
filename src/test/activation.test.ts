@@ -33,6 +33,21 @@ function setWorkspace(fsPath: string | undefined): void {
     mock.__setWorkspaceFolders!([{ uri: mock.Uri.file(fsPath), name: 'ws', index: 0 }]);
 }
 
+/**
+ * 断言引擎已装配且内置命令齐全。
+ *
+ * 三条激活路径（正常 / 无工作区 / 非数据包）都要确认这一点，
+ * 断言内容完全相同，抽出来避免三处各写一遍 41。
+ */
+function assertEngineReady(why: string): void {
+    const engine = CompletionEngine.getCurrent();
+    assert.ok(engine, `${why}：引擎应被显式装配`);
+    assert.strictEqual(
+        engine!.getRootItems().length, 41,
+        `${why}：应注册全部 41 条内置命令`,
+    );
+}
+
 let ext: { activate: Activate; deactivate: () => void };
 let CompletionEngine: typeof import('../dsl/engine').CompletionEngine;
 let MinecraftCompletionProvider: typeof import('../completionProvider/Minecraft').MinecraftCompletionProvider;
@@ -106,8 +121,7 @@ describe('激活路径：正常数据包工作区', () => {
 
         assert.ok(paths.rootDir, 'rootDir 应被设置');
         assert.strictEqual(paths.rootDir!.fsPath, path.resolve(dataDir));
-        assert.ok(CompletionEngine.getCurrent(), '引擎应被显式装配');
-        assert.strictEqual(CompletionEngine.getCurrent()!.getRootItems().length, 41);
+        assertEngineReady('正常数据包工作区');
 
         // 索引是异步的（dataloader.init() 未 await），等一拍
         await new Promise(r => setTimeout(r, 600));
@@ -139,8 +153,7 @@ describe('激活路径：异常环境应优雅降级', () => {
         ext.activate(fakeContext());
 
         // 引擎仍应装配 —— 静态补全不依赖项目数据
-        assert.ok(CompletionEngine.getCurrent(), '即使无工作区，引擎也应装配');
-        assert.strictEqual(CompletionEngine.getCurrent()!.getRootItems().length, 41);
+        assertEngineReady('未打开工作区');
     });
 
     it('工作区不是数据包时 activate 不抛异常', () => {
@@ -150,7 +163,7 @@ describe('激活路径：异常环境应优雅降级', () => {
         setWorkspace(tmp);
 
         ext.activate(fakeContext());   // 不应抛异常
-        assert.strictEqual(CompletionEngine.getCurrent()!.getRootItems().length, 41);
+        assertEngineReady('工作区不是数据包');
     });
 
     it('无工作区时补全仍返回静态结果', async () => {

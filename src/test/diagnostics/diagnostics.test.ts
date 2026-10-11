@@ -562,62 +562,14 @@ describe('diagnostics/execute 与 scoreboard 回归', () => {
         );
     });
 
-    it('scoreboard 的 [dataTag]（NBT）尾巴不误报', () => {
-        assertClean([
-            'scoreboard players set @s obj 1 {Health:10}',
-            'scoreboard players set @s obj 1 {a: 1, b: 2}',
-            'scoreboard players add @s obj 5 {a:1}',
-            'scoreboard players remove @s obj 5 {a:1}',
-            'scoreboard players tag @s add mytag {a:1}',
-            'scoreboard players tag @s remove mytag {a:1}',
-        ], 'dataTag 含空格时被拆成多个 token 而误报');
-    });
-
-    it('scoreboard 的 [display name...]（可多词）不误报', () => {
-        assertClean([
-            'scoreboard objectives add foo dummy My Display Name',
-            'scoreboard teams add red The Red Team',
-        ], '显示名是多词参数');
-    });
-
-    it('scoreboard 的变长 [entities...] 不误报', () => {
-        assertClean([
-            'scoreboard teams join red @a @p @r',
-            'scoreboard teams leave @a @p',
-            'scoreboard teams leave',
-        ], 'entities 变长参数');
-    });
-
-    it('scoreboard 此前遗漏的子命令现在被认识', () => {
-        assertClean([
-            'scoreboard players list',
-            'scoreboard players list @s',
-            'scoreboard players test @s obj 1 10',
-            'scoreboard players test @s obj 1',
-            'scoreboard teams list',
-            'scoreboard teams list red',
-        ], '这些子命令此前整个缺失');
-    });
-
-    it('scoreboard 的可选参数不误报', () => {
-        assertClean([
-            'scoreboard objectives setdisplay sidebar',
-            'scoreboard objectives setdisplay sidebar obj',
-            'scoreboard players reset @s',
-            'scoreboard players reset @s obj',
-        ], '可选参数被当成必填');
-    });
-
-    it('scoreboard teams option 的六个选项都不误报', () => {
-        assertClean([
-            'scoreboard teams option red color dark_red',
-            'scoreboard teams option red friendlyfire false',
-            'scoreboard teams option red seeFriendlyInvisibles true',
-            'scoreboard teams option red nametagVisibility hideForOtherTeams',
-            'scoreboard teams option red deathMessageVisibility never',
-            'scoreboard teams option red collisionRule pushOwnTeam',
-        ], 'option 选项');
-    });
+    // scoreboard 的 [dataTag] / [display name...] / 变长 [entities...] /
+    // 新增子命令 / 可选参数 / teams option 六选项这些「不误报」用例，
+    // 已全部并入 dsl/wiki-syntax.test.ts 的 122 项核验表 ——
+    // 那张表对每条命令断言同样的事，且强制覆盖全部 41 条命令。
+    // 这里只保留**核验表覆盖不到**的三类：
+    //   1. 半截输入（wiki 只列合法完整写法）
+    //   2. 断言"应该报错"（核验表只断言"不报错"）
+    //   3. 已移除命令（/detect 不该被认识）
 
     it('/detect 不再是合法根命令（Java 1.12.2 没有这个命令）', () => {
         const d = run(['detect ~ ~ ~ stone 0 say hi'], { commands: all });

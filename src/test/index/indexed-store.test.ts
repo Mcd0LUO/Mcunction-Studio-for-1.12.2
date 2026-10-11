@@ -97,7 +97,7 @@ describe('IndexedStore P0', () => {
         assert.deepStrictEqual(store.getLineIndex().getLineEntries(u1.toString(), 1), []);
     });
 
-    it('clearFile with wrong resName key still needs uri — clearFile(res, uri) works', () => {
+    it('clearFile 按 uri 清理，不依赖 resName', () => {
         const store = new IndexedStore();
         store.addTag(res1, 't1', 0, u1);
         store.clearFile(res1, u1);

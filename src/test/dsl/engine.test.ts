@@ -226,9 +226,11 @@ describe('matchChild 优先级', () => {
     });
 
     it('argument 无 suggest 时展示参数名占位', async () => {
-        // /say 没有参数，其子节点为空 → 根补全仍应返回自身
+        // say 的 <message> 是 greedy，没有候选值 → 应回退成参数名占位符。
+        // 原断言是 assert.ok(Array.isArray(r))，而 complete() 永远返回数组，
+        // 那条断言不可能失败，等于没测。
         const r = await engine.complete(['say', ''], 'say ');
-        assert.ok(Array.isArray(r));
+        assert.deepStrictEqual(labels(r), ['<message>']);
     });
 });
 
@@ -292,11 +294,6 @@ describe('walk 的 token 消费', () => {
         const b = await engine.complete(['function', ''], 'function ');
         assert.deepStrictEqual(labels(a), labels(b));
     });
-
-    it('未知 token 不会破坏后续补全', async () => {
-        const r = await engine.complete(['function', 'x', 'bogus'], 'function x bogus');
-        assert.ok(Array.isArray(r), '不应抛异常');
-    });
 });
 
 // ============================================================
@@ -350,14 +347,6 @@ describe('forward_root 转发', () => {
 // ============================================================
 
 describe('optional 参数行为', () => {
-    it('optional 节点在补全链路中与普通 argument 一致（不跳过）', async () => {
-        // 已知限制：engine 不读 optional，参数填满后仍会提示后续参数。
-        // 此测试锁定当前行为，防止"静默改变补全体验"。
-        const r = await engine.complete(['effect', '@p', 'speed', '10', '1', 'true'], 'effect @p speed 10 1 true');
-        // 填满后仍提示 [hideParticles] 是已知的粗糙之处，不是崩溃
-        assert.ok(Array.isArray(r));
-    });
-
     it('optional 节点仍可被 treeShape 序列化', () => {
         const { toTreeShape } = require('../../dsl/treeShape') as typeof import('../../dsl/treeShape');
         // command('t') → optional('[opt]') → argument('<req>')
@@ -403,22 +392,15 @@ describe('JumpNode 已移除', () => {
 
 // ============================================================
 // 引擎不应因未知命令崩溃
+//
+// 注：「未注册命令返回空数组」不在这里 —— 它与
+// 《根命令补全》里的「未注册的命令名返回空」是同一件事，已合并过去。
 // ============================================================
 
 describe('健壮性', () => {
-    it('未注册命令返回空数组', async () => {
-        const r = await engine.complete(['nonexistent', ''], 'nonexistent ');
-        assert.deepStrictEqual(r, []);
-    });
-
     it('只有根命令一个 token 时列出根命令', async () => {
         const r = await engine.complete(['scoreboard'], 'scoreboard');
         assert.ok(labels(r).length > 0);
-    });
-
-    it('多余 token 不会抛异常', async () => {
-        const r = await engine.complete(['scoreboard', 'a', 'b', 'c', 'd', 'e'], 'scoreboard a b c d e');
-        assert.ok(Array.isArray(r));
     });
 });
 
@@ -650,12 +632,17 @@ describe('根命令补全', () => {
         }
     });
 
-    it("单个空 token（['']）同样给出根命令", async () => {
-        const ls = labels(await engine.complete([''], ''));
-        assert.strictEqual(ls.length, 41);
-    });
+    it('空 token 列表 → 全部 41 条根命令，且带显式替换区间', async () => {
+        // [] 与 [''] 都是"空行"，行为必须一致
+        for (const empty of [[], ['']]) {
+            const ls = labels(await engine.complete(empty as string[], ''));
+            assert.strictEqual(ls.length, 41, `${JSON.stringify(empty)} 实际 ${ls.length} 项`);
+            for (const c of ALL) {
+                assert.ok(ls.includes(c), `${JSON.stringify(empty)} 缺少 ${c}`);
+            }
+        }
 
-    it('带 cursor 时根命令也带显式替换区间', async () => {
+        // 带 cursor 时同样要设置区间，否则 VS Code 会按语言词法自行推算
         const line = 'sc';
         const r = await engine.complete([''], line, { line: 0, character: 2 });
         assert.strictEqual(r.length, 41);

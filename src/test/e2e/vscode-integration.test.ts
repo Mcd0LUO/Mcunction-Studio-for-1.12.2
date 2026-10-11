@@ -279,18 +279,28 @@ suite('Mcfunction Studio — 真实 VS Code 集成', () => {
         const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(funcFile));
         const editor = await vscode.window.showTextDocument(doc);
         const lastLine = doc.lineCount - 1;
-        // 写一个前缀再触发补全
-        await editor.edit(b => b.insert(new vscode.Position(lastLine, 0), 'sc'));
-        const list = await vscode.commands.executeCommand<vscode.CompletionList>(
-            'vscode.executeCompletionItemProvider',
-            doc.uri,
-            new vscode.Position(lastLine, 2),
-        );
-        const labels = list.items.map(i =>
-            typeof i.label === 'string' ? i.label : i.label.label
-        );
-        assert.ok(labels.includes('scoreboard'), `前缀 sc 应给出 scoreboard，实际 ${JSON.stringify(labels.slice(0, 10))}`);
-        assert.ok(!labels.includes('kill'), '前缀 sc 不该给出 kill');
+        const original = doc.lineAt(lastLine).text;
+        // 写一个前缀再触发补全。
+        // ⚠️ 必须还原 —— 前面「命令补全覆盖已注册的内置命令」依赖这一行是空行，
+        //    留下 'sc' 会让两条测试的执行顺序变成隐式依赖。
+        try {
+            await editor.edit(b => b.replace(
+                new vscode.Range(lastLine, 0, lastLine, original.length), 'sc'));
+            const list = await vscode.commands.executeCommand<vscode.CompletionList>(
+                'vscode.executeCompletionItemProvider',
+                doc.uri,
+                new vscode.Position(lastLine, 2),
+            );
+            const labels = list.items.map(i =>
+                typeof i.label === 'string' ? i.label : i.label.label
+            );
+            assert.ok(labels.includes('scoreboard'), `前缀 sc 应给出 scoreboard，实际 ${JSON.stringify(labels.slice(0, 10))}`);
+            assert.ok(!labels.includes('kill'), '前缀 sc 不该给出 kill');
+        } finally {
+            await editor.edit(b => b.replace(
+                new vscode.Range(lastLine, 0, lastLine, doc.lineAt(lastLine).text.length), original));
+            assert.strictEqual(doc.lineAt(lastLine).text, original, '测试必须还原文件内容');
+        }
     });
 
     test('扩展注册的命令存在于命令面板', async () => {
