@@ -535,6 +535,80 @@ suite('Mcfunction Studio — 真实 VS Code 集成', () => {
     });
 
     // ================================================================
+    // 重命名：逐符号类型核对
+    //
+    // 六种符号里目前只有四种真的能重命名（见下方断言）。
+    // function 被显式拒绝；advancement 返回空编辑 —— 原因见测试内的注释。
+    // ================================================================
+
+    test('重命名覆盖 scoreboard / team / tag / fake_player', async function () {
+        this.timeout(60000);
+        const dataDir = path.join(PACK_ROOT, 'data');
+        const probeFile = path.join(dataDir, 'functions/ns/rename-kinds.mcfunction');
+        fs.writeFileSync(probeFile, [
+            'scoreboard objectives add prob_obj dummy',       // 0 定义
+            'scoreboard players set @s prob_obj 1',           // 1 引用
+            'kill @a[score_prob_obj=1]',                      // 2 选择器内引用
+            'scoreboard teams add prob_team',                 // 3 定义
+            'scoreboard teams join prob_team @s',             // 4 引用
+            'scoreboard players tag @s add prob_tag',         // 5 定义
+            'kill @a[tag=prob_tag]',                          // 6 选择器内引用
+            'scoreboard players set #probfp prob_obj 1',      // 7 假玩家定义
+            '',
+        ].join('\n'));
+        const uri = vscode.Uri.file(probeFile);
+        const doc = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(doc);
+
+        // 夹具是激活之后写的，索引里还没有 —— 先让扩展重载一次
+        await vscode.commands.executeCommand('mcf-studio.reloadWorkspace');
+        await new Promise(r => setTimeout(r, 2500));
+
+        const cases: [number, string, string][] = [
+            [0, 'prob_obj', 'scoreboard'],
+            [3, 'prob_team', 'team'],
+            [5, 'prob_tag', 'tag'],
+            [7, '#probfp', 'fake_player'],
+        ];
+        for (const [line, value, kind] of cases) {
+            const text = doc.lineAt(line).text;
+            const col = text.indexOf(value) + Math.min(2, value.length - 1);
+            const edit = await vscode.commands.executeCommand<vscode.WorkspaceEdit>(
+                'vscode.executeDocumentRenameProvider', uri,
+                new vscode.Position(line, col), 'zzz_new_name');
+            assert.ok(edit, `${kind} 应允许重命名`);
+            // WorkspaceEdit.size 是**受影响文件数**，不是编辑条数
+            assert.strictEqual(edit!.size, 1, `${kind} 应产生 1 个文件的编辑`);
+        }
+    });
+
+    test('function 重命名被拒绝（改名要连文件一起改）', async function () {
+        this.timeout(30000);
+        const uri = vscode.Uri.file(path.join(PACK_ROOT, 'data/functions/ns/good.mcfunction'));
+        const doc = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(doc);
+        // 第 12 行是 'function NS:good'
+        let line = -1;
+        for (let i = 0; i < doc.lineCount; i++) {
+            if (doc.lineAt(i).text.startsWith('function ')) { line = i; break; }
+        }
+        assert.ok(line >= 0, '夹具应含 function 行');
+        const text = doc.lineAt(line).text;
+        const col = text.indexOf('NS:good') + 2;
+
+        let refused = false;
+        try {
+            const edit = await vscode.commands.executeCommand<vscode.WorkspaceEdit>(
+                'vscode.executeDocumentRenameProvider', uri,
+                new vscode.Position(line, col), 'ns:other');
+            refused = !edit || edit.size === 0;
+        } catch {
+            refused = true;   // provider 返回 null → 命令报 "No result."
+        }
+        assert.ok(refused, 'function 重命名目前应被拒绝');
+    });
+
+    // ================================================================
     // 补全替换区间
     //
     // 背景：VS Code 在补全项没有 range 时按语言词法推算替换范围，

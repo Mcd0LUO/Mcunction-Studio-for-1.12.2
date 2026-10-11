@@ -26,9 +26,16 @@ const executablePath = localVscodePath();
  *
  * 必须是**固定**路径：测试用例要断言具体文件的内容，
  * 不能用 mkdtemp 每次生成随机目录（否则测试无从知道打开的是哪个文件）。
+ *
+ * ⚠️ 每次启动前**整目录清空**。这个函数在 VS Code 启动之前执行，
+ *    所以删除是安全的。不清的话上一轮遗留的夹具会留在索引里：
+ *    实测过一次——上一轮探针写的文件里也有 `prob_obj`，
+ *    于是本轮重命名 `prob_obj` 命中了 **2 个文件**而非 1 个，
+ *    断言 `edit.size === 1` 失败，而失败原因跟被测代码毫无关系。
  */
 function e2ePackDir() {
 	const p = path.join(rootDir(), '.vscode-test', 'e2e-pack');
+	fs.rmSync(p, { recursive: true, force: true });
 	fs.mkdirSync(path.join(p, 'data', 'functions', 'ns'), { recursive: true });
 	fs.writeFileSync(path.join(p, 'data', 'functions', 'ns', 'a.mcfunction'), [
 		'scoreboard objectives add kills dummy',
