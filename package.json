@@ -222,6 +222,7 @@
     "lint": "eslint src",
     "test": "vscode-test",
     "test:e2e": "npm run compile && vscode-test",
+    "test:e2e:silent": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-e2e-silent.ps1",
     "test:baseline": "npm run compile && node scripts/run-baseline-tests.mjs",
     "test:index": "npm run compile && node scripts/run-index-tests.mjs",
     "test:engine": "npm run compile && node scripts/run-engine-tests.mjs",
