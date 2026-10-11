@@ -25,9 +25,11 @@ import { IndexEntry } from './types';
  * 不参与校验 → 幽灵索引跨会话永久存活并被反复写回磁盘，缓存体积单调增长。
  * v4 起，加载与写盘两侧都会先剔除越界文件，缓存内不再可能存在幽灵条目。
  *
- * 格式未变，但语义已变：旧缓存必须失效重建，否则其中的幽灵条目会被当成有效数据。
+ * v5 起加入 DataType.Advancement（进度引用进索引）。
+ * 旧缓存里没有进度条目，加载后 References / Rename 对进度会静默失效，
+ * 因此必须整体失效重建 —— 格式未变，是**语义**变了。
  */
-export const INDEX_CACHE_VERSION = 4;
+export const INDEX_CACHE_VERSION = 5;
 /** 主缓存：gzip 压缩的 JSON */
 export const INDEX_CACHE_REL = ['index-cache.json.gz'] as const;
 /** 兼容读取旧明文 JSON（写入时会清理） */

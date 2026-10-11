@@ -85,6 +85,12 @@ export function registerHandlers(store: IndexedStore, handlers: Map<string, Line
                 case 'fake_player':
                     store.addFakePlayer(resName, occ.value, line, uri);
                     break;
+                case 'advancement':
+                    // 进度与 function 一样只有"引用"（定义是磁盘上的 JSON 文件）。
+                    // 此前这个 case 缺失 → 落到 default 被静默丢弃，
+                    // 于是 References / Rename 对进度全都拿不到数据。
+                    store.addAdvancementRef(resName, occ.value, line, uri);
+                    break;
                 default:
                     break;
             }
@@ -96,6 +102,9 @@ export function registerHandlers(store: IndexedStore, handlers: Map<string, Line
         'kill', 'clear', 'effect', 'enchant', 'gamemode', 'give', 'tp', 'teleport',
         'spawnpoint', 'title', 'playsound', 'stopsound', 'testfor', 'tellraw',
         'execute', 'testforblock', 'testforblocks', 'stats', 'summon', 'replaceitem',
+        // advancement 不带选择器，但它含**进度资源名**符号；
+        // 复用同一个抽取器，靠 kind 分派即可
+        'advancement',
     ]) {
         handlers.set(cmd, selectorHandler);
     }

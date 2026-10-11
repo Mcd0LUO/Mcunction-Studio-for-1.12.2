@@ -176,8 +176,12 @@ describe('IndexCache path compression helpers', () => {
             lineIndex: [],
         }, 'abc');
         assert.strictEqual(p.version, INDEX_CACHE_VERSION);
-        // v4 起文件全集语义修正（幽灵索引不再可能进入缓存），旧缓存必须失效重建
-        assert.strictEqual(INDEX_CACHE_VERSION, 4);
+        // 这条断言是**有意的绊线**：缓存格式/语义一变就必须显式改这个数字，
+        // 避免有人改了索引结构却忘了让旧缓存失效。
+        //   v4 起文件全集语义修正（幽灵索引不再可能进入缓存）
+        //   v5 起加入 DataType.Advancement —— 旧缓存没有进度条目，
+        //      加载后 References / Rename 对进度会静默失效
+        assert.strictEqual(INDEX_CACHE_VERSION, 5);
         assert.strictEqual(p.fingerprint, 'abc');
     });
 

@@ -2,6 +2,54 @@
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
 
+# [1.6.7]
+
+修复重命名功能的残缺：**六种符号里有两种不能用**，另有一处让 `execute` 内层引用被漏改。
+
+### 修复：进度引用从未进入索引
+- `IndexedStore` 没有 `addAdvancementRef`，`MinecraftExtractor` 的 switch 也
+  没有 `advancement` 分支（落到 `default: break` 被静默丢弃）。
+  后果不止重命名 —— **Shift+F12 查找引用对进度一直返回空**。
+  提取器本身没问题（`extractor.ts` 会产出 advancement 符号，
+  `resource/undefined-advancement` 诊断也正常），断的是"提取结果 → 索引"这一环。
+- 新增 `DataType.Advancement` 与 `addAdvancementRef`，`advancement` 命令挂上抽取器。
+- `INDEX_CACHE_VERSION` **4 → 5**：旧缓存没有进度条目，
+  加载后 References / Rename 对进度会静默失效，必须整体重建。
+
+### 新增：function / advancement 重命名**连文件一起改**
+- 这两类符号的名字**就是文件路径**（`data/functions/ns/a.mcfunction` → `ns:a`），
+  没有"定义行"可改。此前 `function` 被直接拒绝（半吊子改引用会把数据包改坏），
+  `advancement` 则既不拒绝也不工作。
+- 现在两件事一起做：引用行里的旧资源名替换成新资源名 +
+  `WorkspaceEdit.renameFile` 把文件挪到新路径。
+- 新名支持两种写法：`ns:new`（完整资源名，可换命名空间/子目录）与
+  `new`（只给末段，沿用原命名空间）。
+- 安全约束：源文件必须存在；**目标已存在则拒绝**（宁可不动也不覆盖别人的文件）；
+  拒绝 `..` 路径穿越；影响文件数超过 200 则拒绝。
+
+### 修复：`execute` 内层命令的符号抽不出来
+- `extractSymbols` 的所有分支都是 `t[0] === '<命令>'`，
+  而 `execute @s ~ ~ ~ function ns:x` 的 `t[0]` 是 `execute` ——
+  内层命令的符号**一个都抽不出来**。
+- 索引侧不受影响（DataLoader 按"活跃命令"分派，拿到的是内层命令），
+  但 References / Rename 会**用本函数重新抽取原行来算列区间**，抽不到就整条丢弃。
+  表现：重命名 `function ns:a` 时，写在行首的引用改了，
+  `execute … function ns:a` 里那处漏掉，改完数据包就是坏的。
+- 现在递归抽取内层命令并回补列偏移，支持 `detect` 形式与嵌套 `execute`。
+
+### 修复：e2e 夹具跨运行残留
+- `.vscode-test.mjs` 的 `e2ePackDir()` 只 mkdir + 覆写，**从不清空目录**。
+  上一轮遗留的文件会留在索引里：实测上一轮探针写的文件里也有 `prob_obj`，
+  本轮重命名因此命中 **2 个文件**而非 1 个，断言失败而原因与被测代码无关。
+- 该函数在 VS Code 启动之前执行，删除是安全的 —— 已加整目录清理。
+
+### 测试
+- e2e 21 项（原 17）：新增"重命名连文件一起改并更新全部引用"、
+  "advancement 引用进索引：查找引用与重命名都可用"、"拒绝覆盖已存在的目标文件"、
+  "重命名覆盖 scoreboard / team / tag / fake_player"。
+- 符号层新增 7 项：`execute` 内层 function / scoreboard / 选择器引用 / `detect` 形式 /
+  嵌套 execute / 半截 execute / `say` 的角色隔离。
+
 # [1.6.6]
 
 **逐命令对照 wiki 原文重查了全部 41 条内置命令**，修正 15 条命令的语法，

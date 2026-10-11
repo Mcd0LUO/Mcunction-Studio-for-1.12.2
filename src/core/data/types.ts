@@ -25,7 +25,15 @@ export enum DataType {
     Function = 1,
     Tag = 2,
     Team = 3,
-    FakePlayer = 4
+    FakePlayer = 4,
+    /**
+     * 进度资源名。
+     *
+     * ⚠️ 5 是后加的。旧缓存里没有这个值，因此加载后进度的引用会缺失
+     *    （References / Rename 对进度失效）—— INDEX_CACHE_VERSION 已随之 +1，
+     *    旧缓存会被整体丢弃并重建。
+     */
+    Advancement = 5,
 }
 
 /** docCache 中每行的索引条目 */

@@ -79,6 +79,33 @@ export function extractSymbols(lineText: string): SymbolOccurrenceWithHash[] {
     };
 
     // ---------------------------------------------------------
+    // execute 的内层命令 —— 递归抽取，列偏移回补
+    //
+    // ⚠️ 此前完全没处理：下面的判断全是 `t[0] === '<命令>'`，
+    //    而 `execute @s ~ ~ ~ function ns:x` 的 t[0] 是 execute，
+    //    于是内层命令的符号**一个都抽不出来**。后果：
+    //      · `execute … scoreboard players set @s obj 1` 的记分板引用抽不到
+    //      · `execute … function ns:x` 的函数引用抽不到
+    //    索引侧不受影响（DataLoader 按"活跃命令"分派，会拿到内层命令），
+    //    但 References / Rename 会**用本函数重新抽取原行来算列区间**，
+    //    抽不到就整条丢弃 —— 表现是"改了两处、漏了 execute 里那处"。
+    // ---------------------------------------------------------
+    if (t[0] === 'execute') {
+        const innerIdx = executeInnerStart(t);
+        if (innerIdx > 0 && innerIdx < tokens.length) {
+            const base = tokens[innerIdx].start;
+            for (const o of extractSymbols(lineText.slice(base))) {
+                out.push({
+                    ...o,
+                    start: o.start + base,
+                    end: o.end + base,
+                    hashStart: o.hashStart >= 0 ? o.hashStart + base : o.hashStart,
+                });
+            }
+        }
+    }
+
+    // ---------------------------------------------------------
     // scoreboard
     // ---------------------------------------------------------
     if (t[0] === 'scoreboard') {
@@ -240,8 +267,25 @@ export function extractSymbols(lineText: string): SymbolOccurrenceWithHash[] {
  *
  * 各位置与 dsl/commands/*.ts 中 suggestSelectors 的挂载点保持一致。
  */
-function selectorPositions(t: readonly string[]): number[] {
-    const out: number[] = [];
+/**
+ * `execute` 内层命令的 token 下标。
+ *
+ * wiki（Commands/execute，2018-05 修订）Java Edition 两种形式：
+ *   execute <entity> <x> <y> <z> <command …>
+ *   execute <entity> <x> <y> <z> detect <x2> <y2> <z2> <block> <dataValue> <command …>
+ *
+ * 前一种内层从 5 开始；后一种多 6 个 token（detect + 三个坐标 + 方块 + 数据值），
+ * 内层从 11 开始。取不到时返回 -1，调用方跳过。
+ */
+function executeInnerStart(t: readonly string[]): number {
+    if (t.length < 5) { return -1; }
+    if (t[5] === 'detect') {
+        return t.length > 11 ? 11 : -1;
+    }
+    return t.length > 5 ? 5 : -1;
+}
+
+function selectorPositions(t: readonly string[]): number[] {    const out: number[] = [];
     const cmd = t[0];
 
     // <target> 在第 3 位的实体命令（t[0] 为命令名，t[1] 为子命令的情况另算）

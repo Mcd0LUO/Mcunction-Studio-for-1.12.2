@@ -22,6 +22,7 @@ const T = {
     Tag: 'tag',
     Function: 'function',
     FakePlayer: 'fake_player',
+    Advancement: 'advancement',
 } as const;
 
 /** "resName:line" → [resName, line]；resName 内含冒号（命名空间）时按最后一个冒号切分 */
@@ -194,6 +195,26 @@ export class IndexedStore {
         defs.set(resName, lines);
         this.index.appendEntries(this.f(uri), line, [{ type: T.Function, value: funcName }]);
         this._indexLine(resName, line, DataType.Function, funcName);
+    }
+
+    /**
+     * 进度的**引用**（`advancement grant|revoke ... <res>`）。
+     *
+     * 进度的"定义"是磁盘上的 JSON 文件，不在任何 mcfunction 行里，
+     * 所以这里只有引用 —— 与 function 同理。
+     *
+     * ⚠️ 此前**完全没有这个方法**，`MinecraftExtractor` 的 switch 也没收 advancement，
+     *    于是进度引用从不进 LineIndex，后果是：
+     *      · Shift+F12 查找引用对进度返回空
+     *      · F2 重命名对进度返回**空编辑**（既不拒绝也不工作）
+     *    提取器本身一直是好的（extractor.ts 会产出 advancement 符号），
+     *    断的是"提取结果 → 索引"这一环。
+     */
+    addAdvancementRef(resName: string, advName: string, line: number, uri: vscode.Uri): void {
+        if (!advName) { return; }
+        this.rememberFile(resName, uri);
+        this.index.appendEntries(this.f(uri), line, [{ type: T.Advancement, value: advName }]);
+        this._indexLine(resName, line, DataType.Advancement, advName);
     }
 
     // ================================================================

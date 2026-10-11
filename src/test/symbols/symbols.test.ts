@@ -585,3 +585,73 @@ describe('symbols/valueSpanAt', () => {
         assert.strictEqual(spanText('scoreboard players set #fp obj 1', 24), '#fp');
     });
 });
+
+// ============================================================
+// execute 内层命令的符号
+//
+// 回归：extractSymbols 的各个分支全是 `t[0] === '<命令>'`，
+// 而 `execute @s ~ ~ ~ function ns:x` 的 t[0] 是 execute ——
+// 内层命令的符号**一个都抽不出来**。
+//
+// 索引侧不受影响（DataLoader 按"活跃命令"分派，拿到的是内层命令），
+// 但 References / Rename 会**用本函数重新抽取原行来算列区间**，
+// 抽不到就整条丢弃。表现：重命名 `function ns:a` 时，
+// 直接写在行首的引用改了，`execute … function ns:a` 里那处漏掉。
+// ============================================================
+
+describe('symbols/execute 内层命令', () => {
+    const kindsOf = (line: string) =>
+        extractSymbols(line).map(o => `${o.kind}:${o.value}`).sort();
+
+    it('内层 function 被抽出，且列区间指向原行里的真实位置', () => {
+        const line = 'execute @s ~ ~ ~ function ns:x';
+        const hits = extractSymbols(line).filter(o => o.kind === 'function');
+        assert.strictEqual(hits.length, 1, `实际 ${JSON.stringify(kindsOf(line))}`);
+        assert.strictEqual(hits[0].value, 'ns:x');
+        // 列区间必须落在原行里，而不是相对内层切片的偏移
+        assert.strictEqual(line.slice(hits[0].start, hits[0].end), 'ns:x');
+    });
+
+    it('内层 scoreboard 引用被抽出', () => {
+        const line = 'execute @s ~ ~ ~ scoreboard players set @s obj 1';
+        const hits = extractSymbols(line).filter(o => o.kind === 'scoreboard');
+        assert.strictEqual(hits.length, 1, `实际 ${JSON.stringify(kindsOf(line))}`);
+        assert.strictEqual(hits[0].value, 'obj');
+        assert.strictEqual(line.slice(hits[0].start, hits[0].end), 'obj');
+    });
+
+    it('detect 形式同样能定位到内层命令', () => {
+        const line = 'execute @s ~ ~ ~ detect ~ ~ ~ stone 0 function ns:x';
+        const hits = extractSymbols(line).filter(o => o.kind === 'function');
+        assert.strictEqual(hits.length, 1, `实际 ${JSON.stringify(kindsOf(line))}`);
+        assert.strictEqual(line.slice(hits[0].start, hits[0].end), 'ns:x');
+    });
+
+    it('内层选择器里的引用也被抽出', () => {
+        const line = 'execute @s ~ ~ ~ kill @a[score_obj=1]';
+        const hits = extractSymbols(line).filter(o => o.kind === 'scoreboard');
+        assert.strictEqual(hits.length, 1, `实际 ${JSON.stringify(kindsOf(line))}`);
+        assert.strictEqual(hits[0].value, 'obj');
+        assert.strictEqual(line.slice(hits[0].start, hits[0].end), 'obj');
+    });
+
+    it('嵌套 execute 逐层下钻', () => {
+        const line = 'execute @s ~ ~ ~ execute @s ~ ~ ~ function ns:deep';
+        const hits = extractSymbols(line).filter(o => o.kind === 'function');
+        assert.strictEqual(hits.length, 1, `实际 ${JSON.stringify(kindsOf(line))}`);
+        assert.strictEqual(line.slice(hits[0].start, hits[0].end), 'ns:deep');
+    });
+
+    it('execute 尚未写内层命令时不产出任何符号', () => {
+        assert.deepStrictEqual(extractSymbols('execute @s ~ ~ ~'), []);
+        assert.deepStrictEqual(extractSymbols('execute @s ~ ~ ~ detect ~ ~ ~ stone 0'), []);
+    });
+
+    it('say 是贪婪文本参数，里面的 function 不被当成引用', () => {
+        // 角色隔离：内层递归不能把 say 的消息正文也当命令解析
+        assert.deepStrictEqual(extractSymbols('say function ns:x'), []);
+        const hits = extractSymbols('execute @s ~ ~ ~ say function ns:x')
+            .filter(o => o.kind === 'function');
+        assert.deepStrictEqual(hits, [], 'say 之后的文本不该产出 function 符号');
+    });
+});

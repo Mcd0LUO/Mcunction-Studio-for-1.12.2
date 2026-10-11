@@ -582,30 +582,123 @@ suite('Mcfunction Studio — 真实 VS Code 集成', () => {
         }
     });
 
-    test('function 重命名被拒绝（改名要连文件一起改）', async function () {
-        this.timeout(30000);
-        const uri = vscode.Uri.file(path.join(PACK_ROOT, 'data/functions/ns/good.mcfunction'));
+    test('function 重命名连文件一起改，并更新全部引用', async function () {
+        this.timeout(60000);
+        const dataDir = path.join(PACK_ROOT, 'data');
+        const fnFile = path.join(dataDir, 'functions/ns/renamable.mcfunction');
+        const callerFile = path.join(dataDir, 'functions/ns/caller.mcfunction');
+        fs.writeFileSync(fnFile, ['say I am renamable', ''].join('\n'));
+        fs.writeFileSync(callerFile, [
+            'function ns:renamable',
+            'function ns:renamable',
+            'execute @s ~ ~ ~ function ns:renamable',
+            '',
+        ].join('\n'));
+
+        const uri = vscode.Uri.file(callerFile);
         const doc = await vscode.workspace.openTextDocument(uri);
         await vscode.window.showTextDocument(doc);
-        // 第 12 行是 'function NS:good'
-        let line = -1;
-        for (let i = 0; i < doc.lineCount; i++) {
-            if (doc.lineAt(i).text.startsWith('function ')) { line = i; break; }
-        }
-        assert.ok(line >= 0, '夹具应含 function 行');
-        const text = doc.lineAt(line).text;
-        const col = text.indexOf('NS:good') + 2;
 
+        // 夹具是激活之后写的，索引里还没有 —— 先让扩展重载一次
+        await vscode.commands.executeCommand('mcf-studio.reloadWorkspace');
+        await new Promise(r => setTimeout(r, 2500));
+
+        const line = doc.lineAt(0).text;
+        const col = line.indexOf('ns:renamable') + 3;
+        const edit = await vscode.commands.executeCommand<vscode.WorkspaceEdit>(
+            'vscode.executeDocumentRenameProvider', uri,
+            new vscode.Position(0, col), 'ns:renamed');
+        assert.ok(edit, 'function 重命名应被允许');
+        assert.ok(await vscode.workspace.applyEdit(edit), 'WorkspaceEdit 应用失败');
+
+        // 1) 文件本身被改名
+        const renamedFile = path.join(dataDir, 'functions/ns/renamed.mcfunction');
+        assert.ok(!fs.existsSync(fnFile), '旧文件应已被改名');
+        assert.ok(fs.existsSync(renamedFile), `新文件应存在：${renamedFile}`);
+
+        // 2) 全部引用被更新（含 execute 内层）
+        const after = await vscode.workspace.openTextDocument(uri);
+        const text = after.getText();
+        assert.ok(!text.includes('ns:renamable'), `旧名仍有残留：\n${text}`);
+        assert.strictEqual(
+            (text.match(/function ns:renamed/g) ?? []).length, 3,
+            `三处引用都应改名：\n${text}`,
+        );
+    });
+
+    test('advancement 引用进索引：查找引用与重命名都可用', async function () {
+        this.timeout(60000);
+        const dataDir = path.join(PACK_ROOT, 'data');
+        const advFile = path.join(dataDir, 'advancements/ns/probe.json');
+        const refFile2 = path.join(dataDir, 'functions/ns/adv-ref.mcfunction');
+        fs.mkdirSync(path.dirname(advFile), { recursive: true });
+        fs.writeFileSync(advFile, JSON.stringify({ criteria: { x: { trigger: 'minecraft:impossible' } } }));
+        fs.writeFileSync(refFile2, [
+            'advancement grant @s only ns:probe',
+            'advancement revoke @s from ns:probe',
+            '',
+        ].join('\n'));
+
+        const uri = vscode.Uri.file(refFile2);
+        const doc = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(doc);
+        await vscode.commands.executeCommand('mcf-studio.reloadWorkspace');
+        await new Promise(r => setTimeout(r, 2500));
+
+        // 1) 查找引用（Shift+F12）应能找到两处
+        const line0 = doc.lineAt(0).text;
+        const col = line0.indexOf('ns:probe') + 3;
+        const refs = await vscode.commands.executeCommand<vscode.Location[]>(
+            'vscode.executeReferenceProvider', uri, new vscode.Position(0, col));
+        assert.ok(refs && refs.length >= 2,
+            `进度引用应进索引，实际找到 ${refs ? refs.length : 0} 处`);
+
+        // 2) 重命名应连 JSON 文件一起改
+        const edit = await vscode.commands.executeCommand<vscode.WorkspaceEdit>(
+            'vscode.executeDocumentRenameProvider', uri,
+            new vscode.Position(0, col), 'ns:probe2');
+        assert.ok(edit, 'advancement 重命名应被允许（此前返回空编辑）');
+        assert.ok(await vscode.workspace.applyEdit(edit), 'WorkspaceEdit 应用失败');
+
+        assert.ok(!fs.existsSync(advFile), '旧进度文件应已被改名');
+        assert.ok(fs.existsSync(path.join(dataDir, 'advancements/ns/probe2.json')), '新进度文件应存在');
+
+        const after = await vscode.workspace.openTextDocument(uri);
+        assert.ok(!after.getText().includes('ns:probe') || after.getText().includes('ns:probe2'),
+            `引用应已更新：\n${after.getText()}`);
+        assert.strictEqual((after.getText().match(/ns:probe2/g) ?? []).length, 2,
+            `两处引用都应改名：\n${after.getText()}`);
+    });
+
+    test('重命名拒绝覆盖已存在的目标文件', async function () {
+        this.timeout(60000);
+        const dataDir = path.join(PACK_ROOT, 'data');
+        const a = path.join(dataDir, 'functions/ns/taken-a.mcfunction');
+        const b = path.join(dataDir, 'functions/ns/taken-b.mcfunction');
+        fs.writeFileSync(a, 'say a\n');
+        fs.writeFileSync(b, 'say b\n');
+        const caller = path.join(dataDir, 'functions/ns/taken-caller.mcfunction');
+        fs.writeFileSync(caller, 'function ns:taken-a\n');
+
+        const uri = vscode.Uri.file(caller);
+        const doc = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(doc);
+        await vscode.commands.executeCommand('mcf-studio.reloadWorkspace');
+        await new Promise(r => setTimeout(r, 2500));
+
+        const col = doc.lineAt(0).text.indexOf('ns:taken-a') + 3;
         let refused = false;
         try {
             const edit = await vscode.commands.executeCommand<vscode.WorkspaceEdit>(
                 'vscode.executeDocumentRenameProvider', uri,
-                new vscode.Position(line, col), 'ns:other');
+                new vscode.Position(0, col), 'ns:taken-b');
             refused = !edit || edit.size === 0;
         } catch {
-            refused = true;   // provider 返回 null → 命令报 "No result."
+            refused = true;
         }
-        assert.ok(refused, 'function 重命名目前应被拒绝');
+        assert.ok(refused, '目标文件已存在时必须拒绝，而不是覆盖');
+        // 两个文件都还在
+        assert.ok(fs.existsSync(a) && fs.existsSync(b), '被拒绝的重命名不应动任何文件');
     });
 
     // ================================================================
