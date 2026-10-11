@@ -10,17 +10,13 @@ import { CompletionEngine } from '../../dsl/engine';
 import { rootDir } from '../paths';
 import { ValidationContext } from './types';
 import { EngineValidator } from './rules/syntax';
+import { hasResName } from '../resName';
 
 /** IndexedStore 的最小只读子集（避免把整个类拖进诊断层类型） */
 interface IndexedStoreLike {
     getScoreboardDefPoints(name: string): string[];
     getTeamDefPoints(name: string): string[];
     getScoreboardCriteria(name: string): string | undefined;
-}
-
-/** 判断资源名是否存在于函数/进度索引中 */
-function hasResName(list: readonly string[], name: string): boolean {
-    return list.indexOf(name) >= 0;
 }
 
 /**

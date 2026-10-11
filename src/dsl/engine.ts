@@ -344,7 +344,40 @@ export class CompletionEngine {
                 ...this.withRanges(own, cursor, lineText, 'value'),
                 ...this.withRanges(sub, cursor, lineText, 'insert'),
             ];
+
+            // 参数子节点的候选也要给出 —— 例如 particle 的 `[count]` 之下
+            // 并列着 normal / force 与可省略 mode 的 [player]，
+            // 只收字面量的话 `particle … 5 ` 就看不到 @a。
+            for (const child of node.children) {
+                if (child.kind !== 'argument') { continue; }
+                const c2 = child as ArgumentNode;
+                if (!c2.suggest) { continue; }
+                const r2 = c2.suggest(this.mkCtx(commands, lineText));
+                const items2 = r2 instanceof Promise ? await r2 : r2;
+                merged.push(...this.withRanges([...items2], cursor, lineText, 'insert'));
+            }
+
             if (merged.length > 0) { return merged; }
+
+            // 自身与字面子节点都没候选时，**向参数子节点下钻**。
+            // 否则 `particle … <speed> ` 只会返回占位符 "<speed>"，
+            // 而该位置真正要填的是下一级的 [count] / mode / [player]。
+            const argChild = node.children.find(c => c.kind === 'argument') as ArgumentNode | undefined;
+            if (argChild) {
+                const inner = await this.suggest(
+                    argChild, ancestors.concat(node), commands, lineText,
+                    false, cursor,
+                );
+                // 下钻时带上子参数自身的占位符，用户才知道这一级是什么
+                return [
+                    {
+                        label: argChild.argName, detail: ' ', insertText: '',
+                        kind: vscode.CompletionItemKind.TypeParameter, sortText: '￿',
+                    },
+                    ...inner,
+                ];
+            }
+
             return [{ label: arg.argName, detail: ' ', insertText: '', kind: vscode.CompletionItemKind.TypeParameter, sortText: '￿' }];
         }
 
@@ -445,16 +478,32 @@ export class CompletionEngine {
     // Match — literal 优先，argument 兜底，forward_root 消费
     // ================================================================
 
+    /**
+     * 选下一个节点。优先级：literal → argument → greedy → forward_root。
+     *
+     * ⚠️ literal 必须**先于** greedy。setblock 这类命令的尾巴是
+     *   [dataValue] [oldBlockHandling] [dataTag]
+     * 三者互相独立，于是 `[dataValue]` 下同时挂了
+     *   literal destroy / keep / replace 与一个并列的 greedy('[dataTag]')。
+     * 若 greedy 优先，`setblock 1 2 3 stone 0 destroy` 里的 destroy
+     * 会被 greedy 当成 NBT 吃掉，oldBlockHandling 分支永远进不去。
+     *
+     * ⚠️ argument 也要**先于** greedy。fill 的 replace 分支下同时有
+     *   <replaceTileName>（方块名）与并列的 greedy('[dataTag]')，
+     *   `fill … replace dirt 0` 里的 dirt 必须走 argument 才认得出是方块名。
+     * 真正需要 greedy 吃掉一切的位置（say <message …>、teams leave [entities...]）
+     * 下面没有并列的 literal/argument，不受影响。
+     */
     private matchChild(node: CommandNode, token: string): CommandNode | null {
-        // 贪婪参数兜底：匹配它即视为消费任意 token
-        for (const child of node.children) {
-            if (child.kind === 'greedy') { return child; }
-        }
         for (const child of node.children) {
             if (child.kind === 'literal' && (child as LiteralNode).literal === token) { return child; }
         }
         for (const child of node.children) {
             if (child.kind === 'argument') { return child; }
+        }
+        // 贪婪参数兜底：匹配它即视为消费任意 token
+        for (const child of node.children) {
+            if (child.kind === 'greedy') { return child; }
         }
         for (const child of node.children) {
             if (child.kind === 'forward_root') { return child; }

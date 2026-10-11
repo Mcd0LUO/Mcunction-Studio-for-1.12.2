@@ -65,6 +65,8 @@ function makePack(): { dataDir: string; packRoot: string; funcFile: string; good
             'scoreboard teams join blue @a @p',
             // 选择器里两个**不同**记分板目标各带一边约束 —— 不构成区间，不该报错
             'kill @a[score_used_min=1,score_named=-1]',
+            // Windows 文件系统大小写不敏感：NS:good 能打开 ns/good.mcfunction
+            'function NS:good',
             '',
         ].join('\n'),
     );

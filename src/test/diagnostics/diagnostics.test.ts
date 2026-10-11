@@ -12,6 +12,7 @@ import * as assert from 'assert';
 import { tokenize, isIncompleteLine, ValidationContext, Severity } from '../../core/diagnostics/types';
 import { parseSelector, scoreObjectiveOf, parseInt32Strict, inInt32Range, INT32_MAX } from '../../core/diagnostics/selector';
 import { DiagnosticRunner, ALL_RULES } from '../../core/diagnostics/runner';
+import { hasResName, isCaseInsensitiveFs } from '../../core/resName';
 import { CompletionEngine } from '../../dsl/engine';
 import { registerAll } from '../../dsl/commands/index';
 import { DataLoader } from '../../core/DataLoader';
@@ -624,5 +625,51 @@ describe('diagnostics/execute 与 scoreboard 回归', () => {
             d.some(x => x.ruleId === 'syntax/unknown-command'),
             'detect 不是 Java 1.12.2 命令，应报未知命令',
         );
+    });
+});
+
+// ============================================================
+// 资源名匹配：Windows 文件系统大小写不敏感
+//
+// Minecraft 的命名空间/路径本身大小写敏感（Linux 上 NS:foo 与 ns:foo
+// 是两个文件），但 Windows 上 `function NS:foo` 确实能打开
+// data/functions/ns/foo.mcfunction —— 不该报"函数不存在"。
+// ============================================================
+
+describe('core/resName 大小写策略', () => {
+    it('win32 判定为大小写不敏感，其余平台不是', () => {
+        assert.strictEqual(isCaseInsensitiveFs('win32'), true);
+        assert.strictEqual(isCaseInsensitiveFs('linux'), false);
+        assert.strictEqual(isCaseInsensitiveFs('darwin'), false);
+    });
+
+    it('精确命中永远优先（两种平台一致）', () => {
+        for (const ci of [true, false]) {
+            assert.strictEqual(hasResName(['ns:foo'], 'ns:foo', ci), true);
+        }
+    });
+
+    it('大小写不敏感平台：忽略大小写命中', () => {
+        assert.strictEqual(hasResName(['ns:foo'], 'NS:foo', true), true);
+        assert.strictEqual(hasResName(['ns:foo'], 'ns:FOO', true), true);
+        assert.strictEqual(hasResName(['ns:foo'], 'Ns:Foo', true), true);
+    });
+
+    it('大小写敏感平台：不命中就是不存在', () => {
+        assert.strictEqual(hasResName(['ns:foo'], 'NS:foo', false), false);
+        assert.strictEqual(hasResName(['ns:foo'], 'ns:FOO', false), false);
+    });
+
+    it('大小写不敏感也不会把不存在的名字判成存在', () => {
+        assert.strictEqual(hasResName(['ns:foo'], 'ns:bar', true), false);
+        assert.strictEqual(hasResName(['ns:foo'], 'other:foo', true), false);
+        assert.strictEqual(hasResName([], 'ns:foo', true), false);
+    });
+
+    it('放宽是单向的：同时存在时仍能精确区分', () => {
+        const list = ['ns:foo', 'NS:foo'];
+        // 精确命中优先，两者各自都能找到（不会因为忽略大小写而混淆）
+        assert.strictEqual(hasResName(list, 'ns:foo', true), true);
+        assert.strictEqual(hasResName(list, 'NS:foo', true), true);
     });
 });

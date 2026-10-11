@@ -83,11 +83,14 @@ describe('clone（1.12.2 语法）', () => {
 
     it('maskMode 之后给出三个 cloneMode 关键字', async () => {
         // 1.12.2: [cloneMode] = force | move | normal（1.8/14w10a/14w20a 引入）
+        // 注意 cloneMode 本身可省略，所以这里还会同时给出 [TileName] 的方块候选 ——
+        // 用 includes 而非 deepStrictEqual。
         for (const mask of ['filtered', 'masked', 'replace']) {
             const c = [...P, mask];
-            const r = await engine.complete(c, c.join(' '));
-            assert.deepStrictEqual(labels(r).sort(), ['force', 'move', 'normal'],
-                `${mask} 之后应给出 cloneMode`);
+            const ls = labels(await engine.complete(c, c.join(' ')));
+            for (const mode of ['force', 'move', 'normal']) {
+                assert.ok(ls.includes(mode), `${mask} 之后应给出 ${mode}`);
+            }
         }
     });
 
@@ -119,33 +122,40 @@ describe('particle（1.12.2 语法）', () => {
         }
     });
 
-    it('[speed] 之后给出 normal / force', async () => {
-        const r = await engine.complete(P, P.join(' '));
-        assert.deepStrictEqual(labels(r).sort(), ['force', 'normal']);
+    it('[speed] 之后是顺序可选的 [count]', async () => {
+        // wiki: particle <name> <x> <y> <z> <xd> <yd> <zd> <speed> [count] [mode] [player] [params ...]
+        // 四个尾巴参数是**顺序可选**，不是并列选择。
+        const ls = labels(await engine.complete(P, P.join(' ')));
+        assert.ok(ls.includes('[count]'), `应给出 [count]，实际 ${JSON.stringify(ls.slice(0, 6))}`);
     });
 
-    it('mode 可省略：直接给出 [count] 占位', async () => {
-        const c = [...P, ''];
-        const r = await engine.complete(c, c.join(' '));
-        assert.ok(labels(r).includes('[count]'), 'mode 省略时也应能继续');
+    it('[count] 之后给出 normal / force（且 mode 可省略）', async () => {
+        const c = [...P, '5'];
+        const ls = labels(await engine.complete(c, c.join(' ')));
+        assert.ok(ls.includes('normal') && ls.includes('force'),
+            `应给出 mode，实际 ${JSON.stringify(ls.slice(0, 6))}`);
+        // mode 省略时直接给 [player]，故选择器候选也应在
+        assert.ok(ls.includes('@a'), 'mode 省略时也应能直接给 [player]');
     });
 
-    it('[player] 可选，params 变长（最多 2 个）', () => {
+    it('[player] 之后 params 变长（用 greedy 而非固定两个）', () => {
         const { toTreeShape } = require('../../dsl/treeShape') as typeof import('../../dsl/treeShape');
         const { particleCmd } = require('../../dsl/commands/vanilla/particle') as
             typeof import('../../dsl/commands/vanilla/particle');
         const shape = toTreeShape(particleCmd);
-        // 沿 <name> → <x> → ... → <speed> 走到 tail，其子节点应含 mode 与 [player]
+        // 沿 <name> → … → <speed> → [count] 走到尾巴
         let node = shape;
-        for (const name of ['<name>', '<x>', '<y>', '<z>', '<xd>', '<yd>', '<zd>', '<speed>']) {
+        for (const name of ['<name>', '<x>', '<y>', '<z>', '<xd>', '<yd>', '<zd>', '<speed>', '[count]']) {
             const next = node.children.find(c => c.name === name);
             assert.ok(next, `树中应存在 ${name}`);
             node = next!;
         }
         const names = node.children.map(c => c.name);
-        assert.ok(names.includes('[count]'));
-        assert.ok(names.includes('normal') && names.includes('force'));
+        assert.ok(names.includes('normal') && names.includes('force'), '应含 mode 两值');
         assert.ok(names.includes('[player]'), 'mode 省略时也应能到 [player]');
+        // params 必须是 greedy（变长），不是 [params] [params2] 两个固定参数
+        const flat = JSON.stringify(shape);
+        assert.ok(flat.includes('[params...]'), 'params 应为 greedy [params...]');
     });
 });
 

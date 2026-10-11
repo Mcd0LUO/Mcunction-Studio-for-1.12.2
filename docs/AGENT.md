@@ -162,9 +162,13 @@ npm run bench:real -- "D:/path/to/data"
   查 1.12 时期的精确原文可用 MediaWiki API：
   `?action=query&prop=revisions&rvstart=2018-06-01&rvdir=older`
 - **提交前跑完 Node 侧五个测试脚本 + lint**
-  （当前应分别为 16 / 63 / 122 / 31 / 12 passing，lint 0 error）。
+  （当前应分别为 16 / 105 / 132 / 31 / 12 passing，lint 0 error）。
   改动 `package.json` 的 `contributes`、扩展激活、语言绑定相关代码时，
   额外跑 `npm run test:e2e`。
+- **改命令树必须同步 `src/test/dsl/wiki-syntax.test.ts`**。
+  那张表逐命令列出 wiki 原文里的每一种合法写法，并有一条断言强制它覆盖
+  全部 41 条注册命令 —— 加了新命令却没补表会直接失败。
+  它同时是"防误报"的底线：诊断层曾把每一条 execute 都标红两条。
 - **命令语法一律查 wiki 原文，且必须查 `Scoreboard#Command reference` 这类
   表格页而不是同名子页**。教训：
   - `Commands/scoreboard` 只有一行转述，真表格在 `Scoreboard#Command reference`

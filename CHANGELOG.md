@@ -2,6 +2,60 @@
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
 
+# [1.6.6]
+
+**逐命令对照 wiki 原文重查了全部 41 条内置命令**，修正 15 条命令的语法，
+并新增一张 122 项的语法核验表把它固定下来。
+依据：minecraft.wiki 各 `Commands/<name>` 页在 2018-06-01 之前的最后一个修订
+（1.12.2 发布于 2017-09-18，1.13 发布于 2018-07-18，故该时点正文即 1.12.2 语法）。
+
+### 命令语法修正（Java Edition 原文为准）
+- `advancement` —— 漏了 `until`（只有 from / through）；`only` 与 `test` 尾巴的
+  `[criterion]` 也漏了
+- `clear` —— `[data] [maxCount] [dataTag]` 三个参数整个缺失
+  （wiki 原文：五个参数**全部可选**）
+- `clone` —— 此前写成 maskMode × cloneMode 的两层交叉矩阵，与原文不符。
+  原文是**顺序可选**的 `[maskMode] [cloneMode] [TileName] [dataValue|state]`。
+  顺带修掉 `.then(...).then(...)` 链在父节点上、导致 `[data]` 成了 `[block]` 兄弟的问题
+- `fill` —— 缺 `[dataTag]`；缺 replace 的过滤形式 `replace <replaceTileName> [replaceDataValue]`
+  （`outline` 经核对**确实是** 1.12.2 的 oldBlockHandling 取值，不是 1.13 新增，予以保留）
+- `gamemode` —— `[player]` 可选，此前写成了必填
+- `give` —— 缺 `[dataTag]`
+- `particle` —— 四个尾巴参数是**顺序可选**，此前误写成并列选择；
+  `[params ...]` 是**变长**的，改用 `greedy`（此前是固定的 `[params] [params2]`）
+- `playsound` —— `<source>`（声音频道）整个漏了
+- `setblock` / `testforblock` —— 缺 `[dataTag]`
+- `spawnpoint` —— `[player]` 与 `[x y z]` 都可选，此前全部写成必填
+- `stats` —— `clear` 分支也要接 `<stat>`，此前只写了 `literal('clear')`
+- `teleport` —— 原文有五种形式（含 `facing`），此前只有一种；
+  `facing` 之后可以是实体也可以是坐标（3 个 token）
+- `testfor` —— 缺 `[dataTag]`
+- `tp` —— 原文两种形式（`<destination player>` 与 `<x> <y> <z> [<yaw> <pitch>]`），此前只有一种
+
+### 引擎
+- `matchChild` 优先级改为 **literal → argument → greedy → forward_root**。
+  `setblock`/`fill` 这类命令的尾巴三个参数互相独立，同一个节点下会同时挂
+  枚举字面量与并列的 `greedy('[dataTag]')`；greedy 若优先会把 `destroy`、
+  方块名一并吃掉，那些分支就永远进不去
+- 参数节点无自身候选也无字面子节点时，**向参数子节点下钻**并带上其占位符。
+  此前 `particle … <speed> ` 只会返回占位符 `<speed>`，
+  而该位置真正要填的是下一级的 `[count]` / mode / `[player]`
+- 参数节点的**参数子节点**候选也会一并给出（如 mode 可省略时 `[player]` 的选择器）
+
+### Windows 大小写
+- **Windows 文件系统大小写不敏感**：`function NS:foo` 能打开
+  `data/functions/ns/foo.mcfunction`，游戏也能执行，不该报"函数不存在"。
+  新增 `core/resName.ts`：精确命中优先，未命中时在 win32 上退回忽略大小写比较。
+  放宽是单向的 —— `ns:foo` 与 `NS:foo` 同时存在时仍能精确区分。
+  （macOS 未纳入：APFS 可格式化成大小写敏感，无法仅凭 `process.platform` 判断。）
+
+### 测试
+- 新增 **`src/test/dsl/wiki-syntax.test.ts`**：122 项语法核验表，
+  逐命令列出 wiki 原文里的每一种合法写法，断言**一条诊断都不能产生**。
+  另有一条断言强制该表覆盖全部 41 条注册命令 —— 新增命令忘了补表会直接失败。
+- 诊断回归增至 132 项（新增 `core/resName` 大小写策略 6 项）。
+- e2e 的"合法文件不被误报"夹具加入 `function NS:good`（大小写不匹配）。
+
 # [1.6.5]
 
 修复 `selector/invalid-score-range`（选择器记分板取值区间）的两处判断错误。

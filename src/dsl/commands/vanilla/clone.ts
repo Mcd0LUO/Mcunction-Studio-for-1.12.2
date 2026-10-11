@@ -1,24 +1,40 @@
 /**
- * 1.12.2:
- *   /clone <x1> <y1> <z1> <x2> <y2> <z2> <x> <y> <z> [maskMode] [cloneMode] [TileName] [dataValue]
+ * /clone <x1> <y1> <z1> <x2> <y2> <z2> <x> <y> <z> [maskMode] [cloneMode] [TileName] [dataValue|state]
  *
- * maskMode = filtered | masked | replace（默认 replace）
- * cloneMode = force | move | normal（默认 normal）
- * TileName  = 方块 id，filtered 模式下必填
- * dataValue = 0–15
+ * wiki（Commands/clone，2018-05 修订）Java Edition 原文即上面一行 ——
+ * 四个尾巴参数是**顺序可选**的，不是"maskMode 与 cloneMode 的组合矩阵"。
  *
- * 注意顺序：1.12.2 中 <block> 位于 cloneMode **之后**。
- * 1.13 (17w45a) 才把 filtered 的 <block> 挪到 mode 之前 —— 不要照抄新版。
+ * maskMode  = masked | replace | filtered
+ * cloneMode = normal | force | move
+ * TileName / dataValue 仅 filtered 模式有意义（游戏对其它模式会忽略）
+ *
+ * ⚠️ 此前写成了 maskMode → cloneMode 的两层交叉（每个组合各挂一次 block/data），
+ *    结构冗余且与原文不符；而且 `.then(...).then(...)` 是链在**父节点**上的，
+ *    导致 `[data]` 实际成了 `[block]` 的兄弟而非子节点。
+ *
+ * ⚠️ 顺序：1.12.2 的 TileName 在 cloneMode **之后**。
+ *    1.13 (17w45a) 才把它挪到 mode 之前 —— 不要照抄新版。
  */
 import { command, argument, literal, optional } from '../../builder';
 import { suggestCoordinates, suggestBlocks } from '../suggests';
 
-/**
- * 三个 cloneMode 关键字必须**各自**挂上后续尾巴（<block> [data]）：
- * 引擎的 matchChild 匹配到 literal 后不会回退到兄弟节点，
- * 若只挂在父节点上，输入 `filtered force` 会停在 force 这个空叶子上，
- * 后续补全变为空。
- */
+/** maskMode/cloneMode 之后的 [TileName] [dataValue] */
+function tileTail() {
+    return optional('[TileName]', suggestBlocks())
+        .then(optional('[dataValue]'));
+}
+
+/** cloneMode 三值，各自挂尾巴；另有一条省略 cloneMode 的边 */
+function cloneModeBranches() {
+    return [
+        literal('normal').then(tileTail()),
+        literal('force').then(tileTail()),
+        literal('move').then(tileTail()),
+        // cloneMode 可省略，直接写 TileName
+        tileTail(),
+    ];
+}
+
 export const cloneCmd = command('clone')
     .then(
         argument('<x1>', suggestCoordinates())
@@ -31,23 +47,11 @@ export const cloneCmd = command('clone')
                                     .then(argument('<y>', suggestCoordinates())
                                         .then(argument('<z>', suggestCoordinates())
                                             .then(
-                                                // masked / replace：block 可省略（游戏会忽略）
-                                                literal('masked').then(
-                                                    literal('force').then(optional('[block]', suggestBlocks())).then(optional('[data]')),
-                                                    literal('move').then(optional('[block]', suggestBlocks())).then(optional('[data]')),
-                                                    literal('normal').then(optional('[block]', suggestBlocks())).then(optional('[data]')),
-                                                ),
-                                                literal('replace').then(
-                                                    literal('force').then(optional('[block]', suggestBlocks())).then(optional('[data]')),
-                                                    literal('move').then(optional('[block]', suggestBlocks())).then(optional('[data]')),
-                                                    literal('normal').then(optional('[block]', suggestBlocks())).then(optional('[data]')),
-                                                ),
-                                                // filtered：block 必填
-                                                literal('filtered').then(
-                                                    literal('force').then(argument('<block>', suggestBlocks())).then(optional('[data]')),
-                                                    literal('move').then(argument('<block>', suggestBlocks())).then(optional('[data]')),
-                                                    literal('normal').then(argument('<block>', suggestBlocks())).then(optional('[data]')),
-                                                ),
+                                                literal('masked').then(...cloneModeBranches()),
+                                                literal('replace').then(...cloneModeBranches()),
+                                                literal('filtered').then(...cloneModeBranches()),
+                                                // maskMode 可省略
+                                                ...cloneModeBranches(),
                                             )
                                         )
                                     )
