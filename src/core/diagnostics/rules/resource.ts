@@ -142,7 +142,7 @@ export const undefinedFunction: DiagnosticRule = {
     },
 };
 
-/** advancement grant|revoke 引用不存在的进度 */
+/** advancement grant|revoke|test 引用不存在的进度 */
 export const undefinedAdvancement: DiagnosticRule = {
     id: 'resource/undefined-advancement',
     description: 'advancement 命令引用的进度不存在',
@@ -151,9 +151,18 @@ export const undefinedAdvancement: DiagnosticRule = {
     commands: ['advancement'],
     check(rc: RuleContext): readonly Diagnostic[] {
         const t = rc.tokens;
-        // advancement grant|revoke <target> only|from|until|through <res>
-        if ((t[1] !== 'grant' && t[1] !== 'revoke')) { return []; }
-        const idx = 4;
+        // wiki（Commands/advancement，2018-05 修订）：
+        //   grant|revoke <player> only|until|from|through <advancement>   ← 下标 4
+        //   grant|revoke <player> everything                              ← 无进度名
+        //   test <player> <advancement> [criterion]                       ← 下标 3
+        let idx: number;
+        if (t[1] === 'grant' || t[1] === 'revoke') {
+            idx = 4;
+        } else if (t[1] === 'test') {
+            idx = 3;   // 此前漏了这个分支，test 引用的缺失进度不会被报出
+        } else {
+            return [];
+        }
         const name = t[idx];
         if (!name) { return []; }
         if (!rc.ctx.hasAdvancement(name)) {

@@ -2,6 +2,48 @@
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
 
+# [1.6.8]
+
+**选择器参数位表基本全错** —— 这比 1.6.7 修的进度索引问题严重得多。
+
+### 修复：`selectorPositions` 的位置表
+- 该表此前写成「目标在下标 2 的一批实体命令」，而实际上**只有 `gamemode` 的目标真在下标 2**：
+  `effect <player> …`、`give <player> …`、`execute <entity> …`、`title <player> …`
+  等目标都在下标 1。实测 17 条命令里 **15 条抽不到选择器谓词**。
+- 后果：`@a[tag=x]`、`@a[score_obj=1]`、`@a[team=red]` 这类引用
+  **根本不进索引** —— Shift+F12 搜不到，重命名标签/队伍/记分板时这些引用全被漏改，
+  改完数据包就是坏的。
+- 现已逐条对照 wiki（各 `Commands/<name>` 页 2018-05 修订）的 Java Edition 语法重写，
+  并为「目标位置随可选参数漂移」的命令（`tp`/`teleport`/`particle`/`spreadplayers`）
+  与子命令形态（`scoreboard`/`stats`）分别列出位置。
+- 顺带修正：`testforblock`/`testforblocks`/`summon` 此前被塞了并不存在的选择器位；
+  `stats` 的位置少算了一个（忘了 `t[1]` 是字面量 `entity`/`block`）。
+
+### 修复：`execute` 的外层选择器从未进索引
+- `DataLoader.handleSingleLine` 按**活跃命令**分派，会把 `execute` 前缀剥掉：
+  `execute @a[tag=x] ~ ~ ~ say hi` 的活跃命令是 `say`，
+  于是 `execute` 的处理器**根本不会被调用**，外层选择器永远进不了索引。
+- 现在对原始行补一次抽取。新增 `extractOuterSymbols`（只抽本层）——
+  若这里也递归进内层，内层符号会被索引两遍，而 `LineIndex.appendEntries`
+  不去重，引用计数会虚高。
+
+### 修复：`advancement test` 的进度名从未被抽出
+- 提取器与诊断规则都只处理 `grant|revoke`，而 wiki 的 `test <player> <advancement>`
+  里进度名在下标 3。于是 `advancement test @s ns:foo` 的引用既不进索引、
+  缺失时也不会被 `resource/undefined-advancement` 报出。
+
+### 修复：`execute` 内层命令的符号抽不出来
+- `extractSymbols` 的所有分支都是 `t[0] === '<命令>'`，
+  `execute … function ns:x` 的 `t[0]` 是 `execute`，内层符号一个都抽不出来。
+  References / Rename 会**重新抽取原行算列区间**，抽不到就整条丢弃 ——
+  重命名时行首的引用改了、`execute` 里那处漏掉。现已递归抽取并回补列偏移。
+
+### 测试
+- 符号层 +13：选择器参数位按命令分组（下标 1 / 下标 2 / 漂移位置 / 子命令形态）、
+  无选择器命令的负例、`advancement test`、`execute` 内层符号与角色隔离。
+- e2e 22 项（原 17）：新增「重命名改掉选择器内的引用」——
+  用此前抽不到谓词的 `effect`/`give`/`execute` 验证端到端。
+
 # [1.6.7]
 
 修复重命名功能的残缺：**六种符号里有两种不能用**，另有一处让 `execute` 内层引用被漏改。

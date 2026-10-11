@@ -701,6 +701,40 @@ suite('Mcfunction Studio — 真实 VS Code 集成', () => {
         assert.ok(fs.existsSync(a) && fs.existsSync(b), '被拒绝的重命名不应动任何文件');
     });
 
+    test('重命名改掉选择器内的引用（含此前漏掉的命令）', async function () {
+        this.timeout(60000);
+        const dataDir = path.join(PACK_ROOT, 'data');
+        const f = path.join(dataDir, 'functions/ns/sel-rename.mcfunction');
+        fs.writeFileSync(f, [
+            'scoreboard players tag @s add prob_tag',       // 0 定义
+            'kill @a[tag=prob_tag]',                        // 1 此前就能抽到（kill 单独处理）
+            'effect @a[tag=prob_tag] speed',                // 2 此前抽不到（目标在下标 1）
+            'give @a[tag=prob_tag] minecraft:stone',        // 3 此前抽不到
+            'execute @a[tag=prob_tag] ~ ~ ~ say hi',        // 4 此前抽不到
+            '',
+        ].join('\n'));
+        const uri = vscode.Uri.file(f);
+        const doc = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(doc);
+        await vscode.commands.executeCommand('mcf-studio.reloadWorkspace');
+        await new Promise(r => setTimeout(r, 2500));
+
+        const col = doc.lineAt(0).text.indexOf('prob_tag') + 2;
+        const edit = await vscode.commands.executeCommand<vscode.WorkspaceEdit>(
+            'vscode.executeDocumentRenameProvider', uri,
+            new vscode.Position(0, col), 'renamed_tag');
+        assert.ok(edit, '标签重命名应被允许');
+        assert.ok(await vscode.workspace.applyEdit(edit), 'WorkspaceEdit 应用失败');
+
+        const after = await vscode.workspace.openTextDocument(uri);
+        const text = after.getText();
+        assert.ok(!text.includes('prob_tag'), `旧标签名仍有残留：\n${text}`);
+        assert.strictEqual(
+            (text.match(/renamed_tag/g) ?? []).length, 5,
+            `五处（1 定义 + 4 选择器）都应改名：\n${text}`,
+        );
+    });
+
     // ================================================================
     // 补全替换区间
     //

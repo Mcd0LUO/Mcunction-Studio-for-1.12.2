@@ -694,6 +694,21 @@ export class DataLoader {
         if (handler) {
             handler(uri, index, commands);
         }
+
+        // execute 的**外层**选择器。
+        //
+        // extraceActiveCommand 会把 execute 前缀剥掉（活跃命令是内层那条），
+        // 于是 `execute @a[tag=x] ~ ~ ~ say hi` 的处理器是 say ——
+        // execute 的处理器根本不会被调用，外层的 tag=x 永远进不了索引，
+        // 重命名标签时这一处被漏改。
+        //
+        // 这里对**原始行**补一次；execute 的处理器内部只抽本层，
+        // 内层符号仍由上面的活跃命令处理器负责，不会重复索引。
+        const rawFirst = trimLine.split(/\s+/u)[0];
+        if (rawFirst === 'execute' && commands[0] !== 'execute') {
+            this.commandHandlers.get('execute')?.(uri, index, CommandUtils.extractCommand(trimLine));
+        }
+
         // YAML 自定义数据提取（与 scoreboard/team 提取走同一通道）
         this.yamlExtractor()?.applyExtractForFile(commands[0], commands, uri.toString(), index);
     }

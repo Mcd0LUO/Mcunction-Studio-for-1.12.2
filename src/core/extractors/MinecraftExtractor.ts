@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { IndexedStore } from '../data';
 import { MinecraftUtils } from '../../utils/MinecraftUtils';
 import { CommandUtils } from '../../utils/CommandUtils';
-import { extractSymbols } from '../symbols/extractor';
+import { extractSymbols, extractOuterSymbols } from '../symbols/extractor';
 
 type LineHandler = (uri: vscode.Uri, line: number, commands: string[]) => void;
 
@@ -67,10 +67,11 @@ export function registerHandlers(store: IndexedStore, handlers: Map<string, Line
     //    于是 `kill @a[score_x=1]` 里的引用在索引里根本不存在，
     //    "查找引用" 对选择器引用永远返回空。
     // 复用一个处理器挂到所有可能带选择器的命令上。
-    const selectorHandler = (uri: vscode.Uri, line: number, commands: string[]) => {
+
+    /** 把抽取到的引用写进索引 */
+    const indexRefs = (uri: vscode.Uri, line: number, occs: ReturnType<typeof extractSymbols>): void => {
         const resName = MinecraftUtils.buildFunctionCall(uri) ?? '';
-        const lineText = commands.join(' ');
-        for (const occ of extractSymbols(lineText)) {
+        for (const occ of occs) {
             if (occ.role !== 'reference') { continue; }
             switch (occ.kind) {
                 case 'scoreboard':
@@ -97,17 +98,38 @@ export function registerHandlers(store: IndexedStore, handlers: Map<string, Line
         }
     };
 
+    const selectorHandler = (uri: vscode.Uri, line: number, commands: string[]) => {
+        indexRefs(uri, line, extractSymbols(commands.join(' ')));
+    };
+
+    /**
+     * `execute` 的**外层**选择器。
+     *
+     * `DataLoader.handleSingleLine` 按活跃命令分派，会把 execute 前缀剥掉：
+     * `execute @a[tag=x] ~ ~ ~ say hi` 的活跃命令是 `say`，
+     * 于是 execute 的处理器压根不会被调用 —— 外层选择器永远进不了索引，
+     * 重命名标签时这一处被漏改。
+     *
+     * 这里只抽本层（`extractOuterSymbols`），内层由它自己的处理器负责，
+     * 避免重复索引（LineIndex.appendEntries 不去重，引用计数会虚高）。
+     */
+    const executeOuterHandler = (uri: vscode.Uri, line: number, commands: string[]) => {
+        indexRefs(uri, line, extractOuterSymbols(commands.join(' ')));
+    };
+
     // 与 core/symbols/extractor 的 selectorPositions 保持一致
     for (const cmd of [
         'kill', 'clear', 'effect', 'enchant', 'gamemode', 'give', 'tp', 'teleport',
         'spawnpoint', 'title', 'playsound', 'stopsound', 'testfor', 'tellraw',
-        'execute', 'testforblock', 'testforblocks', 'stats', 'summon', 'replaceitem',
+        'testforblock', 'testforblocks', 'stats', 'summon', 'replaceitem',
         // advancement 不带选择器，但它含**进度资源名**符号；
         // 复用同一个抽取器，靠 kind 分派即可
         'advancement',
     ]) {
         handlers.set(cmd, selectorHandler);
     }
+    // execute 单独处理：内层命令由活跃命令分派，这里只管外层
+    handlers.set('execute', executeOuterHandler);
 
     // execute 的内层命令是任意一条命令，选择器可能在更深的位置；
     // 这里对整行再做一次兜底抽取（幂等：LineIndex 按 "file:line" 去重）。

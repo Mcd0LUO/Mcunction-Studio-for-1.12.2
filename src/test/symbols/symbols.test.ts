@@ -655,3 +655,120 @@ describe('symbols/execute 内层命令', () => {
         assert.deepStrictEqual(hits, [], 'say 之后的文本不该产出 function 符号');
     });
 });
+
+// ============================================================
+// 选择器参数位（selectorPositions）
+//
+// 回归：这张表此前写成「目标在下标 2 的一批实体命令」，
+// 而实际上只有 gamemode 的目标真在下标 2 —— effect/give/execute 等都在下标 1。
+// 实测 17 条命令里 15 条抽不到选择器谓词：`@a[tag=x]` 不进索引，
+// 于是 Shift+F12 搜不到、重命名标签/队伍/记分板时这些引用全被漏改。
+//
+// 每条都按 wiki（各 Commands/<name> 页 2018-05 修订）的 Java Edition 语法，
+// 把选择器放在**正确**的位置上。
+// ============================================================
+
+describe('symbols/选择器参数位', () => {
+    /**
+     * 断言这一行的 tag=x 谓词被抽出，且列区间指向原行里的 x。
+     *
+     * 按 value 过滤而非要求只有一个 —— `scoreboard players tag @s add t`
+     * 这类行本来就会同时产出选择器谓词与标签定义两个 tag 符号。
+     */
+    function assertTagFound(line: string): void {
+        const hits = extractSymbols(line).filter(o => o.kind === 'tag' && o.value === 'x');
+        assert.strictEqual(hits.length, 1, `未抽出 tag 谓词: ${line}`);
+        assert.strictEqual(line.slice(hits[0].start, hits[0].end), 'x',
+            `列区间不对: ${line}`);
+    }
+
+    it('目标在下标 1 的命令', () => {
+        for (const line of [
+            'clear @a[tag=x]',
+            'effect @a[tag=x] speed',
+            'enchant @a[tag=x] minecraft:sharpness',
+            'entitydata @a[tag=x] {}',
+            'execute @a[tag=x] ~ ~ ~ say hi',
+            'give @a[tag=x] minecraft:stone',
+            'kill @a[tag=x]',
+            'spawnpoint @a[tag=x]',
+            'stopsound @a[tag=x]',
+            'tellraw @a[tag=x] {"text":"hi"}',
+            'testfor @a[tag=x]',
+            'title @a[tag=x] clear',
+        ]) {
+            assertTagFound(line);
+        }
+    });
+
+    it('目标在下标 2 的命令', () => {
+        // advancement 的 t[1] 是子命令（grant/revoke/test），玩家在 2
+        assertTagFound('advancement grant @a[tag=x] only ns:foo');
+        assertTagFound('advancement revoke @a[tag=x] from ns:foo');
+        assertTagFound('advancement test @a[tag=x] ns:foo');
+        assertTagFound('gamemode creative @a[tag=x]');
+        assertTagFound('xp 30 @a[tag=x]');
+    });
+
+    it('目标位置随可选参数漂移的命令', () => {
+        assertTagFound('tp @a[tag=x] 1 2 3');
+        assertTagFound('tp @a[tag=x]');            // target 省略，@a 是 destination
+        assertTagFound('teleport @a[tag=x] 1 2 3');
+        assertTagFound('playsound minecraft:x master @a[tag=x]');
+        assertTagFound('spreadplayers 0 0 1 10 false @a[tag=x]');
+        assertTagFound('replaceitem entity @a[tag=x] slot.weapon.mainhand minecraft:stone');
+        // particle：<speed> 之后依次是 [count] [mode] [player]
+        assertTagFound('particle flame 1 2 3 0 0 0 1 5 @a[tag=x]');
+        assertTagFound('particle flame 1 2 3 0 0 0 1 5 normal @a[tag=x]');
+        assertTagFound('particle flame 1 2 3 0 0 0 1 5 normal @a[tag=x] 1');
+    });
+
+    it('子命令形态', () => {
+        assertTagFound('scoreboard players set @a[tag=x] obj 1');
+        assertTagFound('scoreboard players operation @a[tag=x] obj += @s obj2');
+        assertTagFound('scoreboard players tag @a[tag=x] add t');
+        assertTagFound('scoreboard teams join red @a[tag=x]');
+        assertTagFound('scoreboard teams leave @a[tag=x]');
+        assertTagFound('stats entity @a[tag=x] set AffectedBlocks @s obj');
+        assertTagFound('stats block 1 2 3 set AffectedBlocks @a[tag=x] obj');
+    });
+
+    it('没有选择器参数位的命令不产出谓词符号', () => {
+        // 这些命令 1.12.2 语法里根本没有选择器参数
+        for (const line of [
+            'say @a[tag=x]',
+            'blockdata 1 2 3 {}',
+            'clone 1 1 1 2 2 2 3 3 3',
+            'fill 1 1 1 2 2 2 minecraft:stone',
+            'function ns:foo',
+            'gamerule doDaylightCycle',
+            'setblock 1 2 3 minecraft:stone',
+            'summon minecraft:creeper',
+            'testforblock 1 2 3 minecraft:stone',
+            'time set day',
+            'trigger obj add 1',
+            'weather clear',
+            'worldborder get',
+        ]) {
+            const tags = extractSymbols(line).filter(o => o.kind === 'tag');
+            assert.deepStrictEqual(tags, [], `不该抽出 tag 谓词: ${line}`);
+        }
+    });
+
+    it('advancement 的 test 形式也抽出进度名', () => {
+        for (const line of [
+            'advancement test @s ns:foo',
+            'advancement test @s ns:foo criterion',
+        ]) {
+            const hits = extractSymbols(line).filter(o => o.kind === 'advancement');
+            assert.strictEqual(hits.length, 1, `未抽出进度名: ${line}`);
+            assert.strictEqual(hits[0].value, 'ns:foo');
+            assert.strictEqual(line.slice(hits[0].start, hits[0].end), 'ns:foo');
+        }
+        // everything 没有进度名
+        assert.deepStrictEqual(
+            extractSymbols('advancement grant @s everything').filter(o => o.kind === 'advancement'),
+            [],
+        );
+    });
+});

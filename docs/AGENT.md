@@ -162,7 +162,7 @@ npm run bench:real -- "D:/path/to/data"
   查 1.12 时期的精确原文可用 MediaWiki API：
   `?action=query&prop=revisions&rvstart=2018-06-01&rvdir=older`
 - **提交前跑完 Node 侧五个测试脚本 + lint**
-  （当前应分别为 16 / 104 / 133 / 31 / 12 passing，lint 0 error；e2e 21）。
+  （当前应分别为 16 / 104 / 139 / 31 / 12 passing，lint 0 error；e2e 22）。
   改动 `package.json` 的 `contributes`、扩展激活、语言绑定相关代码时，
   额外跑 `npm run test:e2e`。
 - **改命令树必须同步 `src/test/dsl/wiki-syntax.test.ts`**。

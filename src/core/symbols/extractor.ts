@@ -55,6 +55,24 @@ export interface SymbolOccurrenceWithHash extends SymbolOccurrence {
  * @returns 按出现顺序排列；同一 token 被拆出多个符号时各自独立
  */
 export function extractSymbols(lineText: string): SymbolOccurrenceWithHash[] {
+    return extract(lineText, true);
+}
+
+/**
+ * 只抽**本层**符号，不递归进 `execute` 的内层命令。
+ *
+ * 用于"内层命令已由它自己的处理器单独索引过"的场景：
+ * `DataLoader.handleSingleLine` 按**活跃命令**分派，
+ * `execute @a[tag=x] ~ ~ ~ say hi` 的活跃命令是 `say`，
+ * 于是 execute 的处理器根本不会被调用，**外层选择器永远进不了索引**。
+ * 那里补一次本层抽取即可 —— 若这里也递归，内层符号会被索引两遍，
+ * 而 LineIndex.appendEntries 不去重，引用计数会虚高。
+ */
+export function extractOuterSymbols(lineText: string): SymbolOccurrenceWithHash[] {
+    return extract(lineText, false);
+}
+
+function extract(lineText: string, recurseExecute: boolean): SymbolOccurrenceWithHash[] {
     const out: SymbolOccurrenceWithHash[] = [];
     // token 起点：由扫描时的偏移记录，供反查 value 的精确位置
     const tokens = scanTokens(lineText);
@@ -90,11 +108,11 @@ export function extractSymbols(lineText: string): SymbolOccurrenceWithHash[] {
     //    但 References / Rename 会**用本函数重新抽取原行来算列区间**，
     //    抽不到就整条丢弃 —— 表现是"改了两处、漏了 execute 里那处"。
     // ---------------------------------------------------------
-    if (t[0] === 'execute') {
+    if (recurseExecute && t[0] === 'execute') {
         const innerIdx = executeInnerStart(t);
         if (innerIdx > 0 && innerIdx < tokens.length) {
             const base = tokens[innerIdx].start;
-            for (const o of extractSymbols(lineText.slice(base))) {
+            for (const o of extract(lineText.slice(base), true)) {
                 out.push({
                     ...o,
                     start: o.start + base,
@@ -181,10 +199,23 @@ export function extractSymbols(lineText: string): SymbolOccurrenceWithHash[] {
     }
 
     // ---------------------------------------------------------
-    // advancement grant|revoke <t> only|from|until|through <res>
+    // advancement grant|revoke|test
+    //
+    // wiki（Commands/advancement，2018-05 修订）Java Edition：
+    //   advancement <grant|revoke> <player> only <advancement> [criterion]
+    //   advancement <grant|revoke> <player> <until|from|through> <advancement>
+    //   advancement <grant|revoke> <player> everything
+    //   advancement test <player> <advancement> [criterion]
+    //
+    // ⚠️ `test` 形式此前整个漏了 —— 进度名在下标 3 而不是 4，
+    //    于是 `advancement test @s ns:foo` 的引用既不进索引也搜不到。
     // ---------------------------------------------------------
-    if (t[0] === 'advancement' && (t[1] === 'grant' || t[1] === 'revoke') && t[4]) {
-        push('advancement', t[4], 'reference', 4);
+    if (t[0] === 'advancement') {
+        if ((t[1] === 'grant' || t[1] === 'revoke') && t[4]) {
+            push('advancement', t[4], 'reference', 4);
+        } else if (t[1] === 'test' && t[3]) {
+            push('advancement', t[3], 'reference', 3);
+        }
     }
 
     // ---------------------------------------------------------
@@ -259,15 +290,6 @@ export function extractSymbols(lineText: string): SymbolOccurrenceWithHash[] {
 }
 
 /**
- * 哪些 token 下标在 1.12.2 中是「选择器参数位」。
- *
- * ⚠️ 必须穷举而非全行扫描：否则 `say @a[tag=x]`（那只是消息文本）
- *    会被当成标签引用，重命名标签时会把用户的聊天文本一起改掉。
- *    未列出的命令一律不认选择器 —— 宁可漏引用，不可改错内容。
- *
- * 各位置与 dsl/commands/*.ts 中 suggestSelectors 的挂载点保持一致。
- */
-/**
  * `execute` 内层命令的 token 下标。
  *
  * wiki（Commands/execute，2018-05 修订）Java Edition 两种形式：
@@ -285,40 +307,101 @@ function executeInnerStart(t: readonly string[]): number {
     return t.length > 5 ? 5 : -1;
 }
 
-function selectorPositions(t: readonly string[]): number[] {    const out: number[] = [];
+/**
+ * 哪些 token 下标在 1.12.2 中是「选择器参数位」。
+ *
+ * ⚠️ 必须穷举而非全行扫描：否则 `say @a[tag=x]`（那只是消息文本）
+ *    会被当成标签引用，重命名标签时会把用户的聊天文本一起改掉。
+ *    未列出的命令一律不认选择器 —— 宁可漏引用，不可改错内容。
+ *
+ * ⚠️ 位置必须逐条对照 wiki 原文（各 `Commands/<name>` 页 2018-05 修订）。
+ *    此前这张表**基本全错**：写成「目标在第 3 位（下标 2）的一批实体命令」，
+ *    而实际上只有 `gamemode <mode> [player]` 的目标真在下标 2；
+ *    `effect <player> …`、`give <player> …`、`execute <entity> …` 等
+ *    目标都在下标 1。实测 17 条命令里 **15 条抽不到选择器谓词** ——
+ *    `@a[tag=x]` 不进索引，重命名标签/队伍/记分板时这些引用全被漏掉。
+ *
+ * 位置允许多报：非选择器 token 会被 `isSelector` 过滤掉，
+ * 所以 `tp`/`particle` 这类随可选参数漂移的位置可以一次列好几个。
+ */
+function selectorPositions(t: readonly string[]): number[] {
+    const out: number[] = [];
     const cmd = t[0];
-
-    // <target> 在第 3 位的实体命令（t[0] 为命令名，t[1] 为子命令的情况另算）
-    const targetAt2 = new Set([
-        'clear', 'effect', 'enchant', 'gamemode', 'give', 'tp', 'teleport',
-        'spawnpoint', 'title', 'playsound', 'stopsound', 'testfor', 'tellraw', 'execute',
-    ]);
-    if (targetAt2.has(cmd) && t.length > 2) { out.push(2); }
-    // kill 的 1.12.2 语法是 kill [target] —— 目标可省略，
-    // 因此「有第 3 个 token」本身就说明那是 target（没有子命令）。
-    if (cmd === 'kill' && t.length > 1) { out.push(1); }
+    const at = (i: number) => { if (i < t.length) { out.push(i); } };
 
     switch (cmd) {
+        // ---- 目标在下标 1 的命令 ----
+        case 'clear':                             // [player] [item] …
+        case 'effect':                            // <player> <effect> …
+        case 'enchant':                           // <player> <enchantment> [level]
+        case 'entitydata':                        // <entity> <dataTag>
+        case 'execute':                           // <entity> <x> <y> <z> …
+        case 'give':                              // <player> <item> …
+        case 'kill':                              // [player|entity]
+        case 'spawnpoint':                        // [player] [x y z]
+        case 'stopsound':                         // <player> [source] [sound]
+        case 'tellraw':                           // <player> <json>
+        case 'testfor':                           // <player> [dataTag]
+        case 'title':                             // <player> clear|reset|title|…
+            at(1);
+            break;
+
+        // ---- 目标在下标 2 ----
+        // advancement <grant|revoke|test> <player> … —— t[1] 是子命令，玩家在 2
+        case 'advancement': at(2); break;
+        case 'gamemode': at(2); break;            // <mode> [player]
+        case 'xp': at(2); break;                  // <amount> [player]
+
+        // ---- 目标位置随可选参数漂移 ----
+        case 'tp':                                // [target] <destination|x y z> …
+        case 'teleport':                          // <targets> <destination|x y z> …
+            at(1); at(2);
+            break;
+        case 'playsound':                         // <sound> <source> <player> [x] …
+            at(3);
+            break;
+        case 'particle':                          // … <speed> [count] [mode] [player] [params…]
+            at(9); at(10); at(11);
+            break;
+        case 'spreadplayers':                     // <x> <z> <dist> <range> <respect> <player …>
+            at(6);
+            break;
+        case 'replaceitem':                       // entity <selector> … | block <x> <y> <z> …
+            if (t[1] === 'entity') { at(2); }
+            break;
+
+        // ---- 子命令形态 ----
         case 'scoreboard':
             if (t[1] === 'players') {
-                if (t[2] === 'tag') { out.push(4); }
-                // operation: <targetName> <targetObjective> <operation> <selector> <objective>
-                // 选择器位是 <targetName>(3) 与 <selector>(6)
-                else if (t[2] === 'operation') { out.push(3); out.push(6); }
-                else if (t[2] && t[2] !== 'list') { out.push(3); }
+                if (t[2] === 'tag') {
+                    at(3);                        // tag <entity> add|remove <tagName>
+                } else if (t[2] === 'operation') {
+                    at(3); at(6);                 // <targetName> <obj> <op> <selector> <obj>
+                } else if (t[2] && t[2] !== 'objectives') {
+                    at(3);                        // set|add|remove|reset|enable|test|list <entity>
+                }
             } else if (t[1] === 'teams') {
-                // join: <name> <target> → 选择器在下标 4
-                // leave/empty: <target>|<name> → 下标 3
-                if (t[2] === 'join') { out.push(4); }
-                else if (t[2] === 'leave') { out.push(3); }
+                if (t[2] === 'join') { at(4); }   // join <team> [entities...]
+                else if (t[2] === 'leave') { at(3); }
             }
             break;
-        case 'testforblock':
-        case 'testforblocks': out.push(1); break;
-        case 'stats': out.push(3); break;
-        case 'summon': out.push(3); break;
-        case 'replaceitem': out.push(3); break;
-        default: break;
+        case 'stats':
+            // wiki：stats entity <selector2> set <stat> <selector> <objective>
+            //       stats block <x> <y> <z> set <stat> <selector> <objective>
+            // t[1] 是字面量 entity/block，所以选择器位比"数参数"再多一个
+            if (t[1] === 'entity') {
+                at(2); at(5);
+            } else if (t[1] === 'block') {
+                at(7);
+            }
+            break;
+
+        default:
+            // blockdata / clone / defaultgamemode / difficulty / fill / function /
+            // gamerule / say / setblock / setworldspawn / summon / testforblock /
+            // testforblocks / time / toggledownfall / trigger / weather / worldborder
+            // —— 这些命令 1.12.2 语法里没有选择器参数位
+            break;
     }
 
     return [...new Set(out.filter(i => i < t.length))];
