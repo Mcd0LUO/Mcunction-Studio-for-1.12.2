@@ -37,17 +37,62 @@ export function suggestFunctions() {
     return (ctx: SuggestContext) => ctx.cc.functions();
 }
 
+/**
+ * `scoreboard teams option <team> <option> <value>` 的六个选项。
+ *
+ * 已核对 wiki（Scoreboard#Command reference，2018-05-26 修订）原文，
+ * 1.12.2 只有这六个：color / friendlyfire / seeFriendlyInvisibles /
+ * nametagVisibility / deathMessageVisibility / collisionRule。
+ *
+ * ⚠️ 注意是 **friendlyfire**（全小写）。早先写成 `friendlyFire` 是错的，
+ *    游戏不认这个选项名。
+ * ⚠️ 1.12.2 **没有** prefix/suffix 的 option 子命令 ——
+ *    它们只存在于 scoreboard.dat 的 NBT 里。
+ */
 export function suggestTeamOptions() {
     const options = [
         { label: 'color', desc: '队伍颜色' },
-        { label: 'friendlyFire', desc: '友军伤害' },
+        { label: 'friendlyfire', desc: '友军伤害（true|false）' },
+        { label: 'seeFriendlyInvisibles', desc: '友方隐身可见（true|false）' },
         { label: 'nametagVisibility', desc: '名称标签可见性' },
         { label: 'deathMessageVisibility', desc: '死亡消息可见性' },
         { label: 'collisionRule', desc: '碰撞规则' },
-        { label: 'seeFriendlyInvisibles', desc: '友方隐身可见' },
     ];
     return (ctx: SuggestContext): vscode.CompletionItem[] =>
         options.map(o => ctx.item(o.label, o.desc, o.label, false, vscode.CompletionItemKind.Enum));
+}
+
+/** 队伍颜色（16 个，wiki 原文列举） */
+export function suggestTeamColors() {
+    const colors = [
+        'black', 'dark_blue', 'dark_green', 'dark_aqua', 'dark_red', 'dark_purple',
+        'gold', 'gray', 'dark_gray', 'blue', 'green', 'aqua', 'red',
+        'light_purple', 'yellow', 'white',
+    ];
+    return (ctx: SuggestContext): vscode.CompletionItem[] =>
+        colors.map(c => ctx.item(c, '', c, false, vscode.CompletionItemKind.Color));
+}
+
+/** true | false */
+export function suggestBoolean() {
+    return (ctx: SuggestContext): vscode.CompletionItem[] => [
+        ctx.item('true', '', 'true', false, vscode.CompletionItemKind.Keyword),
+        ctx.item('false', '', 'false', false, vscode.CompletionItemKind.Keyword),
+    ];
+}
+
+/** nametagVisibility / deathMessageVisibility 的取值 */
+export function suggestVisibility() {
+    const values = ['never', 'hideForOtherTeams', 'hideForOwnTeam', 'always'];
+    return (ctx: SuggestContext): vscode.CompletionItem[] =>
+        values.map(v => ctx.item(v, '', v, false, vscode.CompletionItemKind.Enum));
+}
+
+/** collisionRule 的取值 */
+export function suggestCollisionRule() {
+    const values = ['always', 'never', 'pushOwnTeam', 'pushOtherTeams'];
+    return (ctx: SuggestContext): vscode.CompletionItem[] =>
+        values.map(v => ctx.item(v, '', v, false, vscode.CompletionItemKind.Enum));
 }
 
 export function suggestOperations() {

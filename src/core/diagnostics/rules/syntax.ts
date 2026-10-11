@@ -14,9 +14,12 @@ export interface EngineValidator {
         node: { kind: string; argName?: string; children: unknown[] } | null;
         leftovers: readonly { token: string; index: number }[];
         reachedLeaf: boolean;
+        /** 内层命令位置写了 1.13 的 run */
         trailing: boolean;
         extraOnLeaf: boolean;
         missingRequired: boolean;
+        /** forward_root 之后第一个 token；不在 forward_root 时为 null */
+        innerCommand: string | null;
     };
 }
 
@@ -76,14 +79,21 @@ export const extraTokenRule: DiagnosticRule & { needsEngine: true } = {
 };
 
 /**
- * execute 末段之后还有内容。
+ * 内层命令位置上写了 1.13 的 `run` 关键字。
  *
- * 1.12.2 的 execute 语法是 `execute <entity> <x> <y> <z> <command>`，
- * 没有 1.13 的 `run` 关键字，也不允许多余 token。
+ * 1.12.2 的 execute 是 `execute <entity> <x> <y> <z> <command>` ——
+ * 坐标之后**直接就是命令**，没有 `run`（那是 1.13 的 Brigadier 语法）。
+ *
+ * ⚠️ 早先这条规则写的是「forward_root 之后还有 token 就算错」，
+ *    于是**每一条 execute 都会被误报**，包括
+ *    `execute @s ~ ~ ~ say hello` 这种完全合法的写法 ——
+ *    因为 forward_root 是叶子，引擎无法消费内层命令的参数，
+ *    那些参数全被当成了"多余 token"。
+ *    现在只精确检查内层命令的**第一个** token 是不是 `run`。
  */
-export const executeTrailingRule: DiagnosticRule & { needsEngine: true } = {
-    id: 'syntax/execute-trailing',
-    description: 'execute 子命令之后有多余内容（1.12.2 无 run 关键字）',
+export const executeRunKeywordRule: DiagnosticRule & { needsEngine: true } = {
+    id: 'syntax/execute-run',
+    description: 'execute 之后写了 1.13 的 run 关键字（1.12.2 没有）',
     defaultLevel: 'error',
     needsEngine: true,
     check(rc: RuleContext): readonly Diagnostic[] {
@@ -91,14 +101,51 @@ export const executeTrailingRule: DiagnosticRule & { needsEngine: true } = {
         if (!e) { return []; }
         if (rc.ctx.commandTable().length === 0) { return []; }
         const res = e.validate(rc.tokens);
-        if (res.known && res.trailing) {
-            return [rc.report(
-                executeTrailingRule,
-                tokenSpan(rc, res.leftovers[0].index),
-                'execute 之后的内容无法解析：1.12.2 的 execute 直接接命令，没有 run 关键字',
-            )];
-        }
-        return [];
+        if (!res.known || !res.trailing || res.innerCommand !== 'run') { return []; }
+
+        // 定位到那个 run token
+        const idx = rc.tokens.indexOf('run');
+        return [rc.report(
+            executeRunKeywordRule,
+            tokenSpan(rc, idx < 0 ? 0 : idx),
+            '1.12.2 的 execute 在坐标之后直接接命令，没有 run 关键字（那是 1.13+ 语法）',
+        )];
+    },
+};
+
+/**
+ * 内层命令名不存在。
+ *
+ * 引擎不递归展开内层命令（forward_root 是叶子），但至少能确认
+ * 「这里确实是一条命令」—— `execute @s ~ ~ ~ giv @s stone` 这种
+ * 命令名拼错的情况可以抓出来。
+ */
+export const unknownInnerCommandRule: DiagnosticRule & { needsEngine: true } = {
+    id: 'syntax/unknown-inner-command',
+    description: 'execute 之后接的命令不存在',
+    defaultLevel: 'error',
+    needsEngine: true,
+    check(rc: RuleContext): readonly Diagnostic[] {
+        const e = getEngine(rc);
+        if (!e) { return []; }
+        const table = rc.ctx.commandTable();
+        if (table.length === 0) { return []; }
+        const res = e.validate(rc.tokens);
+        if (!res.known) { return []; }
+
+        const inner = res.innerCommand;
+        // null = 不在 forward_root；'' = 用户还没输入内层命令，都不算错
+        if (inner === null || inner === '') { return []; }
+        // run 由上面那条规则专门报，避免同一处报两次
+        if (inner === 'run') { return []; }
+        if (table.includes(inner)) { return []; }
+
+        const idx = rc.tokens.indexOf(inner);
+        return [rc.report(
+            unknownInnerCommandRule,
+            tokenSpan(rc, idx < 0 ? 0 : idx),
+            `execute 之后的命令 "${inner}" 不存在`,
+        )];
     },
 };
 
@@ -131,4 +178,9 @@ export function getEngine(rc: RuleContext): EngineValidator | undefined {
     return (rc as unknown as Record<symbol, unknown>)[ENGINE] as EngineValidator | undefined;
 }
 
-export const syntaxRules: readonly DiagnosticRule[] = [unknownCommandRule, extraTokenRule, executeTrailingRule];
+export const syntaxRules: readonly DiagnosticRule[] = [
+    unknownCommandRule,
+    extraTokenRule,
+    executeRunKeywordRule,
+    unknownInnerCommandRule,
+];

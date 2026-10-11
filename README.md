@@ -27,7 +27,7 @@ Press <kbd>Tab</kbd> to accept, arrow keys to browse.
 
 | Group | Examples |
 |-------|----------|
-| Syntax | unknown command, too many arguments, trailing content after `execute` |
+| Syntax | unknown command, too many arguments, the 1.13 `run` keyword after `execute`, unknown command after `execute` |
 | References | undefined scoreboard objective / team / tag / advancement / **function** |
 | Duplicates | the same objective or team defined more than once |
 | Values | integer outside int32, objective name > 16 chars, display name > 32 chars, inverted `score_X_min` / `score_X` range |

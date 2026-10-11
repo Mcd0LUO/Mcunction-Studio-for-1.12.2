@@ -22,12 +22,19 @@ export interface ValidationResult {
     readonly leftovers: readonly Leftover[];
     /** 是否停在叶子节点 */
     readonly reachedLeaf: boolean;
-    /** forward_root（execute 末段）之后仍有 token */
+    /** 内层命令位置上写了 1.13 的 `run` 关键字 */
     readonly trailing: boolean;
     /** 叶子节点上还有多余 token —— 参数给多了 */
     readonly extraOnLeaf: boolean;
     /** 必填 argument 尚未取值 */
     readonly missingRequired: boolean;
+    /**
+     * forward_root 之后第一个 token（即内层命令名）；不在 forward_root 时为 null。
+     *
+     * 引擎不递归校验内层命令，但至少要能确认"这里有一条命令"。
+     * 空字符串表示用户刚敲完坐标还没输入命令。
+     */
+    readonly innerCommand: string | null;
 }
 
 export class CompletionEngine {
@@ -132,19 +139,31 @@ export class CompletionEngine {
             return {
                 known: false, node: null, leftovers: [], reachedLeaf: true,
                 trailing: false, extraOnLeaf: false, missingRequired: false,
+                innerCommand: null,
             };
         }
 
-        const { node, consumedRealToken } = result;
+        const { node, consumedRealToken, forwardRootAt } = result;
         const leftovers = result.leftovers;
         const reachedLeaf = node.children.length === 0;
 
-        // 情况一：叶子节点却还有剩余 token —— 参数给多了
-        // 例：/say hello extra（1.12.2 的 say 只收一个 rawtext）
-        const extraOnLeaf = reachedLeaf && leftovers.length > 0;
+        // 一旦走到 forward_root，**其后所有 token 都属于内层命令**。
+        // 引擎不递归展开内层命令（forward_root 是叶子），因此这些 token
+        // 会被 walk 记为"未消费" —— 但它们**不是**语法错误。
+        //
+        // ⚠️ 这里曾漏掉这个区分，导致每一条 execute 都被报
+        //    「多余的参数」+「execute 之后的内容无法解析」两个 error，
+        //    连 `execute @s ~ ~ ~ say hello` 这种完全合法的写法也不例外。
+        const inForwardRoot = node.kind === 'forward_root';
 
-        // 情况二：走到 forward_root 后还有 token —— execute 后又跟了东西
-        const trailing = node.kind === 'forward_root' && leftovers.length > 0;
+        // 情况一：叶子节点却还有剩余 token —— 参数给多了
+        // 例：/gamemode creative @s extra（<target> 已是叶子）
+        const extraOnLeaf = reachedLeaf && leftovers.length > 0 && !inForwardRoot;
+
+        // 情况二：内层命令的位置上写了 1.13 的 `run` 关键字
+        // （1.12.2 坐标之后直接就是命令）
+        const innerCommand = forwardRootAt >= 0 ? (commands[forwardRootAt] ?? '') : null;
+        const trailing = inForwardRoot && innerCommand === 'run';
 
         // 情况三：argument 节点还没填值，且没有任何 suggest 可给 —— 缺必填参数
         const arg = node.kind === 'argument' ? node as ArgumentNode : null;
@@ -161,6 +180,7 @@ export class CompletionEngine {
             trailing,
             extraOnLeaf,
             missingRequired,
+            innerCommand,
         };
     }
 
@@ -180,6 +200,8 @@ export class CompletionEngine {
         ancestors: Ancestors;
         consumedRealToken: boolean;
         leftovers: Leftover[];
+        /** 进入 forward_root 时消费的 token 下标；未进入为 -1 */
+        forwardRootAt: number;
     } {
         const root = this.roots.get(commands[0]);
         if (!root) {
@@ -189,6 +211,7 @@ export class CompletionEngine {
                 ancestors: [],
                 consumedRealToken: false,
                 leftovers: commands.slice(1).map((token, i) => ({ token, index: i + 1 })),
+                forwardRootAt: -1,
             };
         }
 
@@ -197,6 +220,7 @@ export class CompletionEngine {
         let cursor = 1;
         let consumedRealToken = false;
         let stuck = false;
+        let forwardRootAt = -1;
 
         while (cursor < commands.length) {
             // 贪婪参数：吃掉其余全部 token（含当前），此后不再有 leftovers
@@ -216,6 +240,9 @@ export class CompletionEngine {
 
             ancestors.push(node);
             node = next;
+            // 记录「内层命令从这里开始」：forward_root 之后的一切都属于内层命令，
+            // 不属于本层语法，validate() 据此避免把它们误判为多余 token。
+            if (node.kind === 'forward_root') { forwardRootAt = cursor; }
             cursor++;
             consumedRealToken = token !== '';
         }
@@ -227,7 +254,7 @@ export class CompletionEngine {
             }
         }
 
-        return { root, node, ancestors, consumedRealToken, leftovers };
+        return { root, node, ancestors, consumedRealToken, leftovers, forwardRootAt };
     }
 
     /**
@@ -264,9 +291,16 @@ export class CompletionEngine {
         // forward_root → 根命令列表
         if (node.kind === 'forward_root') { return this.getRootItems(); }
 
-        // 贪婪参数 → 自由文本，无补全项可给
+        // 贪婪参数 → 吃掉其后全部 token；若挂了 suggest，则对首个 token 给出候选
         if (node.kind === 'greedy') {
-            return [{ label: (node as GreedyArgumentNode).argName, detail: '自由文本', insertText: '', kind: vscode.CompletionItemKind.Text, sortText: '￿' }];
+            const g = node as GreedyArgumentNode;
+            if (g.suggest) {
+                const ctx = this.mkCtx(commands, lineText);
+                const result = g.suggest(ctx);
+                const items = result instanceof Promise ? await result : result;
+                return this.withRanges([...items], cursor, lineText, 'value');
+            }
+            return [{ label: g.argName, detail: '自由文本', insertText: '', kind: vscode.CompletionItemKind.Text, sortText: '￿' }];
         }
 
         // 若当前节点是 argument

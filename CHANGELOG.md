@@ -2,6 +2,58 @@
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
 
+# [1.6.4]
+
+**诊断层曾把 `execute` 与 `scoreboard` 大面积误报，本次全部修正。**
+两者都逐行对照 wiki 2018-05 修订（1.12.2 已发布、1.13 未发布）核对过：
+`Commands/execute`、`Scoreboard#Command reference`。
+
+### 修复
+- **每一条 `execute` 都被报两个 error**（最严重的一条）。
+  `forward_root` 在树里是叶子节点，引擎无法消费内层命令的参数，
+  于是内层命令的每个 token 都被当成"多余 token" ——
+  连 `execute @s ~ ~ ~ say hello` 这种完全合法的写法也会被标红两条
+  （`多余的参数 "hello"` + `execute 之后的内容无法解析`）。
+  现改为：进入 `forward_root` 后，其后的 token **全部属于内层命令**，不再计入 leftover。
+- **`execute` 缺少 `detect` 子语法**。
+  1.12.2 有两种形式：
+  `execute <entity> <x> <y> <z> <command>` 与
+  `execute <entity> <x> <y> <z> detect <x2> <y2> <z2> <block> <dataValue> <command>`。
+  此前只建模了前者。
+- **`/detect` 被错误注册成独立根命令**。Java 1.12.2 **没有** `/detect` ——
+  wiki 上 `Commands/detect` 那一页描述的是 Education Edition 的 Agent 命令
+  `detect <direction>`（forward/back/left/right/up/down），与 Java 无关。
+  该命令文件已删除。
+- **`run` 关键字的检查从"有剩余 token 就算错"改为精确识别**。
+  只有内层命令的**第一个** token 是 `run` 时才报错（`syntax/execute-run`），
+  不再牵连合法的内层命令参数。
+- **新增 `syntax/unknown-inner-command`**：`execute @s ~ ~ ~ giv @s stone`
+  这类内层命令名拼错能被抓出来（引擎不递归校验内层命令，但至少确认命令存在）。
+- **`scoreboard` 命令树缺漏多处**（原文件自己就写着 `TODO: 参数结构待修正`）：
+  - `players set/add/remove` 与 `players tag add/remove` 尾巴的 **`[dataTag]`（NBT）**
+  - `objectives add` 与 `teams add` 的 **`[display name...]`**（可多词）
+  - 整个缺失的子命令：`players list`、`players test`、`teams list`
+  - `objectives setdisplay` / `players reset` 的可选参数
+  - `teams join <team> [entities...]`（可选且变长）、`teams leave [entities...]`
+  - `teams option` 的六个选项及其取值枚举
+  - `operation` 的九个运算符改用 literal（此前用 argument+suggest，输入后仍重复提示自身且无法下钻）
+- **`teams option` 的选项名是 `friendlyfire`（全小写）**，此前写成 `friendlyFire`，游戏不认。
+- **`teams leave @a` 把实体报成"队伍未定义"**。诊断规则按 `t[2] !== 'add'` 就检查
+  `t[3]`，而 `teams leave` 根本没有队伍参数（`t[3]` 是实体）。
+  现逐个子命令判断 `t[3]` 是否为队伍名。
+
+### 重构
+- **`greedy` 节点支持候选提供者**。变长参数需要"既吃掉后续全部 token
+  （否则 `set @s obj 1 {a: 1}` 的 `{a:` / `1}` 会被误报），
+  又在首个 token 上给补全（`[entities...]` 给选择器列表）" ——
+  普通 `ArgumentNode` 做不到前者，故给 `greedy` 也挂上 `suggest`。
+
+### 测试
+- `execute` 与 `scoreboard` **首次纳入 1.12.2 命令树基准**（`required`）。
+  这两个命令此前完全不在基准里 —— 正是没有基准兜底，上述错误才长期存在。
+- 新增 22 项诊断回归（execute 三种形式 + scoreboard 六类）+ 12 项引擎补全断言。
+- e2e 的"合法文件不被误报"夹具加入 execute/scoreboard 的上述写法。
+
 # [1.6.3]
 
 ### 修复

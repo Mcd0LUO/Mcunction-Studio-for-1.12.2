@@ -162,9 +162,19 @@ npm run bench:real -- "D:/path/to/data"
   查 1.12 时期的精确原文可用 MediaWiki API：
   `?action=query&prop=revisions&rvstart=2018-06-01&rvdir=older`
 - **提交前跑完 Node 侧五个测试脚本 + lint**
-  （当前应分别为 16 / 51 / 110 / 31 / 10 passing，lint 0 error）。
+  （当前应分别为 16 / 63 / 122 / 31 / 12 passing，lint 0 error）。
   改动 `package.json` 的 `contributes`、扩展激活、语言绑定相关代码时，
   额外跑 `npm run test:e2e`。
+- **命令语法一律查 wiki 原文，且必须查 `Scoreboard#Command reference` 这类
+  表格页而不是同名子页**。教训：
+  - `Commands/scoreboard` 只有一行转述，真表格在 `Scoreboard#Command reference`
+  - `Commands/detect` 是 Education Edition 的 Agent 命令，**不是** Java 的 `/detect`
+    （Java 里 `detect` 只是 `execute` 的子语法）
+  - `scoreboard` 的 `[dataTag]`(NBT)、`[display name...]`、`players test`
+    都是这样查出来的 —— 凭印象写的树会缺一大片
+- **变长/自由文本参数用 `greedy`**，不要用普通 `argument`。
+  否则多写的词会被诊断误判成"多余参数"
+  （`say hello world`、`set @s obj 1 {a: 1}`、`teams join red @a @p` 都属此类）。
 - 迭代计划写 `docs/plans/`，缺陷报告写 `docs/bugs/`，待决策项写 `docs/actions/`，
   阶段快照写 `docs/status/`。
 

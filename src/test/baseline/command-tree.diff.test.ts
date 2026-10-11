@@ -17,6 +17,7 @@ import { titleCmd } from '../../dsl/commands/vanilla/title';
 import { scoreboardCmd } from '../../dsl/commands/vanilla/scoreboard';
 import { sayCmd } from '../../dsl/commands/vanilla/say';
 import { killCmd } from '../../dsl/commands/vanilla/kill';
+import { executeCmd } from '../../dsl/commands/vanilla/execute';
 
 interface BaselineFile {
     version: string;
@@ -33,6 +34,7 @@ const IMPLEMENTED: Record<string, RootNode> = {
     scoreboard: scoreboardCmd,
     say: sayCmd,
     kill: killCmd,
+    execute: executeCmd,
 };
 
 function loadBaseline(): BaselineFile {

@@ -39,8 +39,8 @@ describe('CompletionEngine 注册', () => {
         assert.strictEqual(engine.has('definitely_not_a_command'), false);
     });
 
-    it('getRootItems 覆盖全部 42 条内置命令', () => {
-        assert.strictEqual(engine.getRootItems().length, 42);
+    it('getRootItems 覆盖全部 41 条内置命令', () => {
+        assert.strictEqual(engine.getRootItems().length, 41);
     });
 
     it('已移除的 EasyCber 命令不再注册', () => {
@@ -508,5 +508,99 @@ describe('补全替换区间', () => {
                 `区间应只覆盖选择器内的值 "zom"，实际 ${JSON.stringify(rangeText(it, line))}`,
             );
         }
+    });
+});
+
+// ============================================================
+// execute / scoreboard 的命令树修正
+//
+// 依据 wiki 2018-05 修订（1.12.2 已发布、1.13 未发布）：
+//   Commands/execute、Scoreboard#Command reference
+// ============================================================
+
+describe('execute（1.12.2 语法，已核对 wiki）', () => {
+    it('坐标之后可以接 detect 子语法', async () => {
+        const c = ['execute', '@s', '~', '~', '~'];
+        const ls = labels(await engine.complete(c, 'execute @s ~ ~ ~ '));
+        assert.ok(ls.includes('detect'), `应给出 detect，实际 ${JSON.stringify(ls)}`);
+    });
+
+    it('detect 之后是第二组坐标', async () => {
+        const c = ['execute', '@s', '~', '~', '~', 'detect'];
+        const ls = labels(await engine.complete(c, 'execute @s ~ ~ ~ detect '));
+        assert.ok(ls.length > 0, 'detect 之后应有坐标提示');
+    });
+
+    it('detect 分支走完方块与数据值后转发根命令', async () => {
+        const c = ['execute', '@s', '~', '~', '~', 'detect', '~', '~', '~', 'stone', '0', ''];
+        const ls = labels(await engine.complete(c, 'execute @s ~ ~ ~ detect ~ ~ ~ stone 0 '));
+        assert.ok(ls.includes('scoreboard'), '应转发根命令');
+        assert.ok(!ls.includes('run'), '1.12.2 没有 run 关键字');
+    });
+
+    it('detect 不再是独立根命令（Java 1.12.2 不存在 /detect）', () => {
+        assert.strictEqual(engine.has('detect'), false);
+    });
+});
+
+describe('scoreboard（1.12.2 语法，已核对 wiki）', () => {
+    it('players 下列出全部九个子命令', async () => {
+        const ls = labels(await engine.complete(['scoreboard', 'players', ''], 'scoreboard players '));
+        for (const sub of ['list', 'set', 'add', 'remove', 'reset', 'enable', 'test', 'operation', 'tag']) {
+            assert.ok(ls.includes(sub), `players 下应有 ${sub}，实际 ${JSON.stringify(ls)}`);
+        }
+    });
+
+    it('operation 给出九个运算符（用 literal 而非 suggest）', async () => {
+        const ls = labels(await engine.complete(
+            ['scoreboard', 'players', 'operation', '@s', 'obj', ''],
+            'scoreboard players operation @s obj ',
+        ));
+        assert.deepStrictEqual(ls.sort(), ['*=', '+=', '-=', '/=', '<', '=', '>', '><', '%='].sort());
+    });
+
+    it('运算符之后仍能下钻到选择器（literal 叶子不断链）', async () => {
+        const c = ['scoreboard', 'players', 'operation', '@s', 'obj', '+='];
+        const ls = labels(await engine.complete(c, 'scoreboard players operation @s obj += '));
+        assert.ok(ls.includes('@a'), `+= 之后应给选择器，实际 ${JSON.stringify(ls.slice(0, 8))}`);
+    });
+
+    it('teams option 给出六个选项，且是 friendlyfire（全小写）', async () => {
+        const ls = labels(await engine.complete(['scoreboard', 'teams', 'option', 'red', ''], 'scoreboard teams option red '));
+        assert.ok(ls.includes('friendlyfire'), `应是 friendlyfire，实际 ${JSON.stringify(ls)}`);
+        assert.ok(!ls.includes('friendlyFire'), 'friendlyFire 是错的（游戏不认）');
+        for (const o of ['color', 'seeFriendlyInvisibles', 'nametagVisibility', 'deathMessageVisibility', 'collisionRule']) {
+            assert.ok(ls.includes(o), `缺少选项 ${o}`);
+        }
+    });
+
+    it('option color 给出 16 种颜色', async () => {
+        const ls = labels(await engine.complete(
+            ['scoreboard', 'teams', 'option', 'red', 'color', ''],
+            'scoreboard teams option red color ',
+        ));
+        assert.strictEqual(ls.length, 16);
+        assert.ok(ls.includes('dark_red') && ls.includes('light_purple'));
+    });
+
+    it('teams join 的变长 [entities...] 仍给选择器候选', async () => {
+        const ls = labels(await engine.complete(['scoreboard', 'teams', 'join', 'red', ''], 'scoreboard teams join red '));
+        assert.ok(ls.includes('@a'), `greedy 挂了 suggest 就应给候选，实际 ${JSON.stringify(ls)}`);
+    });
+
+    it('objectives add 末尾给出 [display name...]', async () => {
+        const ls = labels(await engine.complete(
+            ['scoreboard', 'objectives', 'add', 'foo', 'dummy', ''],
+            'scoreboard objectives add foo dummy ',
+        ));
+        assert.ok(ls.includes('[display name...]'), `实际 ${JSON.stringify(ls)}`);
+    });
+
+    it('players set 末尾给出 [dataTag]', async () => {
+        const ls = labels(await engine.complete(
+            ['scoreboard', 'players', 'set', '@s', 'obj', '1', ''],
+            'scoreboard players set @s obj 1 ',
+        ));
+        assert.ok(ls.includes('[dataTag]'), `实际 ${JSON.stringify(ls)}`);
     });
 });

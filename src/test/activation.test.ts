@@ -107,7 +107,7 @@ describe('激活路径：正常数据包工作区', () => {
         assert.ok(paths.rootDir, 'rootDir 应被设置');
         assert.strictEqual(paths.rootDir!.fsPath, path.resolve(dataDir));
         assert.ok(CompletionEngine.getCurrent(), '引擎应被显式装配');
-        assert.strictEqual(CompletionEngine.getCurrent()!.getRootItems().length, 42);
+        assert.strictEqual(CompletionEngine.getCurrent()!.getRootItems().length, 41);
 
         // 索引是异步的（dataloader.init() 未 await），等一拍
         await new Promise(r => setTimeout(r, 600));
@@ -140,7 +140,7 @@ describe('激活路径：异常环境应优雅降级', () => {
 
         // 引擎仍应装配 —— 静态补全不依赖项目数据
         assert.ok(CompletionEngine.getCurrent(), '即使无工作区，引擎也应装配');
-        assert.strictEqual(CompletionEngine.getCurrent()!.getRootItems().length, 42);
+        assert.strictEqual(CompletionEngine.getCurrent()!.getRootItems().length, 41);
     });
 
     it('工作区不是数据包时 activate 不抛异常', () => {
@@ -150,7 +150,7 @@ describe('激活路径：异常环境应优雅降级', () => {
         setWorkspace(tmp);
 
         ext.activate(fakeContext());   // 不应抛异常
-        assert.strictEqual(CompletionEngine.getCurrent()!.getRootItems().length, 42);
+        assert.strictEqual(CompletionEngine.getCurrent()!.getRootItems().length, 41);
     });
 
     it('无工作区时补全仍返回静态结果', async () => {

@@ -32,7 +32,8 @@ import { cloneCmd } from './vanilla/clone';
 import { setblockCmd } from './vanilla/setblock';
 import { testforblockCmd } from './vanilla/testforblock';
 import { testforblocksCmd } from './vanilla/testforblocks';
-import { detectCmd } from './vanilla/detect';
+// 注意：这里**没有** detect。`detect` 是 execute 的子语法（见 vanilla/execute.ts），
+// Java 1.12.2 不存在 /detect —— wiki 上那一页是 Education Edition 的 Agent 命令。
 import { blockdataCmd } from './vanilla/blockdata';
 import { spreadplayersCmd } from './vanilla/spreadplayers';
 import { stopsoundCmd } from './vanilla/stopsound';
@@ -54,7 +55,7 @@ const ALL: RootNode[] = [
     triggerCmd, titleCmd, timeCmd, executeCmd, sayCmd,
     defaultgamemodeCmd, setworldspawnCmd, toggledownfallCmd,
     fillCmd, cloneCmd, setblockCmd, testforblockCmd, testforblocksCmd,
-    detectCmd, blockdataCmd, spreadplayersCmd,
+    blockdataCmd, spreadplayersCmd,
     stopsoundCmd, playsoundCmd, particleCmd, summonCmd, tellrawCmd, entitydataCmd,
     replaceitemCmd, statsCmd, gameruleCmd, advancementCmd, worldborderCmd,
 ];

@@ -2,7 +2,7 @@
   "name": "mcfunction-studio",
   "displayName": "Mcfunction Studio for 1.12",
   "description": "A simple mcfunction dev specialized helper for 1.12.2",
-  "version": "1.6.3",
+  "version": "1.6.4",
   "publisher": "Mcd0-LUO",
   "author": {
     "email": "1473522801@qq.com",
@@ -124,11 +124,17 @@
               "default": "error",
               "markdownDescription": "参数个数多于该命令 1.12.2 语法所允许。"
             },
-            "syntax/execute-trailing": {
+            "syntax/execute-run": {
               "type": "string",
               "enum": ["off", "hint", "information", "warning", "error"],
               "default": "error",
-              "markdownDescription": "execute 之后有多余内容（1.12.2 无 `run` 关键字）。"
+              "markdownDescription": "execute 之后写了 1.13 的 `run` 关键字（1.12.2 在坐标之后直接接命令）。"
+            },
+            "syntax/unknown-inner-command": {
+              "type": "string",
+              "enum": ["off", "hint", "information", "warning", "error"],
+              "default": "error",
+              "markdownDescription": "execute 之后接的命令不存在。"
             },
             "resource/undefined-scoreboard": {
               "type": "string",

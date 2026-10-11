@@ -56,6 +56,13 @@ function makePack(): { dataDir: string; packRoot: string; funcFile: string; good
             'kill',
             'scoreboard players set @s used 1',
             'scoreboard players set @s used 5',
+            // 以下都曾是**大面积误报**的写法：
+            // execute 的内层命令参数、scoreboard 的 dataTag / display name / 变长 entities
+            'execute @s ~ ~ ~ say hello',
+            'execute @s ~ ~ ~ detect ~ ~ ~ stone 0 setblock ~ ~ ~ air',
+            'scoreboard objectives add named dummy My Display Name',
+            'scoreboard players set @s used 1 {Health:10}',
+            'scoreboard teams join blue @a @p',
             '',
         ].join('\n'),
     );

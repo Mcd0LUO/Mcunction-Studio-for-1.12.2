@@ -34,11 +34,15 @@ export function optional(
 /**
  * 贪婪参数：吃掉其后所有剩余 token。
  *
- * 用于 1.12.2 的自由文本参数（wiki 写作 `<message …>`）。
- * 校验与诊断层据此认定：进入该节点后，剩余 token 全部合法。
+ * 用于 1.12.2 的变长/自由文本参数（wiki 写作 `<message …>`、`[display name...]`、
+ * `[entities...]`、`[dataTag]`）。校验与诊断层据此认定：
+ * 进入该节点后，剩余 token 全部合法。
+ *
+ * @param suggest 可选。变长参数若在**首个** token 上有候选（如 `[entities...]`
+ *                给选择器），传进来即可；后续 token 仍会被全部吃掉。
  */
-export function greedy(name: string): GreedyArgumentNode {
-    return new GreedyArgumentNode(name);
+export function greedy(name: string, suggest?: SuggestionProvider | null): GreedyArgumentNode {
+    return new GreedyArgumentNode(name, suggest);
 }
 
 /** 转发到根命令列表（execute 的末段：1.12.2 中该位置直接接命令，无 run 关键字） */

@@ -1,7 +1,17 @@
 {
   "$schema_comment": "Minecraft 1.12.2 命令树结构基准。只描述 kind/name/optional/children。function if|unless 为 1.12.2 合法语法。",
   "version": "1.12.2",
-  "required": ["function", "effect", "time", "title", "scoreboard.players.remove", "say", "kill"],
+  "required": [
+    "function",
+    "effect",
+    "time",
+    "title",
+    "scoreboard.players.remove",
+    "say",
+    "kill",
+    "execute",
+    "scoreboard"
+  ],
   "commands": {
     "function": {
       "kind": "root",
@@ -254,7 +264,7 @@
       ]
     },
     "scoreboard.players.remove": {
-      "_note": "子路径基准：scoreboard players remove 在 1.12.2 需要 <count>",
+      "_note": "子路径基准：wiki 原文 scoreboard players remove <entity> <objective> <count> [dataTag] —— 参数名是 entity 不是 target，且尾巴有 dataTag",
       "kind": "root",
       "name": "scoreboard",
       "children": [
@@ -268,7 +278,7 @@
               "children": [
                 {
                   "kind": "argument",
-                  "name": "<target>",
+                  "name": "<entity>",
                   "children": [
                     {
                       "kind": "argument",
@@ -277,7 +287,13 @@
                         {
                           "kind": "argument",
                           "name": "<count>",
-                          "children": []
+                          "children": [
+                            {
+                              "kind": "greedy",
+                              "name": "[dataTag]",
+                              "children": []
+                            }
+                          ]
                         }
                       ]
                     }
@@ -288,6 +304,706 @@
           ]
         }
       ]
+    },
+    "execute": {
+      "_note": "wiki Commands/execute（2018-05-03 修订）：两种形式 —— 直接接命令，或 detect <x2> <y2> <z2> <block> <dataValue> 后接命令。detect 是 execute 的子语法，不是独立命令；Java 1.12.2 没有 /detect。",
+      "kind": "root",
+      "children": [
+        {
+          "kind": "argument",
+          "children": [
+            {
+              "kind": "argument",
+              "children": [
+                {
+                  "kind": "argument",
+                  "children": [
+                    {
+                      "kind": "argument",
+                      "children": [
+                        {
+                          "kind": "forward_root",
+                          "children": []
+                        },
+                        {
+                          "kind": "literal",
+                          "children": [
+                            {
+                              "kind": "argument",
+                              "children": [
+                                {
+                                  "kind": "argument",
+                                  "children": [
+                                    {
+                                      "kind": "argument",
+                                      "children": [
+                                        {
+                                          "kind": "argument",
+                                          "children": [
+                                            {
+                                              "kind": "argument",
+                                              "children": [
+                                                {
+                                                  "kind": "forward_root",
+                                                  "children": []
+                                                }
+                                              ],
+                                              "name": "<dataValue>"
+                                            }
+                                          ],
+                                          "name": "<block>"
+                                        }
+                                      ],
+                                      "name": "<z2>"
+                                    }
+                                  ],
+                                  "name": "<y2>"
+                                }
+                              ],
+                              "name": "<x2>"
+                            }
+                          ],
+                          "name": "detect"
+                        }
+                      ],
+                      "name": "<z>"
+                    }
+                  ],
+                  "name": "<y>"
+                }
+              ],
+              "name": "<x>"
+            }
+          ],
+          "name": "<entity>"
+        }
+      ],
+      "name": "execute"
+    },
+    "scoreboard": {
+      "_note": "wiki Scoreboard#Command reference（2018-05-26 修订）逐行抄录。含 [dataTag]（NBT）、[display name...]（可多词）、players list|test、teams list、teams option 六选项。选项名是 friendlyfire（全小写）。",
+      "kind": "root",
+      "children": [
+        {
+          "kind": "literal",
+          "children": [
+            {
+              "kind": "literal",
+              "children": [],
+              "name": "list"
+            },
+            {
+              "kind": "literal",
+              "children": [
+                {
+                  "kind": "argument",
+                  "children": [
+                    {
+                      "kind": "argument",
+                      "children": [
+                        {
+                          "kind": "greedy",
+                          "children": [],
+                          "name": "[display name...]"
+                        }
+                      ],
+                      "name": "<criteria>"
+                    }
+                  ],
+                  "name": "<name>"
+                }
+              ],
+              "name": "add"
+            },
+            {
+              "kind": "literal",
+              "children": [
+                {
+                  "kind": "argument",
+                  "children": [],
+                  "name": "<name>"
+                }
+              ],
+              "name": "remove"
+            },
+            {
+              "kind": "literal",
+              "children": [
+                {
+                  "kind": "argument",
+                  "children": [
+                    {
+                      "kind": "argument",
+                      "children": [],
+                      "name": "[objective]",
+                      "optional": true
+                    }
+                  ],
+                  "name": "<slot>"
+                }
+              ],
+              "name": "setdisplay"
+            }
+          ],
+          "name": "objectives"
+        },
+        {
+          "kind": "literal",
+          "children": [
+            {
+              "kind": "literal",
+              "children": [
+                {
+                  "kind": "argument",
+                  "children": [],
+                  "name": "[entity]",
+                  "optional": true
+                }
+              ],
+              "name": "list"
+            },
+            {
+              "kind": "literal",
+              "children": [
+                {
+                  "kind": "argument",
+                  "children": [
+                    {
+                      "kind": "argument",
+                      "children": [
+                        {
+                          "kind": "argument",
+                          "children": [
+                            {
+                              "kind": "greedy",
+                              "children": [],
+                              "name": "[dataTag]"
+                            }
+                          ],
+                          "name": "<score>"
+                        }
+                      ],
+                      "name": "<objective>"
+                    }
+                  ],
+                  "name": "<entity>"
+                }
+              ],
+              "name": "set"
+            },
+            {
+              "kind": "literal",
+              "children": [
+                {
+                  "kind": "argument",
+                  "children": [
+                    {
+                      "kind": "argument",
+                      "children": [
+                        {
+                          "kind": "argument",
+                          "children": [
+                            {
+                              "kind": "greedy",
+                              "children": [],
+                              "name": "[dataTag]"
+                            }
+                          ],
+                          "name": "<count>"
+                        }
+                      ],
+                      "name": "<objective>"
+                    }
+                  ],
+                  "name": "<entity>"
+                }
+              ],
+              "name": "add"
+            },
+            {
+              "kind": "literal",
+              "children": [
+                {
+                  "kind": "argument",
+                  "children": [
+                    {
+                      "kind": "argument",
+                      "children": [
+                        {
+                          "kind": "argument",
+                          "children": [
+                            {
+                              "kind": "greedy",
+                              "children": [],
+                              "name": "[dataTag]"
+                            }
+                          ],
+                          "name": "<count>"
+                        }
+                      ],
+                      "name": "<objective>"
+                    }
+                  ],
+                  "name": "<entity>"
+                }
+              ],
+              "name": "remove"
+            },
+            {
+              "kind": "literal",
+              "children": [
+                {
+                  "kind": "argument",
+                  "children": [
+                    {
+                      "kind": "argument",
+                      "children": [],
+                      "name": "[objective]",
+                      "optional": true
+                    }
+                  ],
+                  "name": "<entity>"
+                }
+              ],
+              "name": "reset"
+            },
+            {
+              "kind": "literal",
+              "children": [
+                {
+                  "kind": "argument",
+                  "children": [
+                    {
+                      "kind": "argument",
+                      "children": [],
+                      "name": "<trigger>"
+                    }
+                  ],
+                  "name": "<entity>"
+                }
+              ],
+              "name": "enable"
+            },
+            {
+              "kind": "literal",
+              "children": [
+                {
+                  "kind": "argument",
+                  "children": [
+                    {
+                      "kind": "argument",
+                      "children": [
+                        {
+                          "kind": "argument",
+                          "children": [
+                            {
+                              "kind": "argument",
+                              "children": [],
+                              "name": "[max]",
+                              "optional": true
+                            }
+                          ],
+                          "name": "<min>"
+                        }
+                      ],
+                      "name": "<objective>"
+                    }
+                  ],
+                  "name": "<entity>"
+                }
+              ],
+              "name": "test"
+            },
+            {
+              "kind": "literal",
+              "children": [
+                {
+                  "kind": "argument",
+                  "children": [
+                    {
+                      "kind": "argument",
+                      "children": [
+                        {
+                          "kind": "literal",
+                          "children": [
+                            {
+                              "kind": "argument",
+                              "children": [
+                                {
+                                  "kind": "argument",
+                                  "children": [],
+                                  "name": "<objective>"
+                                }
+                              ],
+                              "name": "<selector>"
+                            }
+                          ],
+                          "name": "+="
+                        },
+                        {
+                          "kind": "literal",
+                          "children": [
+                            {
+                              "kind": "argument",
+                              "children": [
+                                {
+                                  "kind": "argument",
+                                  "children": [],
+                                  "name": "<objective>"
+                                }
+                              ],
+                              "name": "<selector>"
+                            }
+                          ],
+                          "name": "-="
+                        },
+                        {
+                          "kind": "literal",
+                          "children": [
+                            {
+                              "kind": "argument",
+                              "children": [
+                                {
+                                  "kind": "argument",
+                                  "children": [],
+                                  "name": "<objective>"
+                                }
+                              ],
+                              "name": "<selector>"
+                            }
+                          ],
+                          "name": "*="
+                        },
+                        {
+                          "kind": "literal",
+                          "children": [
+                            {
+                              "kind": "argument",
+                              "children": [
+                                {
+                                  "kind": "argument",
+                                  "children": [],
+                                  "name": "<objective>"
+                                }
+                              ],
+                              "name": "<selector>"
+                            }
+                          ],
+                          "name": "/="
+                        },
+                        {
+                          "kind": "literal",
+                          "children": [
+                            {
+                              "kind": "argument",
+                              "children": [
+                                {
+                                  "kind": "argument",
+                                  "children": [],
+                                  "name": "<objective>"
+                                }
+                              ],
+                              "name": "<selector>"
+                            }
+                          ],
+                          "name": "%="
+                        },
+                        {
+                          "kind": "literal",
+                          "children": [
+                            {
+                              "kind": "argument",
+                              "children": [
+                                {
+                                  "kind": "argument",
+                                  "children": [],
+                                  "name": "<objective>"
+                                }
+                              ],
+                              "name": "<selector>"
+                            }
+                          ],
+                          "name": "="
+                        },
+                        {
+                          "kind": "literal",
+                          "children": [
+                            {
+                              "kind": "argument",
+                              "children": [
+                                {
+                                  "kind": "argument",
+                                  "children": [],
+                                  "name": "<objective>"
+                                }
+                              ],
+                              "name": "<selector>"
+                            }
+                          ],
+                          "name": "<"
+                        },
+                        {
+                          "kind": "literal",
+                          "children": [
+                            {
+                              "kind": "argument",
+                              "children": [
+                                {
+                                  "kind": "argument",
+                                  "children": [],
+                                  "name": "<objective>"
+                                }
+                              ],
+                              "name": "<selector>"
+                            }
+                          ],
+                          "name": ">"
+                        },
+                        {
+                          "kind": "literal",
+                          "children": [
+                            {
+                              "kind": "argument",
+                              "children": [
+                                {
+                                  "kind": "argument",
+                                  "children": [],
+                                  "name": "<objective>"
+                                }
+                              ],
+                              "name": "<selector>"
+                            }
+                          ],
+                          "name": "><"
+                        }
+                      ],
+                      "name": "<targetObjective>"
+                    }
+                  ],
+                  "name": "<targetName>"
+                }
+              ],
+              "name": "operation"
+            },
+            {
+              "kind": "literal",
+              "children": [
+                {
+                  "kind": "argument",
+                  "children": [
+                    {
+                      "kind": "literal",
+                      "children": [
+                        {
+                          "kind": "argument",
+                          "children": [
+                            {
+                              "kind": "greedy",
+                              "children": [],
+                              "name": "[dataTag]"
+                            }
+                          ],
+                          "name": "<tagName>"
+                        }
+                      ],
+                      "name": "add"
+                    },
+                    {
+                      "kind": "literal",
+                      "children": [
+                        {
+                          "kind": "argument",
+                          "children": [
+                            {
+                              "kind": "greedy",
+                              "children": [],
+                              "name": "[dataTag]"
+                            }
+                          ],
+                          "name": "<tagName>"
+                        }
+                      ],
+                      "name": "remove"
+                    },
+                    {
+                      "kind": "literal",
+                      "children": [],
+                      "name": "list"
+                    }
+                  ],
+                  "name": "<entity>"
+                }
+              ],
+              "name": "tag"
+            }
+          ],
+          "name": "players"
+        },
+        {
+          "kind": "literal",
+          "children": [
+            {
+              "kind": "literal",
+              "children": [
+                {
+                  "kind": "argument",
+                  "children": [],
+                  "name": "[teamname]",
+                  "optional": true
+                }
+              ],
+              "name": "list"
+            },
+            {
+              "kind": "literal",
+              "children": [
+                {
+                  "kind": "argument",
+                  "children": [
+                    {
+                      "kind": "greedy",
+                      "children": [],
+                      "name": "[display name...]"
+                    }
+                  ],
+                  "name": "<name>"
+                }
+              ],
+              "name": "add"
+            },
+            {
+              "kind": "literal",
+              "children": [
+                {
+                  "kind": "argument",
+                  "children": [],
+                  "name": "<name>"
+                }
+              ],
+              "name": "remove"
+            },
+            {
+              "kind": "literal",
+              "children": [
+                {
+                  "kind": "argument",
+                  "children": [],
+                  "name": "<name>"
+                }
+              ],
+              "name": "empty"
+            },
+            {
+              "kind": "literal",
+              "children": [
+                {
+                  "kind": "argument",
+                  "children": [
+                    {
+                      "kind": "greedy",
+                      "children": [],
+                      "name": "[entities...]"
+                    }
+                  ],
+                  "name": "<team>"
+                }
+              ],
+              "name": "join"
+            },
+            {
+              "kind": "literal",
+              "children": [
+                {
+                  "kind": "greedy",
+                  "children": [],
+                  "name": "[entities...]"
+                }
+              ],
+              "name": "leave"
+            },
+            {
+              "kind": "literal",
+              "children": [
+                {
+                  "kind": "argument",
+                  "children": [
+                    {
+                      "kind": "literal",
+                      "children": [
+                        {
+                          "kind": "argument",
+                          "children": [],
+                          "name": "<value>"
+                        }
+                      ],
+                      "name": "color"
+                    },
+                    {
+                      "kind": "literal",
+                      "children": [
+                        {
+                          "kind": "argument",
+                          "children": [],
+                          "name": "<value>"
+                        }
+                      ],
+                      "name": "friendlyfire"
+                    },
+                    {
+                      "kind": "literal",
+                      "children": [
+                        {
+                          "kind": "argument",
+                          "children": [],
+                          "name": "<value>"
+                        }
+                      ],
+                      "name": "seeFriendlyInvisibles"
+                    },
+                    {
+                      "kind": "literal",
+                      "children": [
+                        {
+                          "kind": "argument",
+                          "children": [],
+                          "name": "<value>"
+                        }
+                      ],
+                      "name": "nametagVisibility"
+                    },
+                    {
+                      "kind": "literal",
+                      "children": [
+                        {
+                          "kind": "argument",
+                          "children": [],
+                          "name": "<value>"
+                        }
+                      ],
+                      "name": "deathMessageVisibility"
+                    },
+                    {
+                      "kind": "literal",
+                      "children": [
+                        {
+                          "kind": "argument",
+                          "children": [],
+                          "name": "<value>"
+                        }
+                      ],
+                      "name": "collisionRule"
+                    }
+                  ],
+                  "name": "<team>"
+                }
+              ],
+              "name": "option"
+            }
+          ],
+          "name": "teams"
+        }
+      ],
+      "name": "scoreboard"
     }
   }
 }

@@ -92,21 +92,35 @@ export class ArgumentNode extends CommandNode {
 /**
  * 贪婪参数节点 —— 吃掉其后**所有**剩余 token。
  *
- * 对应 1.12.2 中若干命令的自由文本参数（wiki 写作 `<message …>` / `<raw json …>`）：
+ * 对应 1.12.2 中若干变长/自由文本参数（wiki 写作 `<message …>`、
+ * `[display name...]`、`[entities...]`、`[dataTag]`）：
  *   say <message …>
- *   me <message …>（Bedrock/Java 视版本）
  *   title <target> title <raw json title …>
+ *   scoreboard objectives add <name> <criteria> [display name...]
+ *   scoreboard teams join <team> [entities...]
+ *   scoreboard players set <entity> <objective> <score> [dataTag]
  *
  * ⚠️ 之所以需要独立节点类型：普通 ArgumentNode 每层只消费一个 token，
  *    `say hello world` 里的 world 会成为"未消费 token"，
- *    诊断层一上线就会把完全合法的 say 命令判成语法错误。
+ *    诊断层就会把完全合法的命令判成语法错误。
+ *    同理 `teams join red @a @p` 的 `@p`、`set @s obj 1 {a: 1}` 的 `{a:` /
+ *    `1}` 都会误报。
  */
 export class GreedyArgumentNode extends CommandNode {
     public readonly argName: string;
+    /**
+     * 可选候选提供者。
+     *
+     * 变长参数既需要**吃掉后续全部 token**（避免误报），
+     * 又希望在**第一个** token 上给出补全（如 `[entities...]` 给选择器列表）。
+     * 普通 ArgumentNode 做不到前者，所以给 greedy 也挂一个 suggest。
+     */
+    public readonly suggest: SuggestionProvider | null;
 
-    constructor(argName: string) {
+    constructor(argName: string, suggest?: SuggestionProvider | null) {
         super('greedy');
         this.argName = argName;
+        this.suggest = suggest ?? null;
     }
 }
 

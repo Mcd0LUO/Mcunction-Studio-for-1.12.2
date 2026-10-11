@@ -221,7 +221,7 @@ describe('diagnostics/语法规则', () => {
 
     it('execute 之后多余内容被识别（1.12.2 无 run）', () => {
         const d = run(['execute @s ~ ~ ~ run say hi'], { commands: all });
-        assert.ok(d.some(x => x.ruleId === 'syntax/extra-token' || x.ruleId === 'syntax/execute-trailing'));
+        assert.ok(d.some(x => x.ruleId === 'syntax/execute-run'));
     });
 
     it('半截命令不报错（防误报）', () => {
@@ -408,5 +408,159 @@ describe('diagnostics/DiagnosticRunner', () => {
             assert.ok(d.span.end <= lines[d.line].length, `span.end=${d.span.end} > ${lines[d.line].length}`);
             assert.ok(d.span.start <= d.span.end);
         }
+    });
+});
+
+// ============================================================
+// 回归：execute 与 scoreboard 的大面积误报
+//
+// 这两个命令此前都被诊断层误报：
+//   · execute —— forward_root 是叶子，引擎无法消费内层命令的参数，
+//     于是**每一条** execute 都被报「多余的参数」+「内容无法解析」两个 error，
+//     连 `execute @s ~ ~ ~ say hello` 也不例外
+//   · scoreboard —— 命令树本身漏了 [dataTag] / [display name...] / 多个子命令
+//
+// 语法依据均为 wiki 2018-05 修订（1.12.2 已发布、1.13 未发布）：
+//   Commands/execute、Scoreboard#Command reference
+// ============================================================
+
+describe('diagnostics/execute 与 scoreboard 回归', () => {
+    const all = [
+        'execute', 'say', 'scoreboard', 'kill', 'function', 'gamemode',
+        'setblock', 'fill', 'clone', 'particle', 'title', 'effect',
+    ];
+
+    /**
+     * 这些用例只关心**命令树形状**（语法规则），
+     * 因此把用到的记分板/队伍/标签/函数都登记进假索引 ——
+     * 否则 resource/* 规则会正确地报"未定义"，干扰断言。
+     */
+    const idx: FakeOptions = {
+        commands: all,
+        scoreboards: ['obj'],
+        teams: ['red'],
+        tags: ['mytag'],
+        functions: ['ns:foo'],
+    };
+
+    /** 断言这些行一条诊断都不产生（含 resource 规则） */
+    function assertClean(lines: string[], why: string): void {
+        for (const l of lines) {
+            const d = run([l], idx);
+            assert.deepStrictEqual(
+                d.map(x => `${x.ruleId}: ${x.message}`), [],
+                `${why}\n误报行: ${l}`,
+            );
+        }
+    }
+
+    it('execute 内层命令带参数不误报', () => {
+        assertClean([
+            'execute @s ~ ~ ~ say hello',
+            'execute @s ~ ~ ~ say hello world again',
+            'execute @a ~ ~ ~ scoreboard players set @s obj 1',
+            'execute @s ~ ~ ~ function ns:foo',
+            'execute @s 1 2 3 setblock ~ ~ ~ stone',
+        ], 'execute 的内层命令参数被误判为多余 token');
+    });
+
+    it('execute 的 detect 形式不误报', () => {
+        assertClean([
+            'execute @s ~ ~ ~ detect ~ ~ ~ stone 0 say hi',
+            'execute @s ~ ~ ~ detect ~ ~ -1 minecraft:stone 0 setblock ~ ~ ~ air',
+        ], 'execute ... detect ... 未被识别');
+    });
+
+    it('execute 末尾尚未输入命令时不误报', () => {
+        assertClean([
+            'execute @s ~ ~ ~',
+            'execute @s ~ ~ ~ detect ~ ~ ~ stone 0',
+        ], '用户还没输入内层命令');
+    });
+
+    it('1.13 的 run 关键字被精确报出（两种形式）', () => {
+        for (const l of [
+            'execute @s ~ ~ ~ run say hi',
+            'execute @s ~ ~ ~ detect ~ ~ ~ stone 0 run say hi',
+        ]) {
+            const d = run([l], { commands: all });
+            assert.ok(
+                d.some(x => x.ruleId === 'syntax/execute-run'),
+                `应报出 run 关键字: ${l}，实际 ${JSON.stringify(d.map(x => x.ruleId))}`,
+            );
+        }
+    });
+
+    it('execute 之后的命令名不存在时报错', () => {
+        const d = run(['execute @s ~ ~ ~ giv @s stone'], { commands: all });
+        assert.ok(
+            d.some(x => x.ruleId === 'syntax/unknown-inner-command'),
+            `应报出内层命令不存在，实际 ${JSON.stringify(d.map(x => x.ruleId))}`,
+        );
+    });
+
+    it('scoreboard 的 [dataTag]（NBT）尾巴不误报', () => {
+        assertClean([
+            'scoreboard players set @s obj 1 {Health:10}',
+            'scoreboard players set @s obj 1 {a: 1, b: 2}',
+            'scoreboard players add @s obj 5 {a:1}',
+            'scoreboard players remove @s obj 5 {a:1}',
+            'scoreboard players tag @s add mytag {a:1}',
+            'scoreboard players tag @s remove mytag {a:1}',
+        ], 'dataTag 含空格时被拆成多个 token 而误报');
+    });
+
+    it('scoreboard 的 [display name...]（可多词）不误报', () => {
+        assertClean([
+            'scoreboard objectives add foo dummy My Display Name',
+            'scoreboard teams add red The Red Team',
+        ], '显示名是多词参数');
+    });
+
+    it('scoreboard 的变长 [entities...] 不误报', () => {
+        assertClean([
+            'scoreboard teams join red @a @p @r',
+            'scoreboard teams leave @a @p',
+            'scoreboard teams leave',
+        ], 'entities 变长参数');
+    });
+
+    it('scoreboard 此前遗漏的子命令现在被认识', () => {
+        assertClean([
+            'scoreboard players list',
+            'scoreboard players list @s',
+            'scoreboard players test @s obj 1 10',
+            'scoreboard players test @s obj 1',
+            'scoreboard teams list',
+            'scoreboard teams list red',
+        ], '这些子命令此前整个缺失');
+    });
+
+    it('scoreboard 的可选参数不误报', () => {
+        assertClean([
+            'scoreboard objectives setdisplay sidebar',
+            'scoreboard objectives setdisplay sidebar obj',
+            'scoreboard players reset @s',
+            'scoreboard players reset @s obj',
+        ], '可选参数被当成必填');
+    });
+
+    it('scoreboard teams option 的六个选项都不误报', () => {
+        assertClean([
+            'scoreboard teams option red color dark_red',
+            'scoreboard teams option red friendlyfire false',
+            'scoreboard teams option red seeFriendlyInvisibles true',
+            'scoreboard teams option red nametagVisibility hideForOtherTeams',
+            'scoreboard teams option red deathMessageVisibility never',
+            'scoreboard teams option red collisionRule pushOwnTeam',
+        ], 'option 选项');
+    });
+
+    it('/detect 不再是合法根命令（Java 1.12.2 没有这个命令）', () => {
+        const d = run(['detect ~ ~ ~ stone 0 say hi'], { commands: all });
+        assert.ok(
+            d.some(x => x.ruleId === 'syntax/unknown-command'),
+            'detect 不是 Java 1.12.2 命令，应报未知命令',
+        );
     });
 });

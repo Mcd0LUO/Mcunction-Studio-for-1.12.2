@@ -74,8 +74,21 @@ export const undefinedScoreboard: DiagnosticRule = {
             }
         }
 
-        // 队伍引用（teams join/remove/option/empty）
-        if (t[1] === 'teams' && t[3] && t[2] !== 'add') {
+        // 队伍引用。
+        //
+        // ⚠️ 必须逐个子命令判断 t[3] 是不是队伍名 ——
+        //    按 wiki（Scoreboard#Command reference，2018-05-26 修订）：
+        //      teams list   [teamname]   可选
+        //      teams add    <name>       定义，不检查
+        //      teams remove <name>       队伍
+        //      teams empty  <name>       队伍
+        //      teams join   <team> [entities...]  队伍
+        //      teams leave  [entities...]         **没有队伍参数**，t[3] 是实体
+        //      teams option <team> ...   队伍
+        //    早先写成「t[2] !== 'add' 就查 t[3]」，
+        //    于是 `teams leave @a` 会把实体 @a 报成"队伍未定义"。
+        const TEAM_AT_3 = new Set(['remove', 'empty', 'join', 'option', 'list']);
+        if (t[1] === 'teams' && t[3] && TEAM_AT_3.has(t[2])) {
             if (!rc.ctx.hasTeam(t[3])) {
                 out.push(rc.report(undefinedScoreboard, tokenSpan(rc, 3), `队伍 "${t[3]}" 未定义`));
             }
