@@ -1,6 +1,6 @@
 # Mcfunction Studio for 1.12 — 快速上手
 
-**当前稳定版：1.5.0**
+**当前稳定版：1.6.3**
 
 ## 环境要求
 
@@ -12,7 +12,7 @@
 ```bash
 # Marketplace 搜索 "Mcfunction Studio for 1.12"
 # 或本地 vsix：
-code --install-extension mcfunction-studio-1.5.0.vsix
+code --install-extension mcfunction-studio-1.6.3.vsix
 ```
 
 ## 推荐目录结构
@@ -65,7 +65,29 @@ code --install-extension mcfunction-studio-1.5.0.vsix
 
 - Json 行内 / Hover 预览（tellraw、title 等）
 - 签名帮助、定义跳转（`Ctrl+Click`）
+- **诊断（红线）**：15 条规则实时标注语法 / 未定义引用 / 重复定义 / 取值越界
+- **查找引用**（`Shift+F12`）与**重命名**（`F2`），按角色匹配，不会误改 `say` 消息
 - 快速新建函数、记分板 debug 插入
+
+### 诊断规则
+
+规则级别可在 VS Code 设置里逐条调整（`mcfStudio.diagnostics.rules`）：
+
+```jsonc
+{
+  "mcfStudio.diagnostics.rules": {
+    "resource/undefined-scoreboard": "off",   // 关闭该条
+    "syntax/unknown-command": "warning"       // 降级
+  }
+}
+```
+
+可选级别：`off` / `hint` / `information` / `warning` / `error`。
+未列出的规则使用各自的默认级别。
+
+> 引用类规则默认给 `hint` 而非 `error`：数据包常把定义与引用拆在不同文件里，
+> 编辑中间态会短暂"悬空"，标红会让屏幕全是红线。
+> 未加载数据包时全部索引类规则自动静默。
 
 ## 命令面板
 
@@ -109,9 +131,13 @@ code --install-extension mcfunction-studio-1.5.0.vsix
 
 ```bash
 npm run compile
-npm run test:index       # 索引 / 缓存序列化
-npm run test:baseline    # 1.12.2 命令树基准（function/effect/time/title/...）
-npm run bench:perf       # 合成包
+npm run test:purity       # 纯净层守卫（纯逻辑层不得 import vscode）
+npm run test:engine       # 补全引擎行为
+npm run test:diagnostics  # 诊断规则 + 符号抽取
+npm run test:index        # 索引 / 缓存序列化
+npm run test:baseline     # 1.12.2 命令树基准（function/effect/time/title/...）
+npm run test:e2e          # 真实 VS Code 集成（需本机已装 VS Code）
+npm run bench:perf        # 合成包
 npm run bench:real -- "D:/path/to/data"   # 真实 data 目录
 ```
 

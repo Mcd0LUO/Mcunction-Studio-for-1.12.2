@@ -179,3 +179,14 @@ npm run bench:real -- "D:/path/to/data"
 | [plans/2026-07-20-diagnostics-design.md](plans/2026-07-20-diagnostics-design.md) | 诊断层设计与规则清单 |
 | [actions/2026-10-08-architecture-audit-decisions.md](actions/2026-10-08-architecture-audit-decisions.md) | 审计结论与待决策项（含已推翻的结论勘误） |
 | [plans/](plans/) | 历史设计记录 |
+
+### 对外文档（面向用户，需双语同步）
+
+| 文件 | 语言 | 说明 |
+|------|------|------|
+| [../README.md](../README.md) | English | 市场页默认展示这一份 |
+| [../README.zh-CN.md](../README.zh-CN.md) | 简体中文 | |
+
+两份 README 首行都是语言切换链接，**改动功能后要同时更新两份**，
+否则两种语言会描述不一致。相对链接（如 `docs/quickstart.md`）在 GitHub 上直接生效，
+在市场页则由 `package.json` 的 `repository` 字段解析 —— 该字段不可删。
