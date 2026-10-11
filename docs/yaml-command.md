@@ -55,7 +55,7 @@ literal:
 
 ### 转发节点 `forward_root`
 
-转发到根命令列表，用于 `execute`/`foreach`/`superexe` 的 `run` 子句。
+转发到根命令列表，用在 `execute` 那种"这个位置直接接一条命令"的地方。
 
 ```yaml
 { forward_root: true }
@@ -63,14 +63,26 @@ literal:
 
 旧写法 `{ forward: true }` 仍兼容，但建议用 `forward_root`。
 
-### 跳转节点 `jump`
+> 注意 `execute` 在 1.12.2 里坐标之后**直接就是命令**，没有 1.13 的 `run` 关键字。
+> 若你的 YAML 里写了 `literal: run` 再转发，那是 1.13+ 的语法。
 
-向上跳 N 层后展示兄弟节点，用于 `superexe` 等可重复链式子命令。
+### 可用的节点类型
 
-```yaml
-{ jump: 3 }    # 向上跳 3 层
-{ jump: true } # 默认跳 1 层（回到直接父节点）
-```
+YAML 自定义命令目前只支持三种节点：
+
+| 节点 | 写法 |
+|------|------|
+| 字面量 | `literal: { name: add, description: 添加, children: [...] }` |
+| 参数 | `argument: { name: <sel>, suggest: selectors, optional: false, children: [...] }` |
+| 转发 | `{ forward_root: true }` |
+
+**没有** `greedy`（变长参数）与 `jump`（向上跳层）。
+内置命令树里的变长参数（`say <message …>`、`[entities...]`、`[dataTag]`）
+在 YAML 里无法表达 —— 这是已知限制。
+
+> **`jump` 节点已移除。** 它服务于 EasyCber 扩展的 `superexe`/`foreach` 命令，
+> 那些命令已随该扩展下线。现在写 `{ jump: N }` 会**直接抛错**并提示，
+> 而不是被静默忽略 —— 避免你以为它生效了。
 
 ## suggest 函数
 
@@ -170,7 +182,7 @@ children:
 
 ### 带转发的命令
 
-`/runas <target> run <任意命令>`
+`/runas <target> run <任意命令>`（这是**自定义命令**，不是原版 `execute`）
 
 ```yaml
 command: runas
@@ -185,69 +197,12 @@ children:
               - { forward_root: true }
 ```
 
-### 可重复链式子命令
+注意上面这个 `run` 是你自己定义的关键字，所以可以叫任何名字。
+原版 `execute` 在 1.12.2 里没有 `run`，见「转发节点」一节。
 
-`/superexe [if|unless|positioned|facing] [...] run <任意命令>`
-
-```yaml
-command: superexe
-children:
-  - literal:
-      name: if
-      children:
-        - literal:
-            name: entity
-            children:
-              - argument:
-                  name: <sel>
-                  suggest: selectors
-                  children:
-                    - { jump: 3 }       # ← 跳 3 层回 superexe 层
-        - literal:
-            name: block
-            children:
-              - argument:
-                  name: <x>
-                  suggest: coordinates
-                  children:
-                    - argument:
-                        name: <y>
-                        suggest: coordinates
-                        children:
-                          - argument:
-                              name: <z>
-                              suggest: coordinates
-                              children:
-                                - { jump: 5 }   # ← 跳 5 层回 superexe 层
-  - literal:
-      name: positioned
-      children:
-        - argument:
-            name: <pos>
-            suggest: selectors
-            children:
-              - { jump: 2 }
-  - literal:
-      name: run
-      children:
-        - { forward_root: true }
-```
-
-**jump 层数怎么数**：从放 jump 的节点开始，往上数到目标节点。只数祖先，自己不算。
-
-```
-superexe           ← 目标 (距离 3)
-├── if             ← 距离 2
-│   ├── entity    ← 距离 1
-│   │   └── sel   ← 这里放 jump: 3
-│   └── block     ← 距离 2
-│       ├── x     ← 距离 3
-│       │   └── y ← 距离 4
-│       │       └── z ← 这里放 jump: 5
-├── positioned     ← 距离 1
-│   └── pos       ← 这里放 jump: 2
-└── run
-```
+> **`superexe` / `foreach` 与 `jump` 节点均已移除。**
+> 它们属于 EasyCber 扩展，该扩展已下线。文档里若还留着那套"可重复链式子命令 +
+> `{ jump: N }` 向上跳层"的写法，现在会**直接抛错**。
 
 ## 数据提取 `extract`
 

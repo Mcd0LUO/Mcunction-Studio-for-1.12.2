@@ -22,7 +22,7 @@
 > `clone` 是 `[maskMode] [cloneMode] [TileName] [dataValue]`，等等。
 
 ### 诊断（红线）
-15 条规则在编辑时实时标出问题。每条规则都可通过 `mcfStudio.diagnostics.rules`
+16 条规则在编辑时实时标出问题。每条规则都可通过 `mcfStudio.diagnostics.rules`
 单独设为 `off` / `hint` / `information` / `warning` / `error`。
 
 | 类别 | 示例 |
@@ -41,9 +41,14 @@
 ### 查找引用与重命名
 <kbd>Shift</kbd>+<kbd>F12</kbd> 列出该符号在整个数据包中的全部引用。
 <kbd>F2</kbd> 重命名符号，同时改掉定义与所有引用 ——
-**包括选择器里的目标名**，如 `@a[score_points=10]`。
+**包括选择器里的目标名**（如 `@a[score_points=10]`），
+以及 `execute …` 内层命令里的引用。
 
 匹配按**角色**而非原始文本：`say` 消息里的同名字符串永远不会被改动。
+
+重命名**函数**或**进度**时还会**一并改掉磁盘上的文件** ——
+这两类的资源名就是文件路径。可以给完整资源名（`ns:new`），
+也可以只给末段（`new`，沿用原命名空间）。目标文件已存在时会拒绝，不会覆盖。
 
 ### 文本组件预览
 光标移到含 `tellraw` 或 `title` 的行，预览渲染后的组件内容（仅单行，带颜色）。

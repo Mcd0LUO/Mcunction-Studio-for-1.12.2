@@ -4,14 +4,24 @@
 
 用**命令树**描述 Minecraft 命令的语法结构，引擎自动遍历树生成补全项。
 
-三种节点类型：
+节点类型：
 
 | 节点 | 对应 Minecraft 语法 | 示例 |
 |------|---------------------|------|
 | 根命令 | `/scoreboard` | `command('scoreboard')` |
 | 字面量 | `add`, `remove`, `if` | `literal('add')` |
 | 参数 | `<target>`, `<name>` | `argument('<target>', suggestSelectors())` |
-| 转发 | `execute ... run <命令>` | `forward()` |
+| 可选参数 | `[duration]`, `[objective]` | `optional('[duration]')` |
+| 变长参数 | `say <message …>`、`[entities...]`、`[dataTag]` | `greedy('[dataTag]')` |
+| 转发 | `execute` 的内层命令位置 | `forwardRoot()` |
+
+两点容易踩：
+
+- **变长参数必须用 `greedy`**。普通 `argument` 每层只消费一个 token，
+  `say hello world` 的 `world`、`set @s obj 1 {a: 1}` 的 `1}` 都会变成"未消费 token"，
+  诊断层会把完全合法的命令判成语法错误。
+- **1.12.2 的 `execute` 没有 `run` 关键字**（那是 1.13+）。
+  坐标之后直接就是命令，所以用 `forwardRoot()` 而不是 `literal('run').then(forwardRoot())`。
 
 ## 快速开始
 
@@ -158,7 +168,8 @@ export function suggestEffects() {
 | 关键字分支 | `literal('add').then(...)` |
 | 多个分支 | `.then(literal('add').then(...), literal('remove').then(...))` |
 | 连续参数 | `argument('<a>').then(argument('<b>').then(argument('<c>')))` |
-| 转发到根命令 | `literal('run').then(forward())` — execute 的 run 子句 |
+| 变长参数 | `greedy('[dataTag]')` — 吃掉其后全部 token |
+| 转发到根命令 | `forwardRoot()` — execute 坐标之后的位置（1.12.2 **没有** `run`） |
 | 描述文本 | `literal('add').description = '添加'` 或 `command('tp').description = '传送实体'` |
 
 ## 注册

@@ -22,7 +22,7 @@ Press <kbd>Tab</kbd> to accept, arrow keys to browse.
 > `clone` takes `[maskMode] [cloneMode] [TileName] [dataValue]`, and so on.
 
 ### Diagnostics
-15 rules report problems inline while you type. Every rule can be set to
+16 rules report problems inline while you type. Every rule can be set to
 `off` / `hint` / `information` / `warning` / `error` through `mcfStudio.diagnostics.rules`.
 
 | Group | Examples |
@@ -42,10 +42,16 @@ to jump to where it is defined.
 ### Find references and rename
 <kbd>Shift</kbd>+<kbd>F12</kbd> lists every reference across the datapack.
 <kbd>F2</kbd> renames a symbol and updates the definition plus all references —
-including the objective name inside selectors such as `@a[score_points=10]`.
+including the objective name inside selectors such as `@a[score_points=10]`,
+and references nested inside `execute …`.
 
 Matching is by **role**, not by raw text: an identical string inside a `say` message is
 never touched.
+
+Renaming a **function** or **advancement** also renames the file on disk, because for
+those two the resource name *is* the file path. Either give a full resource name
+(`ns:new`) or just the last segment (`new`, keeping the namespace). The rename is
+refused if the target file already exists.
 
 ### Text component preview
 Move the cursor onto a line containing `tellraw` or `title` to preview the rendered
