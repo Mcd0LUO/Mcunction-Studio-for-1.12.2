@@ -17,7 +17,8 @@
 import * as vscode from 'vscode';
 import { symbolAt } from './ReferencesProvider';
 import { invalidateDocCache, resolveSymbol } from './symbols/bridge';
-import { extractSymbols } from './symbols/extractor';
+import { extractSymbols, SymbolKind } from './symbols/extractor';
+import { NAME_MAX, bareName, isValidSymbolName } from './symbols/naming';
 
 /** 重命名最多影响的文件数，超出则拒绝（防止一次误操作改几百个文件） */
 const MAX_FILES = 200;
@@ -35,14 +36,20 @@ export class McFunctionRenameProvider implements vscode.RenameProvider {
         const hit = symbolAt(document, position);
         if (!hit) { return null; }
 
-        // 提前拒绝非法名：空、含空白、含分隔符
-        if (!isValidName(newName)) { return null; }
-        // 重命名到自己等于什么都不做，不必打扰用户
-        if (hit.value === newName) { return null; }
-
         // function 资源名含命名空间，重命名函数名本身语义不对：
         // 改名意味着文件也要改名。明确拒绝而不是半吊子地改引用。
         if (hit.kind === 'function') { return null; }
+
+        // 拒绝非法新名。假玩家允许写成 #newname（会剥掉 # 再校验）。
+        // 长度上限只对 wiki 明确写了 16 的记分板目标/队伍施加，
+        // 标签与假玩家不设限 —— 不用臆测的数字拒绝用户的合法输入。
+        if (!isValidSymbolName(newName, {
+            allowHashPrefix: hit.kind === 'fake_player',
+            maxLength: hasNameLimit(hit.kind) ? NAME_MAX : undefined,
+        })) { return null; }
+
+        // 重命名到自己等于什么都不做，不必打扰用户
+        if (hit.value === bareName(newName)) { return null; }
 
         invalidateDocCache(document.uri);
         const locs = await resolveSymbol(hit.kind, hit.value);
@@ -51,17 +58,14 @@ export class McFunctionRenameProvider implements vscode.RenameProvider {
         const files = new Set(locs.map(l => l.file));
         if (files.size > MAX_FILES) { return null; }
 
+        // 替换区间只覆盖名字本身，**不含**假玩家的前导 #（见 extractor 的 hashStart）。
+        // 因此这里必须插入裸名：若插入 "#newname"，原来的 # 会残留成 "##newname"。
+        const text = bareName(newName);
+
         const edit = new vscode.WorkspaceEdit();
         for (const l of locs) {
             let uri: vscode.Uri;
             try { uri = vscode.Uri.parse(l.file); } catch { continue; }
-
-            let text = newName;
-            if (hit.kind === 'fake_player' && l.hashStart >= 0) {
-                // 原 token 带 # → 新名也带 #；否则视为假玩家名本身不含 #
-                text = newName.startsWith('#') ? newName : `#${newName}`;
-            }
-
             edit.replace(uri, new vscode.Range(l.line, l.start, l.line, l.end), text);
         }
         return edit;
@@ -92,17 +96,13 @@ export class McFunctionRenameProvider implements vscode.RenameProvider {
 }
 
 /**
- * 记分板目标名的合法性。
+ * 哪些符号类型有 wiki 明确写出的名字长度上限。
  *
- * 1.12.2 的限制是 ≤16 字符（wiki Commands/scoreboard），
- * 另需排除命令分隔符与选择器保留前缀，否则改名后命令直接失效。
+ * 只有记分板目标与队伍（均为 16，见 symbols/naming 的注释与来源）。
+ * 标签、假玩家名没有在 wiki 上写明的上限，故不设限。
  */
-export function isValidName(name: string): boolean {
-    if (name === '') { return false; }
-    if (name.length > 16) { return false; }
-    if (/\s/u.test(name)) { return false; }
-    if (/[,.:=\[\]@#"{}\\[\]]/u.test(name)) { return false; }
-    return true;
+function hasNameLimit(kind: SymbolKind): boolean {
+    return kind === 'scoreboard' || kind === 'team';
 }
 
 export function registerRenameProvider(context: vscode.ExtensionContext): void {

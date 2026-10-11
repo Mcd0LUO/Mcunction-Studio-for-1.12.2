@@ -11,7 +11,7 @@ import * as vscode from 'vscode';
 import { extractSymbols } from '../../core/symbols/extractor';
 import { SymbolResolver } from '../../core/symbols/resolver';
 import { IndexedStore } from '../../core/data';
-import { isValidName } from '../../core/RenameProvider';
+import { NAME_MAX, bareName, codePointLength, isValidSymbolName } from '../../core/symbols/naming';
 
 /** 取某行某 kind 的所有出现 */
 function of(line: string, kind: string) {
@@ -417,27 +417,85 @@ describe('symbols/LineIndex 覆盖完整性', () => {
 
 describe('symbols/重命名合法性', () => {
     it('接受普通名字', () => {
-        assert.strictEqual(isValidName('kills'), true);
-        assert.strictEqual(isValidName('my_score'), true);
-        assert.strictEqual(isValidName('中文名'), true);
+        assert.strictEqual(isValidSymbolName('kills'), true);
+        assert.strictEqual(isValidSymbolName('my_score'), true);
+        assert.strictEqual(isValidSymbolName('中文名'), true);
     });
 
-    it('拒绝超长名（1.12.2 上限 16）', () => {
-        assert.strictEqual(isValidName('a'.repeat(16)), true);
-        assert.strictEqual(isValidName('a'.repeat(17)), false);
+    it('指定上限时拒绝超长名', () => {
+        const opt = { maxLength: NAME_MAX };
+        assert.strictEqual(isValidSymbolName('a'.repeat(16), opt), true);
+        assert.strictEqual(isValidSymbolName('a'.repeat(17), opt), false);
+    });
+
+    it('不指定上限时不限制长度（标签/假玩家在 wiki 上无明确上限）', () => {
+        // 用臆测的数字拒绝合法输入，比漏报更糟
+        assert.strictEqual(isValidSymbolName('a'.repeat(64)), true);
+    });
+
+    it('长度按码点计，不按 UTF-16 码元', () => {
+        // '𝕏' 的 UTF-16 length 是 2、码点是 1；9 个这样的字符码点数为 9
+        const astral = '𝕏'.repeat(9);
+        assert.strictEqual(astral.length, 18, '前置断言：UTF-16 长度确实是 18');
+        assert.strictEqual(codePointLength(astral), 9);
+        assert.strictEqual(
+            isValidSymbolName(astral, { maxLength: NAME_MAX }), true,
+            '按码点算只有 9 个字符，不该被 16 上限拒绝',
+        );
     });
 
     it('拒绝含空白与命令分隔符的名字', () => {
-        assert.strictEqual(isValidName('my score'), false);
-        assert.strictEqual(isValidName('a,b'), false);
-        assert.strictEqual(isValidName('a:b'), false);
-        assert.strictEqual(isValidName('a=b'), false);
-        assert.strictEqual(isValidName('a@b'), false);
-        assert.strictEqual(isValidName('a#b'), false);
+        assert.strictEqual(isValidSymbolName('my score'), false);
+        assert.strictEqual(isValidSymbolName('a,b'), false);
+        assert.strictEqual(isValidSymbolName('a:b'), false);
+        assert.strictEqual(isValidSymbolName('a=b'), false);
+        assert.strictEqual(isValidSymbolName('a@b'), false);
+        assert.strictEqual(isValidSymbolName('a#b'), false);
+        assert.strictEqual(isValidSymbolName('a/b'), false);
     });
 
     it('拒绝空名', () => {
-        assert.strictEqual(isValidName(''), false);
+        assert.strictEqual(isValidSymbolName(''), false);
+    });
+
+    it('假玩家允许 # 前缀，但剥掉后不能为空', () => {
+        const opt = { allowHashPrefix: true };
+        assert.strictEqual(isValidSymbolName('#fp', opt), true);
+        assert.strictEqual(isValidSymbolName('fp', opt), true);
+        assert.strictEqual(isValidSymbolName('#', opt), false, '只有一个 # 等于空名');
+        // 不允许前缀时，# 仍是非法字符
+        assert.strictEqual(isValidSymbolName('#fp'), false);
+    });
+});
+
+// ============================================================
+// 假玩家的 # 前缀处理（曾产生 ##newname）
+// ============================================================
+
+describe('symbols/假玩家 # 前缀', () => {
+    it('替换区间不含 #，因此替换文本必须是裸名', () => {
+        const line = 'scoreboard players set #fp kills 1';
+        const [f] = extractSymbols(line).filter(o => o.kind === 'fake_player');
+        // 区间只覆盖 fp —— 这是 # 不能被重复插入的原因
+        assert.strictEqual(line.slice(f.start, f.end), 'fp');
+        assert.strictEqual(line[f.hashStart], '#');
+        assert.ok(f.start > f.hashStart, '# 在区间之前，不在区间内');
+
+        // 模拟重命名的替换：把区间换成裸名 → 结果只有一个 #
+        const renamed = line.slice(0, f.start) + 'newfp' + line.slice(f.end);
+        assert.strictEqual(renamed, 'scoreboard players set #newfp kills 1');
+        assert.ok(!renamed.includes('##'), '绝不能出现 ##newname');
+    });
+
+    it('bareName 剥掉前导 #，且不误伤中间的 #', () => {
+        assert.strictEqual(bareName('#fp'), 'fp');
+        assert.strictEqual(bareName('fp'), 'fp');
+        assert.strictEqual(bareName('#'), '');
+    });
+
+    it('用户输入 #newfp 时最终写入的仍是裸名（# 由原文本保留）', () => {
+        // 旧实现会插入 "#newfp"，叠加原 # 变成 ##newfp
+        assert.strictEqual(bareName('#newfp'), 'newfp');
     });
 });
 

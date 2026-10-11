@@ -30,7 +30,7 @@ const EXT_ID = 'Mcd0-LUO.mcfunction-studio';
 const PACK_ROOT = path.join(__dirname, '../../../.vscode-test/e2e-pack');
 
 /** 写入全部测试夹具 */
-function makePack(): { dataDir: string; packRoot: string; funcFile: string; goodFile: string; badFile: string; refFile: string; renameFile: string } {
+function makePack(): { dataDir: string; packRoot: string; funcFile: string; goodFile: string; badFile: string; refFile: string; renameFile: string; fpFile: string } {
     const packRoot = PACK_ROOT;
     const dataDir = path.join(packRoot, 'data');
     fs.mkdirSync(path.join(dataDir, 'functions/ns'), { recursive: true });
@@ -98,7 +98,19 @@ function makePack(): { dataDir: string; packRoot: string; funcFile: string; good
         ].join('\n'),
     );
 
-    return { dataDir, packRoot, funcFile, goodFile, badFile, refFile, renameFile };
+    // 假玩家重命名用：验证 # 前缀不会被重复插入（曾产生 ##newname）
+    const fpFile = path.join(dataDir, 'functions/ns/fakeplayer.mcfunction');
+    fs.writeFileSync(
+        fpFile,
+        [
+            'scoreboard objectives add kills dummy',
+            'scoreboard players set #fp kills 1',
+            'scoreboard players add #fp kills 5',
+            '',
+        ].join('\n'),
+    );
+
+    return { dataDir, packRoot, funcFile, goodFile, badFile, refFile, renameFile, fpFile };
 }
 
 async function openInVsCode(fsPath: string): Promise<vscode.TextDocument> {
@@ -126,6 +138,7 @@ suite('Mcfunction Studio — 真实 VS Code 集成', () => {
     let badFile: string;
     let refFile: string;
     let renameFile: string;
+    let fpFile: string;
 
     suiteSetup(async function () {
         this.timeout(90000);
@@ -137,6 +150,7 @@ suite('Mcfunction Studio — 真实 VS Code 集成', () => {
         badFile = pack.badFile;
         refFile = pack.refFile;
         renameFile = pack.renameFile;
+        fpFile = pack.fpFile;
 
         // 注意：不能用 vscode.openFolder —— 它会重启窗口并杀死测试运行器。
         // 这里只打开文档：扩展的 activationEvents 是 onLanguage:mcfunction，
@@ -386,6 +400,45 @@ suite('Mcfunction Studio — 真实 VS Code 集成', () => {
         );
 
         // 复原，避免影响后续用例
+        await vscode.commands.executeCommand('workbench.action.files.revert');
+    });
+
+    test('假玩家重命名不产生 ##newname', async function () {
+        this.timeout(30000);
+        const uri = vscode.Uri.file(fpFile);
+        const doc = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(doc);
+
+        // 第 1 行 "scoreboard players set #fp kills 1" —— 光标落在 fp 上
+        const line = doc.lineAt(1).text;
+        const col = line.indexOf('#fp') + 1;
+        assert.ok(line.includes('#fp'), '夹具应含 #fp');
+
+        const edit = await vscode.commands.executeCommand<vscode.WorkspaceEdit>(
+            'vscode.executeDocumentRenameProvider',
+            uri,
+            new vscode.Position(1, col),
+            'boss',
+        );
+        assert.ok(edit, '假玩家应允许重命名');
+        assert.ok(await vscode.workspace.applyEdit(edit), 'WorkspaceEdit 应用失败');
+
+        const after = await vscode.workspace.openTextDocument(uri);
+        const text = after.getText();
+
+        assert.ok(
+            !text.includes('##'),
+            `出现了重复的 #（替换区间不含 #，替换文本必须是裸名）：\n${text}`,
+        );
+        assert.ok(
+            text.includes('scoreboard players set #boss kills 1'),
+            `定义处未正确改名：\n${text}`,
+        );
+        assert.ok(
+            text.includes('scoreboard players add #boss kills 5'),
+            `引用处未正确改名：\n${text}`,
+        );
+
         await vscode.commands.executeCommand('workbench.action.files.revert');
     });
 

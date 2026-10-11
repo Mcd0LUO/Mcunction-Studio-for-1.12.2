@@ -35,7 +35,7 @@ VS Code 扩展，为 Minecraft **1.12.2** 数据包的 `.mcfunction` 文件提�
 | `core/data/IndexedStore.ts` | ~580 | 定义点引用计数（scoreboard/team）+ 按行清理 |
 | `core/LineIndex.ts` | ~215 | 行级追踪 + 引用计数 + 位置反查 |
 | `core/diagnostics/` | ~800 | 诊断（红线）：纯数据规则层 + vscode 适配层 |
-| `core/symbols/` | ~450 | 符号抽取（行 → 带列区间的符号出现）：References / Rename 的底座 |
+| `core/symbols/` | ~500 | 符号抽取（行 → 带列区间的符号出现）+ 命名规则 |
 | `utils/EnumLib.ts` | ~1510 | 懒加载静态枚举（物品/方块/实体/粒子/音效） |
 
 ## 关键设计约束（改动前务必了解）
@@ -61,9 +61,19 @@ VS Code 扩展，为 Minecraft **1.12.2** 数据包的 `.mcfunction` 文件提�
    它吃掉其后所有 token；普通 `argument` 每层只消费一个。
    `say` / `title` 的 raw json 都必须是 greedy，否则诊断会把合法命令判成多余参数。
 
-7. **诊断层的规则目录（`core/diagnostics/` 除 `bridge.ts`/`vscodeAdapter.ts` 外）
-   禁止 import vscode**。这是让规则能被 Node + mock 单测覆盖的前提，
-   也是将来真要抽 headless core / 写 LSP 时唯一不用重写的部分。
+7. **`core/diagnostics/` 与 `core/symbols/` 的规则层禁止 import vscode**。
+   唯一豁免是适配层：`diagnostics/bridge.ts`、`diagnostics/vscodeAdapter.ts`、
+   `symbols/bridge.ts` —— 它们把纯数据翻译成 vscode 类型，是唯一的接缝。
+   纯层也**不得反向 import 适配层**（否则 vscode 会传递进来）。
+
+   > 这条约束由 `npm run test:purity` **运行时强制**：
+   > 那个运行器把 `require('vscode')` 换成抛错的陷阱（而非像其它测试那样注入 mock），
+   > 再逐个加载纯层模块。违反时测试会直接指出是哪个文件。
+   > 静态扫描还会检查未被加载的文件，并锁定豁免集清单。
+
+   为什么值得：Node 测试长期依赖 `scripts/vscode-mock.cjs`，而 mock 的完备性
+   是持续负担（每加一个 vscode API 就要补一次，漏补表现为「测试莫名报
+   is not a function」）。纯层真的纯净，它的测试就永远不用跟着 mock 走。
 
 8. **符号匹配按「角色」而非字符串**。`say total points` 里的 total 与
    `scoreboard objectives add total` 里的 total 是不同角色的同一串文本。
@@ -74,8 +84,18 @@ VS Code 扩展，为 Minecraft **1.12.2** 数据包的 `.mcfunction` 文件提�
    未打开数据包时索引为空，若照常跑"引用是否存在"检查，
    正确写法也会满屏红线（e2e 实测踩过）。诊断规则用 `needsIndex: true` 声明。
 
-10. **新增可索引符号时，三个地方要同步**：
-   `MinecraftExtractor` 的 handler、`extractSymbols` 的角色抽取、
+10. **名字的长度上限只有 wiki 写明的那几种才施加**。
+    记分板目标与队伍是 16（显示名 32），来源见 `core/symbols/naming.ts` 注释。
+    标签、假玩家名在 wiki 上没有写明上限，因此**不设限** ——
+    用臆测的数字拒绝用户的合法输入，比漏报更糟。
+    长度一律按 Unicode **码点**计（`codePointLength`），不用 `String.length`。
+
+11. **重命名的替换区间不含假玩家的 `#`**（见 extractor 的 `hashStart`），
+    因此插入的文本必须是 `bareName(newName)`。
+    插入 `#newname` 会叠加成 `##newname` —— 这是修过的真 bug，e2e 有回归用例。
+
+12. **新增可索引符号时，三个地方要同步**：
+    `MinecraftExtractor` 的 handler、`extractSymbols` 的角色抽取、
    以及 `LineIndex` 的写入（`addScoreboard` / `addScoreboardRef` …）。
    漏掉第三处会导致「能补全、能跳转，但找不到引用」这种半残状态。
 
@@ -84,23 +104,29 @@ VS Code 扩展，为 Minecraft **1.12.2** 数据包的 `.mcfunction` 文件提�
 ```bash
 npm run compile              # 编译（注释不进产物）
 npm run lint                 # ESLint
+npm run test:purity          # 纯净层守卫（16 项，无 mock：碰 vscode 即失败）
 npm run test:engine          # 补全引擎行为测试（45 项）
-npm run test:diagnostics      # 诊断规则 + 符号抽取（95 项）
+npm run test:diagnostics     # 诊断规则 + 符号抽取（101 项）
 npm run test:index           # 索引 / 缓存序列化（31 项）
 npm run test:baseline        # 1.12.2 命令树基准（10 项）
-npm run test:e2e             # 真实 VS Code 集成（13 项，含红线/引用/重命名）
+npm run test:e2e             # 真实 VS Code 集成（14 项，含红线/引用/重命名）
 npm run bench:perf              # 合成包性能基准
 npm run bench:perf -- --quiet   # 轻量负载（降低风扇噪音）
 npm run bench:real -- "D:/path/to/data"
 ```
 
-测试分三层，**各管各的盲区**：
+测试分四层，**各管各的盲区**：
 
 | 层 | 环境 | 能测 | 测不到 |
 |----|------|------|--------|
+| `test:purity` | Node，**vscode 陷阱**（无 mock） | 纯层是否真的与宿主解耦 | 功能正确性 |
 | `test:engine/index/diagnostics/baseline` | Node + `scripts/vscode-mock.cjs` | 纯逻辑、规则、索引 | 宿主 API 是否存在 |
 | `test:e2e` | 真实 VS Code（复用 `D:/tools/ide/VSCode`） | 语言绑定、激活、provider 注册、红线渲染、引用/重命名 | — |
 | 手工安装 vsix | 真实用户环境 | 发布流程 | — |
+
+> `test:purity` 与其它 Node 测试的区别只有一点：它注入的是**陷阱**而不是 mock。
+> 因此它不受 mock 完备性影响 —— 这也是「新增纯逻辑该往哪放」的答案：
+> 放进纯层，测试就永远不用改 mock。
 
 > **e2e 必须带真实工作区。** `.vscode-test.mjs` 通过 `launchArgs` 注入
 > `.vscode-test/e2e-pack`，并用独立的 `--user-data-dir`。
@@ -108,7 +134,7 @@ npm run bench:real -- "D:/path/to/data"
 > rootDir 定位失败，所有依赖索引的用例（引用、重命名、未定义诊断）全部拿不到数据 ——
 > 且表现为「测试莫名失败」，很难联想到是工作区问题。
 
-> 语言绑定失败（`languageId = plaintext`）只有第二层能发现：
+> 语言绑定失败（`languageId = plaintext`）只有第三层能发现：
 > 扩展加载成功、贡献点在、语言也在 `getLanguages()` 里，但就是不绑定。
 
 构建发布包：`npx @vscode/vsce package --allow-missing-repository`
@@ -120,8 +146,8 @@ npm run bench:real -- "D:/path/to/data"
   本项目历史上曾因此误判 5 条命令为「语法错误」。
   查 1.12 时期的精确原文可用 MediaWiki API：
   `?action=query&prop=revisions&rvstart=2018-06-01&rvdir=older`
-- **提交前跑完 Node 侧四个测试脚本 + lint**
-  （当前应分别为 45 / 95 / 31 / 10 passing，lint 0 error）。
+- **提交前跑完 Node 侧五个测试脚本 + lint**
+  （当前应分别为 16 / 45 / 101 / 31 / 10 passing，lint 0 error）。
   改动 `package.json` 的 `contributes`、扩展激活、语言绑定相关代码时，
   额外跑 `npm run test:e2e`。
 - 迭代计划写 `docs/plans/`，缺陷报告写 `docs/bugs/`，待决策项写 `docs/actions/`，

@@ -12,6 +12,7 @@
  */
 import type { Diagnostic, DiagnosticRule, RuleContext } from '../types';
 import { INT32_MAX, INT32_MIN, inInt32Range, parseInt32Strict, scoreObjectiveOf, selectorsOf } from '../selector';
+import { DISPLAY_NAME_MAX, NAME_MAX, codePointLength } from '../../symbols/naming';
 import { tokenSpan } from './syntax';
 
 /** 记分板操作里出现超出 int32 的整数常量 */
@@ -50,7 +51,7 @@ export const scoreOutOfRange: DiagnosticRule = {
     },
 };
 
-/** 记分板目标名超 16 字符 */
+/** 记分板目标名超 16 字符（上限来源：wiki Commands/scoreboard，见 symbols/naming） */
 export const scoreboardNameTooLong: DiagnosticRule = {
     id: 'scoreboard/name-too-long',
     description: '记分板目标名称超过 16 字符（游戏拒绝创建）',
@@ -60,11 +61,11 @@ export const scoreboardNameTooLong: DiagnosticRule = {
         const t = rc.tokens;
         if (t[1] !== 'objectives' || (t[2] !== 'add' && t[2] !== 'remove')) { return []; }
         const name = t[3];
-        if (!name || lengthOf(name) <= 16) { return []; }
+        if (!name || codePointLength(name) <= NAME_MAX) { return []; }
         return [rc.report(
             scoreboardNameTooLong,
             tokenSpan(rc, 3),
-            `记分板目标名 "${name}" 有 ${lengthOf(name)} 个字符，超过上限 16`,
+            `记分板目标名 "${name}" 有 ${codePointLength(name)} 个字符，超过上限 ${NAME_MAX}`,
         )];
     },
 };
@@ -79,11 +80,11 @@ export const scoreboardDisplayNameTooLong: DiagnosticRule = {
         const t = rc.tokens;
         if (t[1] !== 'objectives' || t[2] !== 'add' || t[4] === undefined) { return []; }
         const display = t.slice(4).join(' ');
-        if (lengthOf(display) <= 32) { return []; }
+        if (codePointLength(display) <= DISPLAY_NAME_MAX) { return []; }
         return [rc.report(
             scoreboardDisplayNameTooLong,
             tokenSpan(rc, 4),
-            `显示名有 ${lengthOf(display)} 个字符，超过上限 32`,
+            `显示名有 ${codePointLength(display)} 个字符，超过上限 ${DISPLAY_NAME_MAX}`,
         )];
     },
 };
@@ -152,19 +153,6 @@ export const invalidCount: DiagnosticRule = {
         return out;
     },
 };
-
-/**
- * 字符数按 Unicode 码点计，而非 UTF-16 长度。
- *
- * wiki 写的是 "characters"，Java 侧限制的是 String.length()（UTF-16）。
- * 对纯 ASCII 两者一致；含中文/emoji 时按码点计更贴近用户直觉，
- * 且最多只放宽限制、不会产生误报。
- */
-function lengthOf(s: string): number {
-    let n = 0;
-    for (const _ of s) { n++; }
-    return n;
-}
 
 export const valueRules: readonly DiagnosticRule[] = [
     scoreOutOfRange,
