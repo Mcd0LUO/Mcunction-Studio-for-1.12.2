@@ -199,6 +199,26 @@ function extract(lineText: string, recurseExecute: boolean): SymbolOccurrenceWit
     }
 
     // ---------------------------------------------------------
+    // stats … set <stat> <selector> <objective>
+    //
+    // wiki（Commands/stats，2018-05 修订）Java Edition：
+    //   stats entity <selector2> set <stat> <selector> <objective>
+    //   stats block <x> <y> <z> set <stat> <selector> <objective>
+    //   stats … clear <stat>
+    //
+    // ⚠️ 此前**完全没抽** —— 那个 <objective> 是记分板引用，
+    //    重命名记分板目标时这一处会被漏改。
+    //    注意 t[1] 是字面量 entity/block，所以下标要多数一个。
+    // ---------------------------------------------------------
+    if (t[0] === 'stats') {
+        if (t[1] === 'entity' && t[3] === 'set' && t[6]) {
+            push('scoreboard', t[6], 'reference', 6);
+        } else if (t[1] === 'block' && t[5] === 'set' && t[8]) {
+            push('scoreboard', t[8], 'reference', 8);
+        }
+    }
+
+    // ---------------------------------------------------------
     // advancement grant|revoke|test
     //
     // wiki（Commands/advancement，2018-05 修订）Java Edition：
@@ -219,12 +239,22 @@ function extract(lineText: string, recurseExecute: boolean): SymbolOccurrenceWit
     }
 
     // ---------------------------------------------------------
-    // summon ... {Tags:[...]} —— 标签定义
+    // NBT 里的 Tags:[...] —— 标签定义
+    //
+    // 适用于带 NBT 参数的实体命令：
+    //   summon <entity> [x] [y] [z] [dataTag]     ← dataTag 位置随坐标可选而漂移
+    //   entitydata <entity> <dataTag>
+    //
+    // ⚠️ 此前只处理 summon 且**写死下标 5**，于是
+    //    · `summon creeper`（无坐标）的 NBT 抽不到
+    //    · `entitydata @s {Tags:["boss"]}` 完全不抽 —— 而它同样是标签定义
+    // 现在从 `from` 起找第一个含 Tags:[ 的 token。
     // ---------------------------------------------------------
-    if (t[0] === 'summon') {
-        const nbt = t[5];
-        const tk = tokens[5];
-        if (nbt && tk && nbt.includes('Tags:[')) {
+    const pushNbtTags = (from: number): void => {
+        for (let i = Math.max(1, from); i < t.length; i++) {
+            const nbt = t[i];
+            const tk = tokens[i];
+            if (!nbt || !tk || !nbt.includes('Tags:[')) { continue; }
             const listStart = nbt.indexOf('Tags:[') + 'Tags:['.length;
             const rest = nbt.slice(listStart);
             // ⚠️ 不能用 indexOf('"]') 截断：那只会取到第一个标签，
@@ -250,8 +280,11 @@ function extract(lineText: string, recurseExecute: boolean): SymbolOccurrenceWit
                     hashStart: -1,
                 });
             }
+            return;   // 一行里只有一处 Tags 列表
         }
-    }
+    };
+    if (t[0] === 'summon') { pushNbtTags(2); }
+    if (t[0] === 'entitydata') { pushNbtTags(2); }
 
     // ---------------------------------------------------------
     // 选择器内的 score_<obj> / score_<obj>_min / tag= / team=

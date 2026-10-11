@@ -2,6 +2,39 @@
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
 
+# [1.6.9]
+
+把**符号抽取**也做成穷举核验表（此前只有命令语法有），又查出两处漏洞。
+
+### 新增：`src/test/symbols/symbol-table.test.ts`
+命令 × 期望符号的核验表，96 条。期望值按 wiki 人工写出，不是从实现反推。
+符号抽取是 References（Shift+F12）与 Rename（F2）的**唯一数据源** ——
+抽漏一个位置，表现就是"重命名改了一部分、漏了一处"，
+数据包改完是坏的而且**没有任何报错**。这类缺陷只能靠穷举发现。
+
+### 修复：`stats … set <stat> <selector> <objective>` 的 objective 从未被抽
+- 那个 `<objective>` 是记分板引用，重命名记分板目标时这一处会被漏改。
+- 注意 `t[1]` 是字面量 `entity`/`block`，所以下标要多数一个
+  （entity 形式在下标 6，block 形式在下标 8）。
+
+### 修复：`entitydata {Tags:[…]}` 的标签定义从未被抽
+- NBT 里的 `Tags:[...]` 是**标签定义**，但此前只处理 `summon`，
+  且**写死下标 5** —— `summon creeper`（无坐标）的 NBT 也抽不到。
+- 现在改为从参数区找第一个含 `Tags:[` 的 token，`summon` 与 `entitydata` 共用。
+
+### 顺带确认（本次核验排除的疑点）
+- `scoreboard players tag … remove` 记为 `reference` 而非 `definition` ——
+  它引用一个已存在的标签，不是定义。`fake_player` 一律 `reference`
+  （抽取是逐行的，无法判断哪次是首次出现）。
+- 这两个 `role` 值目前**对行为没有任何影响**：`resolveSymbol` 两种角色都收，
+  References 与 Rename 都不按角色过滤。定义跳转（Ctrl+Click）走的是
+  `McFunctionDefinitionProvider` 那套独立的正则实现，不用符号层。
+- 10 个测试文件**全部已接线**到某个 runner，没有静默遗漏。
+
+### 测试
+- 诊断/符号套件 139 → 235 passing（核验表 96 条）。
+- Node 侧合计 16 + 104 + 235 + 31 + 12 = 398 passing，lint 0 error；e2e 22。
+
 # [1.6.8]
 
 **选择器参数位表基本全错** —— 这比 1.6.7 修的进度索引问题严重得多。
