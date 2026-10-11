@@ -354,6 +354,68 @@ describe('diagnostics/取值规则', () => {
         assert.strictEqual(d.filter(x => x.ruleId === 'selector/invalid-score-range').length, 0);
     });
 
+    it('不同目标各带一边约束不算倒挂（上下界必须按目标名分组）', () => {
+        // 回归：早先只记住"最后一个 min"和"最后一个 max"，跨目标乱配，
+        // 于是 a 的下界 1 与 b 的上界 -1 被拿来比大小 → 误报恒为空集。
+        // a 与 b 是两个独立目标，各只有一边约束，毫无矛盾。
+        const cases = [
+            'kill @a[score_a_min=1,score_b=-1]',
+            'kill @a[score_a=-1,score_b_min=1]',
+            'kill @a[score_a_min=1,score_b_min=2,score_points=5]',
+            'kill @a[score_a_min=100,score_b=-100]',
+        ];
+        for (const line of cases) {
+            const d = run([line], { commands: all, scoreboards: ['a', 'b', 'points'] });
+            assert.strictEqual(
+                d.filter(x => x.ruleId === 'selector/invalid-score-range').length, 0,
+                `跨目标误报: ${line}`,
+            );
+        }
+    });
+
+    it('多目标混合时只报真正倒挂的那个目标', () => {
+        const d = run(
+            ['kill @a[score_a_min=1,score_b=-1,score_a=0]'],
+            { commands: all, scoreboards: ['a', 'b'] },
+        );
+        const hits = d.filter(x => x.ruleId === 'selector/invalid-score-range');
+        assert.strictEqual(hits.length, 1, `应只报 1 条，实际 ${hits.length}`);
+        assert.ok(hits[0].message.includes('"a"'), `应点名目标 a，实际：${hits[0].message}`);
+    });
+
+    it('同目标多个谓词取闭包：下界取最大、上界取最小', () => {
+        // 回归：按目标分组后若只留"最后一个"谓词，后面的松约束会掩盖前面的紧约束。
+        //   只看最后一个是 min=10、max=20 → 判合法；
+        //   但 30 与 10 都要满足 ⇒ 有效下界 30 > 上界 20 ⇒ 区间为空。
+        const bad = [
+            'kill @a[score_a_min=30,score_a_min=10,score_a=20]',
+            'kill @a[score_a_min=10,score_a_min=30,score_a=20]',
+            'kill @a[score_a=5,score_a=20,score_a_min=10]',
+            'kill @a[score_a=20,score_a=5,score_a_min=10]',
+            'kill @a[score_a=40,score_a=20,score_a_min=30]',
+        ];
+        for (const line of bad) {
+            const hits = run([line], { commands: all, scoreboards: ['a'] })
+                .filter(x => x.ruleId === 'selector/invalid-score-range');
+            assert.strictEqual(hits.length, 1, `闭包为空应报错: ${line}`);
+        }
+    });
+
+    it('同目标多个谓词但闭包非空时不报错', () => {
+        const ok = [
+            'kill @a[score_a_min=10,score_a_min=30,score_a=40]',   // [30,40]
+            'kill @a[score_a=40,score_a=30,score_a_min=10]',       // [10,30]
+            'kill @a[score_a_min=30,score_a_min=10,score_a=30]',   // [30,30] 退化为一点
+            'kill @a[score_a=5,score_a=20]',                       // 只有上界
+            'kill @a[score_a_min=5,score_a_min=20]',               // 只有下界
+        ];
+        for (const line of ok) {
+            const hits = run([line], { commands: all, scoreboards: ['a'] })
+                .filter(x => x.ruleId === 'selector/invalid-score-range');
+            assert.strictEqual(hits.length, 0, `闭包非空不该报错: ${line}`);
+        }
+    });
+
     it('c= 负数报 warning', () => {
         const d = run(['kill @a[c=-1]'], { commands: all });
         assert.ok(d.find(x => x.ruleId === 'selector/invalid-count'));

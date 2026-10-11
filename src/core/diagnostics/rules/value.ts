@@ -90,42 +90,77 @@ export const scoreboardDisplayNameTooLong: DiagnosticRule = {
 };
 
 /**
- * 选择器记分板范围无效：score_X_min > score_X（下界高于上界，永远选不中任何实体）。
+ * 选择器记分板取值区间为空：同一目标的**全部**上下界谓词无法同时满足。
  *
- * 1.12.2 的两个谓词可并存构成区间：
- *   @a[score_points_min=30,score_points=39] → 30 <= s <= 39
- * 若 score_points_min=90 而 score_points=39，该选择器**恒为空集**，
- * 是很隐蔽的逻辑 bug（游戏不报错，只是永远不触发）。
+ * 1.12.2 的两个谓词都是**单边**约束（已确认）：
+ *   score_X=v      →  score <= v   （上界）
+ *   score_X_min=v  →  score >= v   （下界）
+ * 二者并存即构成闭区间：@a[score_points_min=30,score_points=39] → 30 <= s <= 39
+ *
+ * 同目标可以出现**多个**谓词，此时必须全部满足，取值区间取**闭包**：
+ *   有效下界 = max(所有 _min 的值)
+ *   有效上界 = min(所有上界的值)
+ * 区间为空 ⇔ 有效下界 > 有效上界 → 该选择器恒为空集
+ * （游戏不报错，只是永远不触发，是很隐蔽的逻辑 bug）。
+ *
+ * ⚠️ 两处曾写错：
+ *   1. 只记住"最后一个 min"和"最后一个 max"，**跨目标**乱配：
+ *        @a[score_a_min=1,score_b=-1]
+ *      里 a 的下界与 b 的上界被拿来比大小 → 误报。a 与 b 是独立目标。
+ *   2. 改成按目标分组后，又只留了**最后一个**谓词，后面的松约束会掩盖
+ *      前面的紧约束：
+ *        @a[score_a_min=30,score_a_min=10,score_a=20]
+ *      只看最后一个是 min=10、max=20，判定合法；
+ *      但 30 与 10 都要满足 ⇒ 实际下界是 30，30 > 20 ⇒ 区间为空。
+ *      必须取所有同名谓词的闭包，不能只看一种情况。
  */
 export const invalidScoreRange: DiagnosticRule = {
     id: 'selector/invalid-score-range',
-    description: 'score_X_min 的值大于 score_X，该选择器恒为空集',
+    description: '同一记分板目标的取值区间为空，该选择器恒为空集',
     defaultLevel: 'error',
     check(rc: RuleContext): readonly Diagnostic[] {
         const out: Diagnostic[] = [];
         for (const { tokenIndex, parsed } of selectorsOf(rc.tokens)) {
-            let minKey: string | null = null;
-            let maxKey: string | null = null;
+            // 目标名 → 该目标的全部下界/上界谓词（**不是**只留一个）
+            const byObjective = new Map<string, {
+                mins: { key: string; value: number }[];
+                maxs: { key: string; value: number }[];
+            }>();
+
             for (const p of parsed.predicates) {
                 const obj = scoreObjectiveOf(p.key);
                 if (!obj) { continue; }
-                if (obj.isMin) { minKey = p.key; } else { maxKey = p.key; }
+                const v = parseInt32Strict(p.value);
+                if (v === null) { continue; }   // 非整数（如 NBT 形式）跳过
+                let slot = byObjective.get(obj.name);
+                if (!slot) { slot = { mins: [], maxs: [] }; byObjective.set(obj.name, slot); }
+                if (obj.isMin) { slot.mins.push({ key: p.key, value: v }); }
+                else { slot.maxs.push({ key: p.key, value: v }); }
             }
-            if (minKey === null || maxKey === null) { continue; }
 
-            const minVal = parsed.predicates.find(p => p.key === minKey);
-            const maxVal = parsed.predicates.find(p => p.key === maxKey);
-            if (!minVal || !maxVal) { continue; }
-            const min = parseInt32Strict(minVal.value);
-            const max = parseInt32Strict(maxVal.value);
-            if (min === null || max === null) { continue; }
-            if (min <= max) { continue; }
+            for (const [name, slot] of byObjective) {
+                // 只有单边约束时不构成区间，永远可满足
+                if (slot.mins.length === 0 || slot.maxs.length === 0) { continue; }
 
-            out.push(rc.report(
-                invalidScoreRange,
-                tokenSpan(rc, tokenIndex),
-                `下界 ${minKey}=${min} 大于上界 ${maxKey}=${max}，该选择器永远不会匹配到实体`,
-            ));
+                // 闭包：下界取最大、上界取最小
+                const lower = slot.mins.reduce((a, b) => (b.value > a.value ? b : a));
+                const upper = slot.maxs.reduce((a, b) => (b.value < a.value ? b : a));
+                if (lower.value <= upper.value) { continue; }
+
+                const lowerDesc = slot.mins.length > 1
+                    ? `max(${slot.mins.map(m => `${m.key}=${m.value}`).join(', ')})=${lower.value}`
+                    : `${lower.key}=${lower.value}`;
+                const upperDesc = slot.maxs.length > 1
+                    ? `min(${slot.maxs.map(m => `${m.key}=${m.value}`).join(', ')})=${upper.value}`
+                    : `${upper.key}=${upper.value}`;
+
+                out.push(rc.report(
+                    invalidScoreRange,
+                    tokenSpan(rc, tokenIndex),
+                    `目标 "${name}" 的取值区间为空：有效下界 ${lowerDesc} 大于有效上界 ${upperDesc}，`
+                    + '该选择器永远不会匹配到实体',
+                ));
+            }
         }
         return out;
     },

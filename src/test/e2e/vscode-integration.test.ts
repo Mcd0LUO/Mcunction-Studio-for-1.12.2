@@ -63,6 +63,8 @@ function makePack(): { dataDir: string; packRoot: string; funcFile: string; good
             'scoreboard objectives add named dummy My Display Name',
             'scoreboard players set @s used 1 {Health:10}',
             'scoreboard teams join blue @a @p',
+            // 选择器里两个**不同**记分板目标各带一边约束 —— 不构成区间，不该报错
+            'kill @a[score_used_min=1,score_named=-1]',
             '',
         ].join('\n'),
     );
