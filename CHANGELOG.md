@@ -49,11 +49,28 @@ All notable changes to the "mcfunction-studio-for-1-12" extension will be docume
   放宽是单向的 —— `ns:foo` 与 `NS:foo` 同时存在时仍能精确区分。
   （macOS 未纳入：APFS 可格式化成大小写敏感，无法仅凭 `process.platform` 判断。）
 
+### 引擎
+- `matchChild` 优先级改为 **literal → argument → greedy → forward_root**。
+  `setblock`/`fill` 这类命令的尾巴三个参数互相独立，同一个节点下会同时挂
+  枚举字面量与并列的 `greedy('[dataTag]')`；greedy 若优先会把 `destroy`、
+  方块名一并吃掉，那些分支就永远进不去
+- 参数节点无自身候选也无字面子节点时，**向参数子节点下钻**并带上其占位符。
+  此前 `particle … <speed> ` 只会返回占位符 `<speed>`，
+  而该位置真正要填的是下一级的 `[count]` / mode / `[player]`
+- 参数节点的**参数子节点**候选也会一并给出（如 mode 可省略时 `[player]` 的选择器）
+- **`complete([])` 不再静默返回空**。`walk()` 取 `commands[0]` 查根节点，
+  空数组时拿到 `undefined` 就直接返回 `[]`。UI 上被补全 provider 的
+  `provideRootCompletions` 兜住了（空行与未知命令走那条路），所以长期没暴露；
+  但引擎拿到空行就该给根命令列表。现改为空 token 列表直接返回全部根命令
+  （带 cursor 时同样设置显式替换区间）。
+
 ### 测试
 - 新增 **`src/test/dsl/wiki-syntax.test.ts`**：122 项语法核验表，
   逐命令列出 wiki 原文里的每一种合法写法，断言**一条诊断都不能产生**。
   另有一条断言强制该表覆盖全部 41 条注册命令 —— 新增命令忘了补表会直接失败。
 - 诊断回归增至 132 项（新增 `core/resName` 大小写策略 6 项）。
+- **e2e 的根命令补全断言从 `> 0` 加强到"覆盖全部 41 条"**，并新增前缀过滤用例。
+  原先只断言"有结果"，无法发现整体返回空或降级成只有 fastCommands。
 - e2e 的"合法文件不被误报"夹具加入 `function NS:good`（大小写不匹配）。
 
 # [1.6.5]

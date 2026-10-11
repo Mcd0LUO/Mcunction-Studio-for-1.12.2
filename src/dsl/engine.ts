@@ -106,6 +106,17 @@ export class CompletionEngine {
         lineText: string,
         cursor?: { line: number; character: number },
     ): Promise<vscode.CompletionItem[]> {
+        // 空行 → 根命令列表。
+        //
+        // walk() 取 commands[0] 查根节点，空数组时拿到 undefined 就直接返回 []，
+        // 于是 `complete([], '')` 静默给空结果。补全 provider 目前在更外层
+        // （Base.provideRootCompletions）自行处理空行，UI 上看不出问题 ——
+        // 但引擎本身应当自洽：调用方传空行就该拿到根命令。
+        if (commands.length === 0 || commands[0] === '') {
+            const roots = this.getRootItems();
+            return cursor ? this.withRanges(roots, cursor, lineText, 'value') : roots;
+        }
+
         const result = this.walk(commands);
         if (!result.root) { return []; }
 

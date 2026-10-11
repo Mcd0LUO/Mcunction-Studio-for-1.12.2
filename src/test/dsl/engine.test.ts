@@ -614,3 +614,61 @@ describe('scoreboard（1.12.2 语法，已核对 wiki）', () => {
         assert.ok(ls.includes('[dataTag]'), `实际 ${JSON.stringify(ls)}`);
     });
 });
+
+// ============================================================
+// 根命令补全
+//
+// 回归：complete([]) 曾经静默返回空 —— walk() 取 commands[0] 是 undefined，
+// 查不到根节点就直接 return []。UI 上被补全 provider 的
+// provideRootCompletions 兜住了，所以长期没暴露；
+// 但引擎拿到空行就该给根命令列表，这才是自洽的行为。
+// ============================================================
+
+describe('根命令补全', () => {
+    /** 取某项的区间文本 */
+    function rangeText(it: vscode.CompletionItem, line: string): string {
+        const r = it.range as vscode.Range | undefined;
+        if (!r) { return '<no range>'; }
+        return line.slice(r.start.character, r.end.character);
+    }
+
+    const ALL = [
+        'advancement', 'blockdata', 'clear', 'clone', 'defaultgamemode', 'difficulty',
+        'effect', 'enchant', 'entitydata', 'execute', 'fill', 'function', 'gamemode',
+        'gamerule', 'give', 'kill', 'particle', 'playsound', 'replaceitem', 'say',
+        'scoreboard', 'setblock', 'setworldspawn', 'spawnpoint', 'spreadplayers',
+        'stats', 'stopsound', 'summon', 'teleport', 'tellraw', 'testfor',
+        'testforblock', 'testforblocks', 'time', 'title', 'toggledownfall', 'tp',
+        'trigger', 'weather', 'worldborder', 'xp',
+    ];
+
+    it('空 token 列表 → 全部 41 条根命令', async () => {
+        const ls = labels(await engine.complete([], ''));
+        assert.strictEqual(ls.length, 41, `实际 ${ls.length} 项`);
+        for (const c of ALL) {
+            assert.ok(ls.includes(c), `缺少 ${c}`);
+        }
+    });
+
+    it("单个空 token（['']）同样给出根命令", async () => {
+        const ls = labels(await engine.complete([''], ''));
+        assert.strictEqual(ls.length, 41);
+    });
+
+    it('带 cursor 时根命令也带显式替换区间', async () => {
+        const line = 'sc';
+        const r = await engine.complete([''], line, { line: 0, character: 2 });
+        assert.strictEqual(r.length, 41);
+        for (const it of r) {
+            assert.ok(it.range, '应设置 range');
+            assert.strictEqual(rangeText(it, line), 'sc',
+                `区间应覆盖已输入前缀，实际 ${JSON.stringify(rangeText(it, line))}`);
+        }
+    });
+
+    it('未注册的命令名不当作根命令（前缀过滤由 provider 负责）', async () => {
+        // engine 只认已注册的根命令；`sc` 不是命令名，故返回空。
+        // 前缀过滤在 Base.provideRootCompletions 里做 —— 这里锁定该分工。
+        assert.deepStrictEqual(await engine.complete(['sc'], 'sc'), []);
+    });
+});

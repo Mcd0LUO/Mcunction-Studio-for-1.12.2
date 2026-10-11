@@ -244,6 +244,7 @@ suite('Mcfunction Studio — 真实 VS Code 集成', () => {
         const editor = await vscode.window.showTextDocument(doc);
         const lastLine = doc.lineCount - 1;
         const text = doc.lineAt(lastLine).text;
+        assert.strictEqual(text, '', '夹具最后一行应为空行，才测得到根命令补全');
         editor.selection = new vscode.Selection(lastLine, text.length, lastLine, text.length);
 
         const list = await vscode.commands.executeCommand<vscode.CompletionList>(
@@ -252,6 +253,44 @@ suite('Mcfunction Studio — 真实 VS Code 集成', () => {
             new vscode.Position(lastLine, text.length),
         );
         assert.ok(list && list.items.length > 0, '根命令补全应有结果');
+
+        // 只断言 > 0 是不够的 —— 根命令补全曾经整体返回空，
+        // 或被 engine 未就绪时的兜底路径悄悄降级成只有 fastCommands。
+        const labels = new Set(list.items.map(i =>
+            typeof i.label === 'string' ? i.label : i.label.label
+        ));
+        const expected = [
+            'advancement', 'blockdata', 'clear', 'clone', 'defaultgamemode', 'difficulty',
+            'effect', 'enchant', 'entitydata', 'execute', 'fill', 'function', 'gamemode',
+            'gamerule', 'give', 'kill', 'particle', 'playsound', 'replaceitem', 'say',
+            'scoreboard', 'setblock', 'setworldspawn', 'spawnpoint', 'spreadplayers',
+            'stats', 'stopsound', 'summon', 'teleport', 'tellraw', 'testfor',
+            'testforblock', 'testforblocks', 'time', 'title', 'toggledownfall', 'tp',
+            'trigger', 'weather', 'worldborder', 'xp',
+        ];
+        const missing = expected.filter(c => !labels.has(c));
+        assert.deepStrictEqual(
+            missing, [],
+            `根命令补全缺少 ${missing.length} 条：${missing.join(', ')}（共返回 ${labels.size} 项）`,
+        );
+    });
+
+    test('输入前缀时根命令补全按前缀过滤', async () => {
+        const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(funcFile));
+        const editor = await vscode.window.showTextDocument(doc);
+        const lastLine = doc.lineCount - 1;
+        // 写一个前缀再触发补全
+        await editor.edit(b => b.insert(new vscode.Position(lastLine, 0), 'sc'));
+        const list = await vscode.commands.executeCommand<vscode.CompletionList>(
+            'vscode.executeCompletionItemProvider',
+            doc.uri,
+            new vscode.Position(lastLine, 2),
+        );
+        const labels = list.items.map(i =>
+            typeof i.label === 'string' ? i.label : i.label.label
+        );
+        assert.ok(labels.includes('scoreboard'), `前缀 sc 应给出 scoreboard，实际 ${JSON.stringify(labels.slice(0, 10))}`);
+        assert.ok(!labels.includes('kill'), '前缀 sc 不该给出 kill');
     });
 
     test('扩展注册的命令存在于命令面板', async () => {
