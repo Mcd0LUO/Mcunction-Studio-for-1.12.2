@@ -473,4 +473,111 @@ suite('Mcfunction Studio — 真实 VS Code 集成', () => {
             `被拒绝的重命名不应修改文件，当前内容：\n${after.getText()}`,
         );
     });
+
+    // ================================================================
+    // 补全替换区间
+    //
+    // 背景：VS Code 在补全项没有 range 时按语言词法推算替换范围，
+    // 而默认词法把 `:` `/` `.` `@` `#` 当分隔符 ——
+    // `function ns:` 的词范围为空、`function ns:a` 的只有 `a`，
+    // 接受 `ns:test` 都会得到 `ns:ns:test`（命名空间被重复插入）。
+    // 引擎现在显式设置区间，这里用真实宿主验证。
+    // ================================================================
+
+    /** 取出补全项实际生效的替换区间（VS Code 会暴露成 InsertReplace 对） */
+    function replacingRange(item: vscode.CompletionItem): vscode.Range | undefined {
+        const raw = item.range as unknown;
+        if (!raw) { return undefined; }
+        const asRange = raw as vscode.Range;
+        if (asRange.start && typeof asRange.start.character === 'number') { return asRange; }
+        const pair = raw as { replacing?: vscode.Range };
+        return pair.replacing;
+    }
+
+    /** 在真实宿主里取某位置的补全项 */
+    async function completionsAt(
+        doc: vscode.TextDocument,
+        line: number,
+        character: number,
+    ): Promise<vscode.CompletionItem[]> {
+        const list = await vscode.commands.executeCommand<vscode.CompletionList>(
+            'vscode.executeCompletionItemProvider',
+            doc.uri,
+            new vscode.Position(line, character),
+        );
+        return list?.items ?? [];
+    }
+
+    function labelOf(i: vscode.CompletionItem): string {
+        return typeof i.label === 'string' ? i.label : i.label.label;
+    }
+
+    test('补全值候选的区间覆盖完整命名空间（不产生 ns:ns:test）', async function () {
+        this.timeout(30000);
+        const dataDir = path.dirname(funcFile);            // .../data/functions/ns
+        const probe = path.join(dataDir, 'completion.mcfunction');
+        fs.writeFileSync(probe, ['function ns:', 'function ns:a', ''].join('\n'));
+
+        const uri = vscode.Uri.file(probe);
+        const doc = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(doc);
+        await new Promise(r => setTimeout(r, 1500));
+
+        for (const [lineNo, line] of [[0, 'function ns:'], [1, 'function ns:a']] as const) {
+            const items = await completionsAt(doc, lineNo, line.length);
+            // 找一个真实的函数资源名（形如 ns:xxx）
+            const funcItem = items.find(i => labelOf(i).startsWith('ns:'));
+            assert.ok(
+                funcItem,
+                `第 ${lineNo} 行应给出函数名候选，实际：${JSON.stringify(items.map(labelOf).slice(0, 8))}`,
+            );
+
+            const r = replacingRange(funcItem!);
+            assert.ok(r, '补全项必须带替换区间，否则 VS Code 会按词法猜');
+            const replaced = line.slice(r!.start.character, r!.end.character);
+            assert.ok(
+                !replaced.startsWith('ns:') || replaced === line.trim().slice('function '.length),
+                `替换区间应覆盖用户已输入的整段（含 ns:），实际覆盖 ${JSON.stringify(replaced)}`,
+            );
+
+            // 模拟接受该候选
+            const insert = typeof funcItem!.insertText === 'string'
+                ? funcItem!.insertText
+                : (funcItem!.insertText ? funcItem!.insertText.value : labelOf(funcItem!));
+            const result = line.slice(0, r!.start.character) + insert + line.slice(r!.end.character);
+            assert.ok(
+                !result.includes('ns:ns:'),
+                `命名空间被重复插入：${JSON.stringify(line)} → ${JSON.stringify(result)}`,
+            );
+            assert.ok(
+                result === `function ${labelOf(funcItem!)}`,
+                `接受候选后应为 "function ${labelOf(funcItem!)}"，实际 ${JSON.stringify(result)}`,
+            );
+        }
+    });
+
+    test('下一级字面量使用零宽区间（插入而非替换）', async function () {
+        this.timeout(30000);
+        const dataDir = path.dirname(funcFile);
+        const probe = path.join(dataDir, 'completion2.mcfunction');
+        const line = 'clone 0 0 0 1 1 1 2 2 2';
+        fs.writeFileSync(probe, line + '\n');
+
+        const uri = vscode.Uri.file(probe);
+        const doc = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(doc);
+        await new Promise(r => setTimeout(r, 1500));
+
+        const items = await completionsAt(doc, 0, line.length);
+        const masked = items.find(i => labelOf(i) === 'masked');
+        assert.ok(masked, `应给出 maskMode，实际：${JSON.stringify(items.map(labelOf).slice(0, 8))}`);
+
+        const r = replacingRange(masked!);
+        assert.ok(r, 'maskMode 应带区间');
+        assert.strictEqual(
+            r!.start.character, r!.end.character,
+            'maskMode 是下一级字面量，必须是零宽区间（插入），否则会替换掉第 9 个坐标',
+        );
+        assert.strictEqual(r!.start.character, line.length, '零宽区间应落在光标处');
+    });
 });

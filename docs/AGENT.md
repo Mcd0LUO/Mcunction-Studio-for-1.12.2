@@ -99,17 +99,32 @@ VS Code 扩展，为 Minecraft **1.12.2** 数据包的 `.mcfunction` 文件提�
    以及 `LineIndex` 的写入（`addScoreboard` / `addScoreboardRef` …）。
    漏掉第三处会导致「能补全、能跳转，但找不到引用」这种半残状态。
 
+13. **补全的替换区间不能交给 VS Code 猜**。
+    它按语言词法找「词」，而 Minecraft 的资源名/选择器里全是
+    `:` `/` `.` `@` `#` —— 默认词法把这些当分隔符，
+    于是 `function ns:` 的词范围为空、`function ns:a` 的只有 `a`，
+    接受 `ns:test` 都会得到 `ns:ns:test`。
+
+    两道防线都要有：
+    - `syntaxes/language-configuration.json` 的 `wordPattern` 覆盖这些字符
+      （兜住引擎未显式设置区间的路径，如根命令补全）
+    - 引擎用 `withRanges()` 显式设置区间，语义分两类：
+      **参数值候选**替换已输入的前缀，**下一级字面量**零宽插入
+
+    ⚠️ 新增返回补全项的代码路径时，务必确认它走了 `withRanges`；
+    漏掉的路径会退回词法推算，在含 `:` 的值上重现重复插入。
+
 ## 开发命令
 
 ```bash
 npm run compile              # 编译（注释不进产物）
 npm run lint                 # ESLint
 npm run test:purity          # 纯净层守卫（16 项，无 mock：碰 vscode 即失败）
-npm run test:engine          # 补全引擎行为测试（45 项）
-npm run test:diagnostics     # 诊断规则 + 符号抽取（101 项）
+npm run test:engine          # 补全引擎行为测试（51 项）
+npm run test:diagnostics     # 诊断规则 + 符号抽取（110 项）
 npm run test:index           # 索引 / 缓存序列化（31 项）
 npm run test:baseline        # 1.12.2 命令树基准（10 项）
-npm run test:e2e             # 真实 VS Code 集成（14 项，含红线/引用/重命名）
+npm run test:e2e             # 真实 VS Code 集成（16 项，含红线/引用/重命名/补全区间）
 npm run bench:perf              # 合成包性能基准
 npm run bench:perf -- --quiet   # 轻量负载（降低风扇噪音）
 npm run bench:real -- "D:/path/to/data"
@@ -147,7 +162,7 @@ npm run bench:real -- "D:/path/to/data"
   查 1.12 时期的精确原文可用 MediaWiki API：
   `?action=query&prop=revisions&rvstart=2018-06-01&rvdir=older`
 - **提交前跑完 Node 侧五个测试脚本 + lint**
-  （当前应分别为 16 / 45 / 101 / 31 / 10 passing，lint 0 error）。
+  （当前应分别为 16 / 51 / 110 / 31 / 10 passing，lint 0 error）。
   改动 `package.json` 的 `contributes`、扩展激活、语言绑定相关代码时，
   额外跑 `npm run test:e2e`。
 - 迭代计划写 `docs/plans/`，缺陷报告写 `docs/bugs/`，待决策项写 `docs/actions/`，

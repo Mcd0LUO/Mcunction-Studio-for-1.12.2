@@ -46,7 +46,13 @@ export abstract class BaseCompletionProvider implements vscode.CompletionItemPro
             if (CompletionEngine.debug) {
                 console.log(`[DSL] ${currentCommands.join(' ')}`);
             }
-            return engine.complete(currentCommands, lineText);
+            // 传入光标位置：引擎据此给补全项设置**显式替换区间**。
+            // 不传的话 VS Code 会按语言词法自行推算，而默认词法把 `:` `/` `.`
+            // 当分隔符，会让 `function ns:` 的补全变成 `ns:ns:test`。
+            return engine.complete(currentCommands, lineText, {
+                line: position.line,
+                character: position.character,
+            });
         }
 
         return this.provideRootCompletions(currentCommands[0]);

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { CommandNode, LiteralNode, ArgumentNode, GreedyArgumentNode, ForwardRootNode, RootNode, SuggestContext } from './nodes';
 import { DataLoader } from '../core/DataLoader';
 import { CompletionContext } from '../completionProvider/CompletionContext';
+import { valueSpanAt } from '../core/symbols/extractor';
 
 type Ancestors = CommandNode[];
 
@@ -85,12 +86,24 @@ export class CompletionEngine {
     // 主入口
     // ================================================================
 
-    async complete(commands: string[], lineText: string): Promise<vscode.CompletionItem[]> {
+    /**
+     * 补全主入口。
+     *
+     * @param cursor 光标位置。传入时会为补全项**显式设置替换区间**：
+     *               参数值候选替换已输入的前缀，下一级字面量插入在光标处。
+     *               不传（单测里常见）则维持旧行为，由 VS Code 自行推算 ——
+     *               那种推算对含 `:` `/` `.` 的 Minecraft 资源名并不准确。
+     */
+    async complete(
+        commands: string[],
+        lineText: string,
+        cursor?: { line: number; character: number },
+    ): Promise<vscode.CompletionItem[]> {
         const result = this.walk(commands);
         if (!result.root) { return []; }
 
         const { node, ancestors, consumedRealToken } = result;
-        const items = await this.suggest(node, ancestors, commands, lineText, consumedRealToken);
+        const items = await this.suggest(node, ancestors, commands, lineText, consumedRealToken, cursor);
 
         if (CompletionEngine.debug) {
             console.log(`[DSL] ${commands.join(' ')} → ${items.length} 项`,
@@ -246,6 +259,7 @@ export class CompletionEngine {
         commands: string[],
         lineText: string,
         consumedRealToken: boolean,
+        cursor?: { line: number; character: number },
     ): Promise<vscode.CompletionItem[]> {
         // forward_root → 根命令列表
         if (node.kind === 'forward_root') { return this.getRootItems(); }
@@ -258,30 +272,45 @@ export class CompletionEngine {
         // 若当前节点是 argument
         if (node.kind === 'argument') {
             const arg = node as ArgumentNode;
-            // 未消费真实 token → 用户还没填值 → 展示 suggest
-            if (!consumedRealToken && arg.suggest) {
-                // argument 常与 literal 兄弟并列（如 effect 的 <target> 与 clear），
-                // 只跑 suggest 会让 literal 分支永远补不出来，这里合并展示。
-                const parent = ancestors.length > 0 ? ancestors[ancestors.length - 1] : null;
-                const siblingItems = parent ? this.collectLiterals(parent) : [];
-                if (siblingItems.length === 0) {
-                    const ctx = this.mkCtx(commands, lineText);
-                    const result = arg.suggest(ctx);
-                    return result instanceof Promise ? await result : result;
-                }
-                const ctx = this.mkCtx(commands, lineText);
-                const result = arg.suggest(ctx);
-                const argItems = result instanceof Promise ? await result : result;
-                return [...siblingItems, ...argItems];
-            }
-            // 展示子节点（literal/forward_root），无则占位符
-            const subItems = this.collectLiterals(node);
-            if (subItems.length > 0) { return subItems; }
+
+            // ① 该参数自身的候选值（如 <name> 的函数名列表）—— **替换**已输入的前缀
+            const own: vscode.CompletionItem[] = [];
             if (arg.suggest) {
                 const ctx = this.mkCtx(commands, lineText);
                 const result = arg.suggest(ctx);
-                return result instanceof Promise ? await result : result;
+                own.push(...(result instanceof Promise ? await result : result));
             }
+
+            if (!consumedRealToken) {
+                // 尚未输入任何值。
+                // 有 suggest 时父节点下的兄弟字面量优先（如 effect 的 clear），
+                // 让用户更容易发现分支；随后是本参数的候选值。
+                if (arg.suggest) {
+                    const parent = ancestors.length > 0 ? ancestors[ancestors.length - 1] : null;
+                    const sib = parent ? this.collectLiterals(parent) : [];
+                    return this.withRanges([...sib, ...own], cursor, lineText, 'value');
+                }
+                // 无 suggest 的参数：给出子字面量，否则占位符
+                const subNoSuggest = this.collectLiterals(node);
+                if (subNoSuggest.length > 0) {
+                    return this.withRanges(subNoSuggest, cursor, lineText, 'insert');
+                }
+                return [{ label: arg.argName, detail: ' ', insertText: '', kind: vscode.CompletionItemKind.TypeParameter, sortText: '￿' }];
+            }
+
+            // 已开始输入该参数的值：
+            //   参数自身候选值 → 替换前缀
+            //   子字面量（下一级续接，如 if/unless、maskMode）→ 插入在光标处，不替换 token
+            //
+            // ⚠️ 早先这里是 `if (subItems.length > 0) return subItems;` ——
+            // 一旦参数有字面量子节点，就会**吞掉参数自身的候选值**：
+            // 输入 `function ns` 只看到 if/unless，函数名一个都补不出来。
+            const sub = this.collectLiterals(node);
+            const merged = [
+                ...this.withRanges(own, cursor, lineText, 'value'),
+                ...this.withRanges(sub, cursor, lineText, 'insert'),
+            ];
+            if (merged.length > 0) { return merged; }
             return [{ label: arg.argName, detail: ' ', insertText: '', kind: vscode.CompletionItemKind.TypeParameter, sortText: '￿' }];
         }
 
@@ -330,6 +359,40 @@ export class CompletionEngine {
             }
         }
 
+        return items;
+    }
+
+    /**
+     * 给补全项设置显式替换区间。
+     *
+     * `kind` 决定语义：
+     *   `'value'`  —— 参数值候选，替换光标处正在输入的整个值
+     *   `'insert'` —— 下一级字面量，仅插入在光标处（零宽区间），不替换任何文本
+     *
+     * 为什么不交给 VS Code 推算：它按语言词法找「词」，而默认词法把
+     * `:` `/` `.` `@` `#` 当分隔符 —— `function ns:` 的词范围为空、
+     * `function ns:a` 的词范围只有 `a`，接受 `ns:test` 都会得到 `ns:ns:test`。
+     *
+     * 未传 cursor（单测场景）时原样返回，保持既有行为。
+     */
+    private withRanges(
+        items: vscode.CompletionItem[],
+        cursor: { line: number; character: number } | undefined,
+        lineText: string,
+        kind: 'value' | 'insert',
+    ): vscode.CompletionItem[] {
+        if (!cursor) { return items; }
+        let range: vscode.Range;
+        if (kind === 'insert') {
+            range = new vscode.Range(cursor.line, cursor.character, cursor.line, cursor.character);
+        } else {
+            const span = valueSpanAt(lineText, cursor.character);
+            range = new vscode.Range(cursor.line, span.start, cursor.line, span.end);
+        }
+        for (const it of items) {
+            // 已显式指定区间的（如数据层传入的）不覆盖
+            if (!it.range) { it.range = range; }
+        }
         return items;
     }
 

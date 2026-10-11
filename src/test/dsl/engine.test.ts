@@ -69,9 +69,16 @@ describe('CompletionEngine 注册', () => {
 describe('clone（1.12.2 语法）', () => {
     const P = ['clone', '0', '0', '0', '1', '1', '1', '2', '2', '2'];
 
-    it('九个坐标之后列出三种 maskMode', async () => {
+    it('九个坐标之后给出三种 maskMode', async () => {
+        // 注意：此时「继续修改第 9 个坐标」与「进入 maskMode」都是合法续接，
+        // 引擎两者都返回，并分别设置不同的替换区间
+        // （值候选替换当前 token，字面量插入在光标处，见 withRanges）。
+        // 故这里只断言 maskMode 必须齐备，不断言列表恰好只有三项。
         const r = await engine.complete(P, P.join(' '));
-        assert.deepStrictEqual(labels(r).sort(), ['filtered', 'masked', 'replace']);
+        const ls = labels(r);
+        for (const m of ['filtered', 'masked', 'replace']) {
+            assert.ok(ls.includes(m), `应给出 maskMode "${m}"，实际 ${JSON.stringify(ls)}`);
+        }
     });
 
     it('maskMode 之后给出三个 cloneMode 关键字', async () => {
@@ -402,5 +409,104 @@ describe('健壮性', () => {
     it('多余 token 不会抛异常', async () => {
         const r = await engine.complete(['scoreboard', 'a', 'b', 'c', 'd', 'e'], 'scoreboard a b c d e');
         assert.ok(Array.isArray(r));
+    });
+});
+
+// ============================================================
+// 显式替换区间（withRanges）
+//
+// 背景：VS Code 在补全项没有 range 时按语言词法推算替换范围，
+// 而默认词法把 `:` `/` `.` `@` `#` 当分隔符 —— `function ns:` 的词范围为空、
+// `function ns:a` 的只有 `a`，接受 `ns:test` 都会得到 `ns:ns:test`。
+// 因此引擎必须自己给区间。
+// ============================================================
+
+describe('补全替换区间', () => {
+    /** 取某项的区间文本 */
+    function rangeText(it: vscode.CompletionItem, line: string): string {
+        const r = it.range as vscode.Range | undefined;
+        if (!r) { return '<no range>'; }
+        return line.slice(r.start.character, r.end.character);
+    }
+
+    function find(items: vscode.CompletionItem[], label: string): vscode.CompletionItem | undefined {
+        return items.find(i => (typeof i.label === 'string' ? i.label : i.label.label) === label);
+    }
+
+    it('不传 cursor 时不设置区间（保持单测/旧调用方行为）', async () => {
+        const line = 'function ns:a';
+        const r = await engine.complete(['function', 'ns:a'], line);
+        assert.ok(r.every(i => !i.range), '未传 cursor 时不应设置 range');
+    });
+
+    it('参数值候选的区间覆盖已输入的完整 token', async () => {
+        // effect <target> <effect>：<effect> 的候选来自静态枚举，无需索引
+        const line = 'effect @p sp';
+        const col = line.length;
+        const r = await engine.complete(['effect', '@p', 'sp'], line, { line: 0, character: col });
+        assert.ok(r.length > 0, '应给出效果列表');
+        for (const it of r) {
+            assert.strictEqual(
+                rangeText(it, line), 'sp',
+                `值候选应替换已输入的前缀 "sp"，实际 ${JSON.stringify(rangeText(it, line))}`,
+            );
+        }
+    });
+
+    it('值候选的区间是完整 token，不被空白之外的字符截断', async () => {
+        // 用带下划线的目标名验证：区间应覆盖 my_obj 整体
+        const line = 'scoreboard players set @s my_obj';
+        const col = line.length;
+        const r = await engine.complete(
+            ['scoreboard', 'players', 'set', '@s', 'my_obj'], line,
+            { line: 0, character: col },
+        );
+        // 空索引下该参数无候选，只剩占位符 —— 占位符不参与替换，无区间即可
+        for (const it of r) {
+            const t = rangeText(it, line);
+            assert.ok(t === 'my_obj' || t === '<no range>', `意外的区间 ${JSON.stringify(t)}`);
+        }
+    });
+
+    it('冒号分隔的资源名整体作为替换区间（修复 ns:ns:test 重复）', async () => {
+        const line = 'function ns:';
+        const col = line.length;
+        const r = await engine.complete(['function', 'ns:'], line, { line: 0, character: col });
+        // 该数据包为空，函数名列表为空；这里用字面量分支验证 insert 区间，
+        // 值候选的区间逻辑由纯函数 valueSpanAt 的单测覆盖。
+        for (const it of r) {
+            const t = rangeText(it, line);
+            assert.notStrictEqual(t, 'ns:', `字面量不应替换掉 ns:（否则会丢命名空间）`);
+        }
+    });
+
+    it('下一级字面量使用零宽区间（插入而非替换）', async () => {
+        const line = 'clone 0 0 0 1 1 1 2 2 2';
+        const col = line.length;
+        const r = await engine.complete(
+            ['clone', '0', '0', '0', '1', '1', '1', '2', '2', '2'],
+            line,
+            { line: 0, character: col },
+        );
+        const masked = find(r, 'masked');
+        assert.ok(masked, '应给出 maskMode');
+        assert.strictEqual(
+            rangeText(masked, line), '',
+            'maskMode 是下一级字面量，必须零宽插入，不能替换第 9 个坐标',
+        );
+    });
+
+    it('选择器内的值候选只替换值，不吞掉选择器本身', async () => {
+        // type= 的候选来自静态实体列表，无需索引
+        const line = 'kill @a[type=zom]';
+        const col = line.indexOf('zom') + 3;             // 光标在 zom 之后、] 之前
+        const r = await engine.complete(['kill', '@a[type=zom]'], line, { line: 0, character: col });
+        assert.ok(r.length > 0, '应给出实体类型列表');
+        for (const it of r) {
+            assert.strictEqual(
+                rangeText(it, line), 'zom',
+                `区间应只覆盖选择器内的值 "zom"，实际 ${JSON.stringify(rangeText(it, line))}`,
+            );
+        }
     });
 });

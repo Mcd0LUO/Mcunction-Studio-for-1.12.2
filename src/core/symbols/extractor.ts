@@ -351,6 +351,72 @@ function isSpace(ch: string): boolean { return ch === ' ' || ch === '\t'; }
 function isSelector(s: string): boolean { return s.startsWith('@'); }
 
 // ============================================================
+// 补全替换区间
+// ============================================================
+
+export interface CharSpan {
+    readonly start: number;
+    readonly end: number;
+}
+
+/**
+ * 光标处「正在输入的参数值」在行内的字符区间。
+ *
+ * ## 为什么需要它
+ *
+ * VS Code 在补全项没有显式 `range` 时，会用**语言词法**自行推算替换范围。
+ * `.mcfunction` 原本没有声明 `wordPattern`，走的是默认词法 ——
+ * 它把 `:` `/` `.` `@` `#` 都当分隔符，于是：
+ *
+ *   `function ns:`   光标在末尾 → 词范围为空 → 接受 `ns:test` 得到 `function ns:ns:test`
+ *   `function ns:a`  光标在末尾 → 词范围只覆盖 `a` → 同样得到 `ns:ns:test`
+ *
+ * 即**命名空间被重复插入**。这正是「补全精度极不准确」的根因之一
+ * （已在真实 VS Code 上实测确认）。
+ *
+ * ## 本函数的作用
+ *
+ * 补全项分两类，替换语义不同：
+ *   · **参数值候选**（函数名 / 目标名…）→ 替换掉用户已输入的前缀
+ *   · **下一级字面量**（if/unless、maskMode…）→ **插入**在光标处，不替换任何东西
+ * 两者的区间由此处与调用方共同决定，不再依赖 VS Code 的猜测。
+ *
+ * @param lineText 整行文本（含光标之后的字符，用于确定值的结束位置）
+ * @param character 光标列（0-based）
+ */
+export function valueSpanAt(lineText: string, character: number): CharSpan {
+    const ch = Math.max(0, Math.min(character, lineText.length));
+
+    // 当前空白分隔 token 的范围
+    let tokStart = ch;
+    while (tokStart > 0 && !isSpace(lineText[tokStart - 1])) { tokStart--; }
+    let tokEnd = ch;
+    while (tokEnd < lineText.length && !isSpace(lineText[tokEnd])) { tokEnd++; }
+    const token = lineText.slice(tokStart, tokEnd);
+
+    // 选择器内部：值在最后一个 = 或 , 之后，到 , 或 ] 之前
+    if (isSelector(token)) {
+        const open = token.indexOf('[');
+        if (open >= 0) {
+            const absOpen = tokStart + open;
+            if (ch > absOpen) {
+                let start = absOpen + 1;
+                for (let i = ch - 1; i > absOpen; i--) {
+                    if (lineText[i] === '=' || lineText[i] === ',') { start = i + 1; break; }
+                }
+                let end = tokEnd;
+                for (let i = ch; i < tokEnd; i++) {
+                    if (lineText[i] === ',' || lineText[i] === ']') { end = i; break; }
+                }
+                return { start, end };
+            }
+        }
+    }
+
+    return { start: tokStart, end: tokEnd };
+}
+
+// ============================================================
 // 选择器谓词（1.12.2 语法）
 // ============================================================
 

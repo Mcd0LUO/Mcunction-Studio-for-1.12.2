@@ -121,15 +121,6 @@ export class CompletionContext {
     }
 
     // ================================================================
-    // 工具
-    // ================================================================
-
-    wordRange(document: vscode.TextDocument, position: vscode.Position, inputLength: number): vscode.Range | undefined {
-        const adjusted = position.with(position.line, position.character - inputLength);
-        return document.getWordRangeAtPosition(adjusted);
-    }
-
-    // ================================================================
     // 数据访问 — 动态（来自 DataLoader）
     // ================================================================
 

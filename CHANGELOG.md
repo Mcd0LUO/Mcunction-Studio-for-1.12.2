@@ -2,6 +2,37 @@
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
 
+# [1.6.2]
+
+### 修复
+- **补全会重复插入命名空间**（`function ns:` → `function ns:ns:test`）。
+  根因是 `.mcfunction` 的 `language-configuration.json` **从未声明 `wordPattern`**，
+  VS Code 于是用默认词法推算补全的替换范围 —— 而默认词法把
+  `:` `/` `.` `@` `#` 全当分隔符：
+  - `function ns:` 光标在末尾 → 词范围**为空** → 插入即变成 `ns:ns:test`
+  - `function ns:a` 光标在末尾 → 词范围只有 `a` → 同样得到 `ns:ns:test`
+  - `kill @` 同理 → `@@a`
+
+  现声明 `wordPattern` 覆盖这些字符，并**由引擎显式设置替换区间**（双保险）。
+
+- **参数已输入一半时，参数自身的候选值被吞掉**。
+  引擎原先在参数有字面量子节点时直接返回那些字面量：
+  输入 `function ns` 只看到 `if` / `unless`，函数名一个都补不出来。
+  现按语义区分两类候选 ——
+  **参数值候选**替换已输入的前缀，**下一级字面量**插入在光标处。
+  这也顺带修正了 `clone <9 坐标>` 处接受 `masked` 会**替换掉第 9 个坐标**的问题。
+
+### 重构
+- **删除死代码 `CompletionContext.wordRange()`**。它没有任何调用点，
+  且用的正是上面那套不可靠的词法推算 —— 留着只会误导后来者以为补全区间由它决定。
+
+### 测试
+- 新增纯函数 `valueSpanAt(lineText, character)`（`core/symbols/extractor.ts`）
+  并配 9 项单测：普通 token、含命名空间的 token、选择器内只取值、
+  多谓词、空值、坐标、越界夹取。
+- e2e 新增 2 项，覆盖「接受候选后不出现 `ns:ns:`」与
+  「下一级字面量必须是零宽区间」。后者已反向验证：移除修复后会失败。
+
 # [1.6.1]
 
 ### 修复

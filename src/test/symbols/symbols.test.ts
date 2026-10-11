@@ -8,7 +8,7 @@
  */
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import { extractSymbols } from '../../core/symbols/extractor';
+import { extractSymbols, valueSpanAt } from '../../core/symbols/extractor';
 import { SymbolResolver } from '../../core/symbols/resolver';
 import { IndexedStore } from '../../core/data';
 import { NAME_MAX, bareName, codePointLength, isValidSymbolName } from '../../core/symbols/naming';
@@ -516,5 +516,72 @@ describe('symbols/综合用例', () => {
         for (const line of ['say foo', 'say foo bar', 'say score_x=1', 'say @a[tag=x]']) {
             assert.deepStrictEqual(extractSymbols(line), [], `误产出符号：${line}`);
         }
+    });
+});
+
+// ============================================================
+// valueSpanAt —— 补全替换区间
+//
+// 这是「补全精度」的核心：VS Code 默认按语言词法找「词」，
+// 会把 `:` `/` `.` `@` `#` 当分隔符，导致 `function ns:` 的替换范围为空
+// （接受 ns:test 得到 ns:ns:test）。区间必须自己算。
+// ============================================================
+
+describe('symbols/valueSpanAt', () => {
+    /** 便捷断言：光标处的值区间覆盖的文本 */
+    function spanText(line: string, col: number): string {
+        const s = valueSpanAt(line, col);
+        return line.slice(s.start, s.end);
+    }
+
+    it('普通参数：覆盖整个空白分隔 token', () => {
+        const line = 'effect @p speed';
+        assert.strictEqual(spanText(line, line.length), 'speed');
+        assert.strictEqual(spanText(line, 10), 'speed', '光标在 token 中间也覆盖整个 token');
+    });
+
+    it('含命名空间冒号的 token 不被截断（修复 ns:ns:test）', () => {
+        const line = 'function ns:test';
+        assert.strictEqual(spanText(line, line.length), 'ns:test');
+        assert.strictEqual(spanText(line, 12), 'ns:test', '光标在冒号之后仍覆盖整个资源名');
+    });
+
+    it('光标紧跟分隔符时区间为空，不会误吞前一个 token', () => {
+        const line = 'function ';
+        assert.strictEqual(spanText(line, line.length), '');
+    });
+
+    it('选择器内：只覆盖值，不吞掉选择器', () => {
+        const line = 'kill @a[tag=my]';
+        const col = line.indexOf('my') + 2;
+        assert.strictEqual(spanText(line, col), 'my');
+    });
+
+    it('选择器内多个谓词：只覆盖当前谓词的值', () => {
+        const line = 'kill @a[tag=a,type=zom]';
+        const col = line.indexOf('zom') + 3;
+        assert.strictEqual(spanText(line, col), 'zom');
+    });
+
+    it('选择器内等号之后为空时区间为空', () => {
+        const line = 'kill @a[tag=]';
+        const col = line.indexOf('=') + 1;
+        assert.strictEqual(spanText(line, col), '');
+    });
+
+    it('坐标等特殊 token 整体覆盖', () => {
+        const line = 'tp @s ~1.5 ~ ~';
+        assert.strictEqual(spanText(line, 10), '~1.5');
+    });
+
+    it('光标越界时被夹到行内，不抛异常', () => {
+        const line = 'say hi';
+        assert.strictEqual(spanText(line, 999), 'hi');
+        assert.strictEqual(spanText(line, -5), 'say');
+    });
+
+    it('含 @ 与 # 的 token 整体覆盖（选择器与假玩家）', () => {
+        assert.strictEqual(spanText('kill @e', 7), '@e');
+        assert.strictEqual(spanText('scoreboard players set #fp obj 1', 24), '#fp');
     });
 });
