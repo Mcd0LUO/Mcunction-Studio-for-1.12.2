@@ -2,6 +2,49 @@
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
 
+# [1.6.10]
+
+按 wiki（**Scoreboard#Command reference**，rev 1215518 / 2018-05-26）重查
+scoreboard 语法与诊断，查出 4 个问题。
+
+> 注意：`Commands/scoreboard` 页只有一行转述，真表格在 `Scoreboard` 页。
+
+### 修复：`players tag … add` 被当成引用，新增标签一律误报「未定义」
+- `scoreboard players tag @s add <tagName>` 是**定义**（把标签加到实体上），
+  符号抽取器也把它记成 definition —— 但诊断规则把 `add` 和 `remove` 一起查了
+  「是否存在」，于是**每写一个新标签都会报「标签 X 未定义」**，语义完全反了。
+- `remove` 移除不存在的标签确实会失败（wiki 的成功条件），保留为 hint。
+
+### 修复：objectives 显示名把 `<criteria>` 也算进去了
+- 两种写法的显示名起点**不同**：
+  ```
+  scoreboard objectives add <name> <criteria> [display name...]   ← criteria 在中间
+  scoreboard teams add      <name>            [display name...]
+  ```
+  规则一律用 `t.slice(4)`，于是 objectives 把 criteria 也算进显示名 ——
+  `scoreboard objectives add foo dummy <32 字符>` 会被误报超长。
+- 现在按命令分别取 `t.slice(5)` / `t.slice(4)`。
+
+### 修复：队伍名超 16 字符不报
+- wiki 原文（teams add）："''name'' must not be used by an existing team,
+  **and must be at most 16 characters**" —— 与目标名上限相同，
+  但此前只查了 `objectives`。
+
+### 修复：队伍显示名超 32 字符不报
+- wiki 原文：teams add 的 display name 同样限 32 字符，此前完全没查。
+
+### 顺带核对（无问题）
+- 命令树与 wiki 的 27 种形式逐条一致，含
+  `players list [entity]`、`teams list [teamname]`、`teams leave [entities...]`
+  （这三行在 wiki 里用的是另一套标记，容易漏读）。
+- int32 边界（±2147483647/8）正负两侧都正确。
+
+### 新增测试
+- `src/test/diagnostics/scoreboard-syntax.test.ts`，68 条：
+  wiki 的 27 种写法逐条断言"零诊断"，定义/引用角色，四种长度上限的
+  边界（16/17、32/33），13 种未定义引用，int32 边界。
+- 诊断套件 235 → 303 passing。Node 侧合计 16 + 104 + 303 + 31 + 12 = 466。
+
 # [1.6.9]
 
 把**符号抽取**也做成穷举核验表（此前只有命令语法有），又查出两处漏洞。

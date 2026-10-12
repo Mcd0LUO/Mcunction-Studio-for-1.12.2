@@ -51,26 +51,51 @@ export const scoreOutOfRange: DiagnosticRule = {
     },
 };
 
-/** 记分板目标名超 16 字符（上限来源：wiki Commands/scoreboard，见 symbols/naming） */
+/**
+ * 记分板目标名 / 队伍名超 16 字符。
+ *
+ * wiki（Scoreboard#Command reference，2018-05-26 修订）原文：
+ *   objectives add: "''name'' must not be used by an existing objective,
+ *                    and must be at most 16 characters."
+ *   teams add:      "''name'' must not be used by an existing team,
+ *                    and must be at most 16 characters."
+ *
+ * ⚠️ 队伍名与目标名上限相同，此前只查了 objectives ——
+ *    `scoreboard teams add <17 字符>` 完全不报。
+ */
 export const scoreboardNameTooLong: DiagnosticRule = {
     id: 'scoreboard/name-too-long',
-    description: '记分板目标名称超过 16 字符（游戏拒绝创建）',
+    description: '记分板目标名或队伍名超过 16 字符（游戏拒绝创建）',
     defaultLevel: 'error',
     commands: ['scoreboard'],
     check(rc: RuleContext): readonly Diagnostic[] {
         const t = rc.tokens;
-        if (t[1] !== 'objectives' || (t[2] !== 'add' && t[2] !== 'remove')) { return []; }
+        const isObj = t[1] === 'objectives' && (t[2] === 'add' || t[2] === 'remove');
+        const isTeam = t[1] === 'teams' && (t[2] === 'add' || t[2] === 'remove' || t[2] === 'empty');
+        if (!isObj && !isTeam) { return []; }
         const name = t[3];
         if (!name || codePointLength(name) <= NAME_MAX) { return []; }
+        const what = isObj ? '记分板目标名' : '队伍名';
         return [rc.report(
             scoreboardNameTooLong,
             tokenSpan(rc, 3),
-            `记分板目标名 "${name}" 有 ${codePointLength(name)} 个字符，超过上限 ${NAME_MAX}`,
+            `${what} "${name}" 有 ${codePointLength(name)} 个字符，超过上限 ${NAME_MAX}`,
         )];
     },
 };
 
-/** 记分板显示名超 32 字符 */
+/**
+ * 记分板显示名超 32 字符。
+ *
+ * wiki 原文：objectives add 与 teams add 的 "''display name'' must be at most
+ * 32 characters."
+ *
+ * ⚠️ 两种写法的显示名起点**不同**：
+ *   objectives add <name> <criteria> [display name...]   ← criteria 在中间
+ *   teams add      <name>            [display name...]
+ *   此前一律用 t.slice(4)，于是 objectives 把 <criteria> 也算进了显示名 ——
+ *   `scoreboard objectives add foo dummy <32 字符>` 会被误报成超长。
+ */
 export const scoreboardDisplayNameTooLong: DiagnosticRule = {
     id: 'scoreboard/display-name-too-long',
     description: '记分板显示名超过 32 字符',
@@ -78,12 +103,20 @@ export const scoreboardDisplayNameTooLong: DiagnosticRule = {
     commands: ['scoreboard'],
     check(rc: RuleContext): readonly Diagnostic[] {
         const t = rc.tokens;
-        if (t[1] !== 'objectives' || t[2] !== 'add' || t[4] === undefined) { return []; }
-        const display = t.slice(4).join(' ');
+        let from: number;
+        if (t[1] === 'objectives' && t[2] === 'add') {
+            from = 5;          // t[3]=name, t[4]=criteria, t[5..]=display name
+        } else if (t[1] === 'teams' && t[2] === 'add') {
+            from = 4;          // t[3]=name, t[4..]=display name
+        } else {
+            return [];
+        }
+        if (t[from] === undefined) { return []; }
+        const display = t.slice(from).join(' ');
         if (codePointLength(display) <= DISPLAY_NAME_MAX) { return []; }
         return [rc.report(
             scoreboardDisplayNameTooLong,
-            tokenSpan(rc, 4),
+            tokenSpan(rc, from),
             `显示名有 ${codePointLength(display)} 个字符，超过上限 ${DISPLAY_NAME_MAX}`,
         )];
     },

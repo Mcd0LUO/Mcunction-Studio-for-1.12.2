@@ -67,8 +67,17 @@ export const undefinedScoreboard: DiagnosticRule = {
             }
         }
 
-        // 标签引用（scoreboard players tag ... add/remove）
-        if (t[1] === 'players' && t[2] === 'tag' && (t[4] === 'add' || t[4] === 'remove')) {
+        // 标签引用：**只有 remove 才查是否存在**。
+        //
+        // wiki（Scoreboard#Command reference，2018-05-26 修订）：
+        //   scoreboard players tag <entity> add    <tagName> [dataTag]
+        //   scoreboard players tag <entity> remove <tagName> [dataTag]
+        // `add` 是**定义** —— 它把标签加到实体上，不存在"未定义"一说；
+        // 符号抽取器也把它记成 definition。此前这里把 add 一起查了，
+        // 于是 `scoreboard players tag @s add newtag` 会报"标签 newtag 未定义"，
+        // 语义完全反了。`remove` 移除一个不存在的标签确实会失败（wiki 的成功条件），
+        // 保留为 hint。
+        if (t[1] === 'players' && t[2] === 'tag' && t[4] === 'remove') {
             if (t[5] && !rc.ctx.hasTag(t[5])) {
                 out.push(rc.report(undefinedScoreboard, tokenSpan(rc, 5), `标签 "${t[5]}" 未定义`));
             }
