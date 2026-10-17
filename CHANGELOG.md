@@ -2,6 +2,50 @@
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
 
+# [1.6.11]
+
+### 修复：参数填完后按空格，上一个参数的候选仍混进来
+
+`scoreboard players tag @e[r=6,tag=enemy] ` 会返回 **9 项** ——
+实体选择器（`@a`/`@p`/`@r`/`@s`/`@e`/`*`，以及来自 `fakePlayers()` 的假玩家名）
+和正确的子命令（`add`/`remove`/`list`）混在一起。
+
+影响面不止这一条，所有「选择器/参数 → 子字面量」的写法都中招：
+
+| 写法 | 修复前 | 修复后 |
+|---|---|---|
+| `scoreboard players tag @a ` | 9 项（含 6 个选择器） | 3 项 |
+| `title @a ` | 12 项（含 6 个选择器） | 6 项 |
+| `advancement grant @s ` | 11 项（含 6 个选择器） | 5 项 |
+
+根因在 `suggest()`：`walk()` 把 `@e[...]` 消费进 `<entity>` 之后
+`consumedRealToken = true`，于是引擎以为"用户正在编辑这个参数"，
+把该参数**自身**的候选值也吐了出来。而末尾的空 token 让前缀过滤失效
+（前缀是空串，全匹配），选择器就全冒出来了。
+
+现在按「末尾恰有一个空 token」判断光标是否已越过该参数：
+越过时撤掉该参数自身的候选，只留子字面量。
+
+### 修复：方括号已闭合仍弹括号内参数名
+
+`kill @a[r=6]`（光标在 `]` 之后）会弹 24 个参数名
+（`score`/`tag`/`team`/`r`/`x`/`y`/`z`/`type`…）。
+`selectors()` 只看 token 是否以 `]` 结尾，却把 `r=6]` 当成待补的参数列表。
+
+**但单纯加「以 `]` 结尾就返回空」会误杀另一种情况**：
+`kill @a[type=zom]` 光标在 `zom` 之后、`]` 之前时，token 同样以 `]` 结尾。
+所以改成**按光标位置**判断：光标在 `]` 之前才是「括号内」。
+
+为此给 `SuggestContext` 加了 `cursorCharacter`，由引擎在
+`complete()` 期间传入（`CompletionContext` 本身没有光标字段，
+`dispatch()` 的 position 只是参数，suggest 工厂拿不到）。
+
+### 测试
+- engine 套件 104 → 110 passing：
+  上述三类「参数已填完」写法各一条、光标仍在选择器 token 上时仍给候选、
+  光标在括号内仍给括号内候选、括号闭合后不弹参数名。
+- Node 侧合计 16 + 110 + 303 + 31 + 12 = 472 passing，lint 0 error；e2e 22。
+
 # [1.6.10]
 
 按 wiki（**Scoreboard#Command reference**，rev 1215518 / 2018-05-26）重查

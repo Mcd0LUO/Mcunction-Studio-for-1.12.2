@@ -121,7 +121,15 @@ export class CompletionEngine {
         if (!result.root) { return []; }
 
         const { node, ancestors, consumedRealToken } = result;
-        const items = await this.suggest(node, ancestors, commands, lineText, consumedRealToken, cursor);
+        // 光标位置要传给 suggest：选择器补全需要区分「光标在方括号内」
+        // 与「方括号已闭合」—— 两者的 token 都以 ']' 结尾。
+        this.currentCursor = cursor;
+        let items: vscode.CompletionItem[];
+        try {
+            items = await this.suggest(node, ancestors, commands, lineText, consumedRealToken, cursor);
+        } finally {
+            this.currentCursor = undefined;
+        }
 
         if (CompletionEngine.debug) {
             console.log(`[DSL] ${commands.join(' ')} → ${items.length} 项`,
@@ -299,6 +307,19 @@ export class CompletionEngine {
         consumedRealToken: boolean,
         cursor?: { line: number; character: number },
     ): Promise<vscode.CompletionItem[]> {
+        /**
+         * 光标是否已经**越过**当前参数 —— 判据是「末尾恰有一个空 token」。
+         *
+         * `scoreboard players tag @a ` 分词得到 […, '@a', '']：
+         * <entity> 已被 '@a' 填满，那个 '' 是用户按空格后等待输入的**下一个** token，
+         * 所以此刻要补的是子字面量（add/remove/list），而不是 @a 自己的取值。
+         *
+         * 反之 `scoreboard players tag @a`（没有末尾空 token）表示光标还在
+         * '@a' 这个 token 上，那时该给出选择器候选以便替换。
+         *
+         * walk() 的 consumedRealToken 区分不了这两种情况 —— 两者都是 true。
+         */
+        const tailEmptyToken = commands.length > 1 && commands[commands.length - 1] === '';
         // forward_root → 根命令列表
         if (node.kind === 'forward_root') { return this.getRootItems(); }
 
@@ -350,22 +371,35 @@ export class CompletionEngine {
             // ⚠️ 早先这里是 `if (subItems.length > 0) return subItems;` ——
             // 一旦参数有字面量子节点，就会**吞掉参数自身的候选值**：
             // 输入 `function ns` 只看到 if/unless，函数名一个都补不出来。
+            //
+            // ⚠️ 但反过来也有个坑：参数**已经填完、用户按空格要写下一个 token** 时，
+            //   这个参数自身的候选值必须**全部撤掉**。
+            //   否则 `scoreboard players tag @a ` 会同时给出 @a/@p/@r/@s/@e/* 与
+            //   add/remove/list —— 因为末尾的空 token 让前缀变成 ''，
+            //   前缀过滤形同虚设，选择器就全冒出来了。
+            //   判据：只剩一个空 token（tailEmptyToken），说明光标已越过本参数。
             const sub = this.collectLiterals(node);
+            const stillEditingThisArg = !tailEmptyToken;
             const merged = [
-                ...this.withRanges(own, cursor, lineText, 'value'),
+                ...(stillEditingThisArg ? this.withRanges(own, cursor, lineText, 'value') : []),
                 ...this.withRanges(sub, cursor, lineText, 'insert'),
             ];
 
             // 参数子节点的候选也要给出 —— 例如 particle 的 `[count]` 之下
             // 并列着 normal / force 与可省略 mode 的 [player]，
             // 只收字面量的话 `particle … 5 ` 就看不到 @a。
-            for (const child of node.children) {
-                if (child.kind !== 'argument') { continue; }
-                const c2 = child as ArgumentNode;
-                if (!c2.suggest) { continue; }
-                const r2 = c2.suggest(this.mkCtx(commands, lineText));
-                const items2 = r2 instanceof Promise ? await r2 : r2;
-                merged.push(...this.withRanges([...items2], cursor, lineText, 'insert'));
+            //
+            // 同理：光标已越过本参数时，下一级参数的候选才有意义；
+            // 仍在编辑本参数时把它们一起给出只会造成混淆。
+            if (!tailEmptyToken) {
+                for (const child of node.children) {
+                    if (child.kind !== 'argument') { continue; }
+                    const c2 = child as ArgumentNode;
+                    if (!c2.suggest) { continue; }
+                    const r2 = c2.suggest(this.mkCtx(commands, lineText));
+                    const items2 = r2 instanceof Promise ? await r2 : r2;
+                    merged.push(...this.withRanges([...items2], cursor, lineText, 'insert'));
+                }
             }
 
             if (merged.length > 0) { return merged; }
@@ -482,8 +516,12 @@ export class CompletionEngine {
             item: (l, d, i, tn, k) => this.ctx.item(l, d, i, tn ?? true, k),
             commands,
             lineText,
+            cursorCharacter: this.currentCursor?.character,
         };
     }
+
+    /** 当前这次补全请求的光标位置（仅在 complete() 期间短暂设置） */
+    private currentCursor: { line: number; character: number } | undefined;
 
     // ================================================================
     // Match — literal 优先，argument 兜底，forward_root 消费

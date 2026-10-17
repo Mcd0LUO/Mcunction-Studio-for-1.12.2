@@ -11,6 +11,8 @@ export interface SuggestContext {
     item(label: string, desc: string, insert: string | vscode.SnippetString, triggerNext?: boolean, kind?: vscode.CompletionItemKind): vscode.CompletionItem;
     commands: string[];
     lineText: string;
+    /** 本次补全请求的光标列（无光标信息时 undefined） */
+    cursorCharacter?: number;
 }
 
 /** suggest 函数签名（支持同步和异步） */

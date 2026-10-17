@@ -504,6 +504,87 @@ describe('补全替换区间', () => {
 });
 
 // ============================================================
+// 参数已填完、光标在新 token 上时的补全
+//
+// 回归：`scoreboard players tag @e[r=6,tag=enemy] `（末尾有空格）曾返回
+// 9 项 —— 实体选择器（@a/@p/@r/@s/@e/*）+ 子命令（add/remove/list）混在一起。
+//
+// 根因有两层：
+//   1. walk() 里 <entity> 已被 '@e[...]' 填满，consumedRealToken = true，
+//      suggest() 便以为"用户正在编辑这个参数"，把该参数自身的候选值
+//      （选择器）也吐了出来。而末尾的空 token 让前缀过滤失效（前缀是 ''），
+//      选择器就全冒出来了。
+//   2. selectors() 只看 token 是否以 ']' 结尾来判断"括号写完了没"，
+//      于是 `@a[r=6]` 的 'r=6]' 仍被当成待补参数列表，又弹出 24 个参数名。
+// ============================================================
+
+describe('补全/参数已填完时不该混入该参数的候选', () => {
+    const SELECTOR_LABELS = ['@a', '@p', '@r', '@s', '@e', '*'];
+    const labelsOf = (r: { label: string | { label: string } }[]): string[] =>
+        r.map(i => (typeof i.label === 'string' ? i.label : i.label.label));
+
+    it('scoreboard players tag @e[...]␣ 只给 add/remove/list', async () => {
+        const line = 'scoreboard players tag @e[r=6,tag=enemy] ';
+        const r = await engine.complete(
+            ['scoreboard', 'players', 'tag', '@e[r=6,tag=enemy]', ''], line,
+            { line: 0, character: line.length },
+        );
+        const labels = labelsOf(r);
+        assert.deepStrictEqual(labels.sort(), ['add', 'list', 'remove'],
+            `实际 ${JSON.stringify(labels)}`);
+    });
+
+    it('title @a␣ 只给子命令，不含选择器', async () => {
+        const line = 'title @a ';
+        const r = await engine.complete(['title', '@a', ''], line, { line: 0, character: line.length });
+        const labels = labelsOf(r);
+        for (const s of SELECTOR_LABELS) {
+            assert.ok(!labels.includes(s), `不该出现选择器 ${s}：${JSON.stringify(labels)}`);
+        }
+        assert.ok(labels.includes('title') && labels.includes('times'), `实际 ${JSON.stringify(labels)}`);
+    });
+
+    it('advancement grant @s␣ 只给 only/until/from/through/everything', async () => {
+        const line = 'advancement grant @s ';
+        const r = await engine.complete(['advancement', 'grant', '@s', ''], line,
+            { line: 0, character: line.length });
+        const labels = labelsOf(r);
+        for (const s of SELECTOR_LABELS) {
+            assert.ok(!labels.includes(s), `不该出现选择器 ${s}：${JSON.stringify(labels)}`);
+        }
+        assert.ok(labels.includes('only') && labels.includes('everything'),
+            `实际 ${JSON.stringify(labels)}`);
+    });
+
+    it('光标仍在选择器 token 上时仍给选择器候选', async () => {
+        // @ 之后没空格 —— 用户在写选择器本身，这时必须给 @a/@p/…
+        const line = 'kill @';
+        const r = await engine.complete(['kill', '@'], line, { line: 0, character: line.length });
+        const labels = labelsOf(r);
+        assert.ok(labels.some(l => SELECTOR_LABELS.includes(l)),
+            `应给选择器，实际 ${JSON.stringify(labels)}`);
+    });
+
+    it('光标在方括号内时仍给括号内候选（不能被"已闭合"判断误杀）', async () => {
+        // 这条正是上述第 2 层修复的回归守卫：
+        // token 以 ']' 结尾，但光标在 ']' 之前，用户正在输入括号内的值。
+        const line = 'kill @a[type=zom]';
+        const col = line.indexOf('zom') + 3;
+        const r = await engine.complete(['kill', '@a[type=zom]'], line, { line: 0, character: col });
+        assert.ok(r.length > 0, '应给出实体类型候选');
+        assert.ok(labelsOf(r).includes('zombie'), `实际 ${JSON.stringify(labelsOf(r).slice(0, 8))}`);
+    });
+
+    it('方括号已闭合、光标在其后时不弹括号内参数名', async () => {
+        const line = 'kill @a[r=6]';
+        const r = await engine.complete(['kill', '@a[r=6]'], line, { line: 0, character: line.length });
+        const labels = labelsOf(r);
+        assert.ok(!labels.includes('type') && !labels.includes('score'),
+            `不该弹括号内参数名，实际 ${JSON.stringify(labels)}`);
+    });
+});
+
+// ============================================================
 // execute / scoreboard 的命令树修正
 //
 // 依据 wiki 2018-05 修订（1.12.2 已发布、1.13 未发布）：

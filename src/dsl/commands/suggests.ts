@@ -11,8 +11,25 @@ import { ParticleNames, SoundNames } from '../../utils/EnumLib';
 // ----------------------------------------------------------------
 
 export function suggestSelectors() {
-    return (ctx: SuggestContext): vscode.CompletionItem[] =>
-        ctx.cc.selectors(ctx.commands[ctx.commands.length - 1] || '');
+    return (ctx: SuggestContext): vscode.CompletionItem[] => {
+        const token = ctx.commands[ctx.commands.length - 1] || '';
+        /**
+         * 光标在该 token 内的偏移。
+         *
+         * `selectors()` 需要它来区分「光标还在方括号里」和「方括号已闭合」——
+         * 两者的 token 都以 ']' 结尾，只看字符串无法分辨。
+         * 用行内最后一次出现的位置往右找：同一个选择器一般只写一次。
+         */
+        let cursorInToken: number | undefined;
+        const at = ctx.lineText.lastIndexOf(token);
+        const cursorCol = ctx.cursorCharacter;
+        if (token && at >= 0 && cursorCol !== undefined) {
+            if (cursorCol >= at && cursorCol <= at + token.length) {
+                cursorInToken = cursorCol - at;
+            }
+        }
+        return ctx.cc.selectors(token, cursorInToken);
+    };
 }
 
 // ----------------------------------------------------------------

@@ -176,8 +176,13 @@ export class CompletionContext {
         return items;
     }
 
-    /** 选择器补全（含参数） */
-    selectors(selector: string): vscode.CompletionItem[] {
+    /**
+     * 选择器补全（含参数）。
+     *
+     * @param selector 光标所在的选择器 token
+     * @param cursorInToken 光标在该 token 内的偏移（默认 = token 长度，即紧贴末尾）
+     */
+    selectors(selector: string, cursorInToken?: number): vscode.CompletionItem[] {
         if (!['@a', '@s', '@e', '@r', '@p'].includes(selector) && !selector.includes('[')) {
             const items = this.simpleSelectors();
             items.push(...this.fakePlayers());
@@ -185,7 +190,24 @@ export class CompletionContext {
         }
 
         if (selector[2] !== '[') { return []; }
-        const params = selector.slice(3).split(',');
+
+        // 光标是否还在方括号**内**。
+        //
+        // ⚠️ 必须按光标位置判断，不能只看 token 是否以 ']' 结尾：
+        //    `kill @a[type=zom]` 光标在 `zom` 之后、`]` 之前时，
+        //    token 同样以 ']' 结尾，但用户明确正在输入括号内的值。
+        const cursor = cursorInToken ?? selector.length;
+        const closeBracket = selector.indexOf(']');
+        const insideBrackets = closeBracket < 0 || cursor <= closeBracket;
+
+        // 方括号已闭合且光标在其后 → 括号内没什么可补的了。
+        // 此前没判断这一点：`@a[r=6]` 的 'r=6]' 被当成待补参数列表，
+        // 又弹出 24 个参数名（score/tag/team/r/x/y/z/type…）。
+        if (!insideBrackets) { return []; }
+
+        // 括号内：把光标之后的内容切掉，否则正在输入的 `]` 会混进值里
+        const head = selector.slice(0, cursor);
+        const params = head.slice(3).split(',');
         const last = params[params.length - 1];
         const lastKey = last.split('=')[0];
 
