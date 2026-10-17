@@ -152,6 +152,9 @@ export const invalidScoreRange: DiagnosticRule = {
     description: '同一记分板目标的取值区间为空，该选择器恒为空集',
     defaultLevel: 'error',
     check(rc: RuleContext): readonly Diagnostic[] {
+        // 廉价预筛：没有 '@' 就没有选择器。selectorsOf() 要做 token 遍历 +
+        // 方括号状态机，而这条规则对**每一行**都会跑。
+        if (!rc.lineText.includes('@')) { return []; }
         const out: Diagnostic[] = [];
         for (const { tokenIndex, parsed } of selectorsOf(rc.tokens)) {
             // 目标名 → 该目标的全部下界/上界谓词（**不是**只留一个）
@@ -205,6 +208,8 @@ export const invalidCount: DiagnosticRule = {
     description: '选择器 c= 必须是正整数',
     defaultLevel: 'warning',
     check(rc: RuleContext): readonly Diagnostic[] {
+        // 廉价预筛：没有 '@' 就没有选择器
+        if (!rc.lineText.includes('@')) { return []; }
         const out: Diagnostic[] = [];
         for (const { tokenIndex, parsed } of selectorsOf(rc.tokens)) {
             for (const p of parsed.predicates) {

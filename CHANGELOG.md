@@ -2,6 +2,70 @@
 
 All notable changes to the "mcfunction-studio-for-1-12" extension will be documented in this file.
 
+# [1.6.12]
+
+性能诊断。先说结论：**补全没有问题**（全在亚毫秒级），瓶颈在**诊断** ——
+它每次防抖触发都对整个文件重算，而此前 `bench-perf` 完全没测这条路径。
+
+新增 `npm run bench:diagnostics`：覆盖全量重算、逐键输入、单行分类。
+
+### 基线（优化前，3000 行文件）
+
+| 阶段 | 耗时 | 占比 |
+|---|---:|---:|
+| `analyze`（tokenize + isIncompleteLine） | 4.47 ms | 30% |
+| `attachEngine` | 3.78 ms | 25% |
+| 规则本身 | 10.22 ms | 70% |
+| **合计** | **15.22 ms/次** | |
+
+### 修复：4 条语法规则各自调一次 `engine.validate()`
+
+`unknown-command` / `extra-token` / `execute-run` / `unknown-inner-command`
+都要看同一份 walk 结果，却**每条各调一次** —— 同一行跑 4 遍完整 walk。
+现在用 `validateOnce(rc)` 把结果挂在 RuleContext 上共享（行结束即 GC，
+不需要失效逻辑）。
+
+### 修复：`tokenize` 与 `isIncompleteLine` 各扫一遍整行
+
+`tokenize` 切词时**本来就在逐字符跟踪引号状态**，而 `isIncompleteLine`
+为了判断"引号是否闭合"又完整扫一遍。新增 `tokenizeDetailed()`
+把 `unterminatedQuote` 一并返回，`analyze()` 不再重复扫描。
+
+（`isIncompleteLine` 保留第三个可选参数，老调用点不传时仍自己扫。）
+
+### 优化：没有 `@` 的行跳过选择器解析
+
+`resource/undefined-scoreboard`、`selector/invalid-score-range`、
+`selector/invalid-count` 对**每一行**都调 `selectorsOf()`（token 遍历 +
+方括号状态机），而这三条规则没有 `commands` 限制。加 `lineText.includes('@')`
+预筛，不含 `@` 的行直接返回。
+
+### 优化：注释行与空行短路
+
+`checkLine` 现在对空行/注释行直接返回，不再分词、不再造 RuleContext。
+
+### 结果（3000 行，3 次取中位数）
+
+| | 优化前 | 优化后 | 变化 |
+|---|---:|---:|---:|
+| 全量重算 p50 | 15.3 ms | **12.4 ms** | **-19%** |
+| 逐键输入 p50 | 15.8 ms | **12.7 ms** | **-20%** |
+| µs/行 | 5.13 | **4.13** | -19% |
+
+### 新增性能回归守卫
+
+`src/test/diagnostics/perf-guard.test.ts`：
+
+- **4 条语法规则只走一次 walk**（正确性守卫 —— 以后新增语法规则不会又各调一遍）
+- 无 `@` 的行不产出选择器诊断
+- `tokenizeDetailed` 与 `tokenize` 的 token 一致
+- 3000 行全量诊断 < 60ms（只守数量级，给 4 倍余量，慢机器不会随机失败）
+- 注释与空行被短路
+
+### 测试
+诊断套件 303 → 309 passing。
+Node 侧合计 16 + 110 + 309 + 31 + 12 = 478 passing，lint 0 error；e2e 22。
+
 # [1.6.11]
 
 ### 修复：参数填完后按空格，上一个参数的候选仍混进来

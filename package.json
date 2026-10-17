@@ -2,7 +2,7 @@
   "name": "mcfunction-studio",
   "displayName": "Mcfunction Studio for 1.12",
   "description": "A simple mcfunction dev specialized helper for 1.12.2",
-  "version": "1.6.11",
+  "version": "1.6.12",
   "publisher": "Mcd0-LUO",
   "author": {
     "email": "1473522801@qq.com",
@@ -231,7 +231,8 @@
     "verify:vsix": "node scripts/verify-vsix.cjs",
     "bench:baseline": "node scripts/bench-baseline.mjs",
     "bench:perf": "npm run compile && node scripts/bench-perf.mjs",
-    "bench:real": "npm run compile && node scripts/bench-real-pack.mjs"
+    "bench:real": "npm run compile && node scripts/bench-real-pack.mjs",
+    "bench:diagnostics": "npm run compile && node scripts/bench-diagnostics.mjs"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",

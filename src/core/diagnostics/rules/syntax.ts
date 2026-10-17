@@ -40,7 +40,8 @@ export const unknownCommandRule: DiagnosticRule & { needsEngine: true } = {
         const e = getEngine(rc);
         if (!e) { return []; }
         if (rc.ctx.commandTable().length === 0) { return []; }
-        const res = e.validate(rc.tokens);
+        const res = validateOnce(rc);
+        if (!res) { return []; }
         if (res.known) { return []; }
         return [rc.report(
             unknownCommandRule,
@@ -64,7 +65,8 @@ export const extraTokenRule: DiagnosticRule & { needsEngine: true } = {
         const e = getEngine(rc);
         if (!e) { return []; }
         if (rc.ctx.commandTable().length === 0) { return []; }
-        const res = e.validate(rc.tokens);
+        const res = validateOnce(rc);
+        if (!res) { return []; }
         if (res.known && res.extraOnLeaf) {
             const extra = res.leftovers.map(l => l.token).join(' ');
             const first = res.leftovers[0];
@@ -100,7 +102,8 @@ export const executeRunKeywordRule: DiagnosticRule & { needsEngine: true } = {
         const e = getEngine(rc);
         if (!e) { return []; }
         if (rc.ctx.commandTable().length === 0) { return []; }
-        const res = e.validate(rc.tokens);
+        const res = validateOnce(rc);
+        if (!res) { return []; }
         if (!res.known || !res.trailing || res.innerCommand !== 'run') { return []; }
 
         // 定位到那个 run token
@@ -130,7 +133,8 @@ export const unknownInnerCommandRule: DiagnosticRule & { needsEngine: true } = {
         if (!e) { return []; }
         const table = rc.ctx.commandTable();
         if (table.length === 0) { return []; }
-        const res = e.validate(rc.tokens);
+        const res = validateOnce(rc);
+        if (!res) { return []; }
         if (!res.known) { return []; }
 
         const inner = res.innerCommand;
@@ -176,6 +180,29 @@ export function attachEngine(rc: RuleContext, engine: EngineValidator): void {
 
 export function getEngine(rc: RuleContext): EngineValidator | undefined {
     return (rc as unknown as Record<symbol, unknown>)[ENGINE] as EngineValidator | undefined;
+}
+
+/**
+ * 本行 validate() 结果的缓存。
+ *
+ * ⚠️ 4 条语法规则（unknown-command / extra-token / execute-run /
+ *    unknown-inner-command）都要看同一份 walk 结果。此前每条各自调一次
+ *    `engine.validate(rc.tokens)` —— 同一行跑 4 遍完整 walk。
+ *    3000 行的文件上，这部分独占 checkDocument 的 ~25%。
+ *
+ * 缓存挂在 RuleContext 上（同一行共享同一个 rc），行结束即被 GC，
+ * 不需要失效逻辑。
+ */
+const VALIDATED = Symbol.for('mcfStudio.diagnostics.validated');
+
+export function validateOnce(rc: RuleContext): ReturnType<EngineValidator['validate']> | undefined {
+    const e = getEngine(rc);
+    if (!e) { return undefined; }
+    const holder = rc as unknown as Record<symbol, unknown>;
+    if (!(VALIDATED in holder)) {
+        holder[VALIDATED] = e.validate(rc.tokens);
+    }
+    return holder[VALIDATED] as ReturnType<EngineValidator['validate']>;
 }
 
 export const syntaxRules: readonly DiagnosticRule[] = [

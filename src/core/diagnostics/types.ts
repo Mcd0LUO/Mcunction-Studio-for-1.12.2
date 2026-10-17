@@ -181,14 +181,15 @@ export class LineAnalyzer {
     constructor(private readonly ctx: ValidationContext) {}
 
     analyze(lineText: string, line: number): RuleContext {
-        const tokens = tokenize(lineText);
+        // tokenize 顺带算出引号是否闭合，避免 isIncompleteLine 再整行扫一遍
+        const { tokens, unterminatedQuote } = tokenizeDetailed(lineText);
         const commandName = tokens.length > 0 ? tokens[0] : '';
         return {
             lineText,
             line,
             tokens,
             commandName,
-            isIncomplete: isIncompleteLine(lineText, tokens),
+            isIncomplete: isIncompleteLine(lineText, tokens, unterminatedQuote),
             ctx: this.ctx,
             report: (rule, span, message, severity) => ({
                 ruleId: rule.id,
@@ -215,8 +216,21 @@ export class LineAnalyzer {
  * @returns 不含空白的 token 列表；注释/空行返回空数组
  */
 export function tokenize(lineText: string): string[] {
+    return tokenizeDetailed(lineText).tokens;
+}
+
+/**
+ * tokenize 的"带诊断"版本。
+ *
+ * `isIncompleteLine` 需要知道引号是否闭合，而 `tokenize` 在切词时
+ * **已经在逐字符扫描并跟踪 inQuotes** —— 此前两处各扫一遍整行。
+ * 这里把结果一并返回，`analyze()` 便不必再扫。
+ */
+export function tokenizeDetailed(lineText: string): { tokens: string[]; unterminatedQuote: boolean } {
     const trimmed = lineText.trim();
-    if (trimmed === '' || trimmed.startsWith('#')) { return []; }
+    if (trimmed === '' || trimmed.startsWith('#')) {
+        return { tokens: [], unterminatedQuote: false };
+    }
 
     const tokens: string[] = [];
     let current = '';
@@ -237,7 +251,7 @@ export function tokenize(lineText: string): string[] {
     if (current !== '') { tokens.push(current); }
 
     // 去除行尾注释：# 前面必须是行首或空白，且不在引号内
-    return stripTrailingComment(tokens);
+    return { tokens: stripTrailingComment(tokens), unterminatedQuote: inQuotes };
 }
 
 /** 去掉被行尾注释吞掉的最后一个 token（# 无空格紧贴时） */
@@ -257,19 +271,33 @@ function stripTrailingComment(tokens: string[]): string[] {
  * 若照常校验就会得到"未知命令"。宁可漏报也不能误报——
  * 一个满屏红线的扩展用户会直接关掉诊断。
  */
-export function isIncompleteLine(lineText: string, tokens: readonly string[]): boolean {
+export function isIncompleteLine(
+    lineText: string,
+    tokens: readonly string[],
+    unterminatedQuote?: boolean,
+): boolean {
     const trimmed = lineText.trim();
     if (trimmed === '' || trimmed.startsWith('#')) { return true; }
 
     // 引号未闭合：tellraw @a {"text":"未写完
-    let inQuotes = false;
-    let escaped = false;
-    for (const ch of trimmed) {
-        if (escaped) { escaped = false; continue; }
-        if (ch === '\\') { escaped = true; continue; }
-        if (ch === '"') { inQuotes = !inQuotes; }
+    //
+    // `unterminatedQuote` 由 tokenizeDetailed() 顺带算出 —— tokenize 切词时
+    // 本来就在跟踪引号状态，没必要再整行扫一遍。
+    // 不传时（老调用点）退回自己扫。
+    let quotesOpen: boolean;
+    if (unterminatedQuote !== undefined) {
+        quotesOpen = unterminatedQuote;
+    } else {
+        let inQuotes = false;
+        let escaped = false;
+        for (const ch of trimmed) {
+            if (escaped) { escaped = false; continue; }
+            if (ch === '\\') { escaped = true; continue; }
+            if (ch === '"') { inQuotes = !inQuotes; }
+        }
+        quotesOpen = inQuotes;
     }
-    if (inQuotes) { return true; }
+    if (quotesOpen) { return true; }
 
     // 末 token 以连接符结尾，说明还在写：give @s stone <caret>
     const last = tokens[tokens.length - 1];

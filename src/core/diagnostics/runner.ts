@@ -55,7 +55,8 @@ export class DiagnosticRunner {
     checkDocument(lines: readonly string[]): Diagnostic[] {
         const out: Diagnostic[] = [];
         for (let i = 0; i < lines.length; i++) {
-            out.push(...this.checkLine(lines[i], i));
+            const d = this.checkLine(lines[i], i);
+            if (d.length > 0) { out.push(...d); }
         }
         // 同一位置同一规则只报一次（重复定义在多 predicate 场景可能重复命中）
         const seen = new Set<string>();
@@ -71,6 +72,12 @@ export class DiagnosticRunner {
 
     /** 检查单行 */
     checkLine(lineText: string, line: number): Diagnostic[] {
+        // 空行与注释行不含命令语义：所有规则都会在 isIncomplete 处返回，
+        // 但 analyze() 仍要分词、造 RuleContext。大文件里注释占比常常很高，
+        // 这里直接短路。
+        const trimmed = lineText.trim();
+        if (trimmed === '' || trimmed.startsWith('#')) { return []; }
+
         const rc = this.analyzer.analyze(lineText, line);
         if (this.opts.engine) { attachEngine(rc, this.opts.engine); }
 

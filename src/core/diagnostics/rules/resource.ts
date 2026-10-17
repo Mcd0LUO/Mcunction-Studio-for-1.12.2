@@ -25,6 +25,11 @@ export const undefinedScoreboardInSelector: DiagnosticRule = {
     defaultLevel: 'hint',
     needsIndex: true,
     check(rc: RuleContext): readonly Diagnostic[] {
+        // 廉价预筛：没有 '@' 就不可能带选择器，直接跳过。
+        // selectorsOf() 要遍历 token、再对每个选择器做方括号状态机，
+        // 对 `scoreboard objectives add foo dummy` 这类行纯属浪费 ——
+        // 而该规则对**每一行**都会跑（没有 commands 限制）。
+        if (!rc.lineText.includes('@')) { return []; }
         const out: Diagnostic[] = [];
         eachSelector(rc, (_ti, key, value) => {
             const obj = scoreObjectiveOf(key);
